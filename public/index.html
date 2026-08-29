@@ -1509,10 +1509,17 @@
       }
       terrainGeo.computeVertexNormals();
 
+      const textureLoader = new THREE.TextureLoader();
+      const snowTexture = textureLoader.load('assets/snow_texture.jpg');
+      snowTexture.wrapS = THREE.RepeatWrapping;
+      snowTexture.wrapT = THREE.RepeatWrapping;
+      snowTexture.repeat.set(16, 32);
+
       const terrainMat = new THREE.MeshStandardMaterial({
+        map: snowTexture,
         color: 0xffffff,
-        roughness: 0.6,
-        metalness: 0.1
+        roughness: 0.82,
+        metalness: 0.08
       });
       const terrain = new THREE.Mesh(terrainGeo, terrainMat);
       terrain.rotation.x = -Math.PI / 2.2;
@@ -1576,12 +1583,19 @@
       icePatches = [];
 
       const iceGeo = new THREE.PlaneGeometry(22, 38);
+      const textureLoader = new THREE.TextureLoader();
+      const iceTexture = textureLoader.load('assets/ice_texture.jpg');
+      iceTexture.wrapS = THREE.RepeatWrapping;
+      iceTexture.wrapT = THREE.RepeatWrapping;
+      iceTexture.repeat.set(2, 3);
+
       const iceMat = new THREE.MeshStandardMaterial({
-        color: 0x00f0ff,
+        map: iceTexture,
+        color: 0x99eeff,
         transparent: true,
-        opacity: 0.65,
-        roughness: 0.05,
-        metalness: 0.8
+        opacity: 0.85,
+        roughness: 0.08,
+        metalness: 0.75
       });
 
       for (let i = 0; i < 8; i++) {
@@ -1631,22 +1645,37 @@
     function createCleanSpacedTrees() {
       trees.forEach(t => scene.remove(t));
       trees = [];
-      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a3d28 });
-      const leavesMat = new THREE.MeshLambertMaterial({ color: 0x1d4d2d });
+
+      const textureLoader = new THREE.TextureLoader();
+      const treeTexture = textureLoader.load('assets/pine_tree.jpg');
+
+      const treeGeo = new THREE.PlaneGeometry(6.5, 9.0);
+      const treeMat = new THREE.MeshStandardMaterial({
+        map: treeTexture,
+        transparent: true,
+        alphaTest: 0.1,
+        roughness: 0.9,
+        side: THREE.DoubleSide
+      });
 
       for (let i = 0; i < 65; i++) {
-        const tree = new THREE.Group();
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.8, 6), trunkMat);
-        const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.2, 5.5, 6), leavesMat);
-        leaves.position.y = 3.2;
-        tree.add(trunk);
-        tree.add(leaves);
-        tree.position.x = (Math.random() - 0.5) * 180;
-        tree.position.z = -45 - (i * 8.5);
-        tree.position.y = -tree.position.z * 0.15;
-        tree.userData = { radius: 2.0 };
-        scene.add(tree);
-        trees.push(tree);
+        const treeGroup = new THREE.Group();
+        // Cross-billboard for full 3D volume
+        const p1 = new THREE.Mesh(treeGeo, treeMat);
+        p1.position.y = 4.5;
+        const p2 = new THREE.Mesh(treeGeo, treeMat);
+        p2.position.y = 4.5;
+        p2.rotation.y = Math.PI / 2;
+
+        treeGroup.add(p1);
+        treeGroup.add(p2);
+
+        treeGroup.position.x = (Math.random() - 0.5) * 180;
+        treeGroup.position.z = -45 - (i * 8.5);
+        treeGroup.position.y = -treeGroup.position.z * 0.15;
+        treeGroup.userData = { radius: 2.2 };
+        scene.add(treeGroup);
+        trees.push(treeGroup);
       }
     }
 
