@@ -264,8 +264,11 @@
     </div>
 
     <!-- Video Teaser -->
-    <div class="media-container" id="teaser">
-      <video controls poster="assets/yeti_v2.jpg" preload="metadata">
+    <div class="media-container" id="teaser" style="position:relative;">
+      <button id="btn-unmute-landing" type="button" style="position:absolute; top:20px; right:20px; z-index:30; background:rgba(6,9,19,0.92); border:2px solid #39ff14; color:#39ff14; font-family:inherit; font-weight:900; font-size:14px; letter-spacing:1.5px; padding:10px 20px; border-radius:30px; cursor:pointer; box-shadow:0 0 20px rgba(57,255,20,0.7); display:flex; align-items:center; gap:8px; touch-action:manipulation;">
+        🔇 UNMUTE VIDEO
+      </button>
+      <video id="landing-teaser-video" controls autoplay muted loop playsinline webkit-playsinline poster="assets/yeti_v2.jpg" preload="auto">
         <source src="assets/media/teaser_trailer.mp4" type="video/mp4">
         Your browser does not support HTML5 video.
       </video>
@@ -383,6 +386,34 @@
 
     loadLeaderboard();
     setInterval(loadLeaderboard, 15000);
+
+    // Pattern 1: User interaction audio unlock
+    const landingVideo = document.getElementById('landing-teaser-video');
+    const landingUnmuteBtn = document.getElementById('btn-unmute-landing');
+    function unlockLandingAudio() {
+      if (landingVideo) {
+        landingVideo.muted = false;
+        landingVideo.volume = 1.0;
+      }
+      if (landingUnmuteBtn) {
+        landingUnmuteBtn.innerHTML = '🔊 SOUND ON';
+        landingUnmuteBtn.style.borderColor = '#00f0ff';
+        landingUnmuteBtn.style.color = '#00f0ff';
+        setTimeout(() => {
+          if (landingUnmuteBtn) landingUnmuteBtn.style.opacity = '0';
+        }, 1200);
+      }
+      ['pointerdown', 'keydown', 'touchstart'].forEach(evt => {
+        window.removeEventListener(evt, unlockLandingAudio, true);
+      });
+    }
+
+    if (landingUnmuteBtn) {
+      landingUnmuteBtn.addEventListener('click', unlockLandingAudio);
+    }
+    ['pointerdown', 'keydown', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, unlockLandingAudio, { capture: true, once: true });
+    });
   </script>
 </body>
 </html>

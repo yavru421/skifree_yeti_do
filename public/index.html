@@ -667,6 +667,11 @@
     <video id="intro-video" autoplay muted loop playsinline webkit-playsinline preload="auto" src="/assets/media/teaser_trailer.mp4" style="width:100%; height:100%; object-fit:cover;">
       <source src="/assets/media/teaser_trailer.mp4" type="video/mp4">
     </video>
+
+    <button id="btn-unmute-intro" type="button" style="position:absolute; top:28px; right:28px; z-index:520; background:rgba(6,9,19,0.92); border:2px solid #39ff14; color:#39ff14; font-family:inherit; font-weight:900; font-size:clamp(13px, 2.5vw, 16px); letter-spacing:1.5px; padding:12px 24px; border-radius:30px; cursor:pointer; box-shadow:0 0 25px rgba(57,255,20,0.85); display:flex; align-items:center; gap:10px; touch-action:manipulation;">
+      🔇 UNMUTE VIDEO
+    </button>
+
     <div style="position:absolute; bottom:20px; display:flex; flex-direction:column; align-items:center; gap:8px; z-index:510; pointer-events:auto;">
       <div style="width:220px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; overflow:hidden;">
         <div id="intro-progress" style="width:0%; height:100%; background:#00f0ff;"></div>
@@ -921,9 +926,9 @@
     }
 
     const DIFFICULTY_PRESETS = {
-      easy: { name: "EASY", cruiseSpeed: 18, tuckSpeed: 32, brakeSpeed: 10, lateralFactor: 0.024, forwardFactor: 0.012, badgeColor: "#39ff14" },
-      medium: { name: "MED", cruiseSpeed: 24, tuckSpeed: 45, brakeSpeed: 14, lateralFactor: 0.030, forwardFactor: 0.015, badgeColor: "#ffff00" },
-      pro: { name: "PRO", cruiseSpeed: 32, tuckSpeed: 60, brakeSpeed: 18, lateralFactor: 0.036, forwardFactor: 0.018, badgeColor: "#ff007f" }
+      easy: { name: "EASY", cruiseSpeed: 20, tuckSpeed: 45, brakeSpeed: 12, lateralFactor: 0.045, forwardFactor: 0.030, badgeColor: "#39ff14" },
+      medium: { name: "MED", cruiseSpeed: 28, tuckSpeed: 60, brakeSpeed: 16, lateralFactor: 0.055, forwardFactor: 0.038, badgeColor: "#ffff00" },
+      pro: { name: "PRO", cruiseSpeed: 38, tuckSpeed: 85, brakeSpeed: 20, lateralFactor: 0.068, forwardFactor: 0.046, badgeColor: "#ff007f" }
     };
 
     let selectedDifficulty = "medium";
@@ -948,11 +953,14 @@
         if (this.ctx && this.ctx.state === 'suspended') {
           this.ctx.resume().catch(() => {});
         }
-        const bg = document.getElementById('bg-soundtrack');
-        if (bg && isSoundOn) {
-          bg.muted = false;
-          bg.volume = 0.6;
-          bg.play().catch(() => {});
+        // ONLY play background soundtrack if intro has been skipped / completed
+        if (isIntroSkipped) {
+          const bg = document.getElementById('bg-soundtrack');
+          if (bg && isSoundOn) {
+            bg.muted = false;
+            bg.volume = 0.6;
+            bg.play().catch(() => {});
+          }
         }
       }
 
@@ -1360,29 +1368,29 @@
       }
     }
 
-    // 100% Solid & Textured Continuous Snow Valley
+    // 100% Solid & Textured Continuous Snow Mountain Slope
     function createContinuousSnowTerrain() {
-      const terrainGeo = new THREE.PlaneGeometry(1600, 2400, 32, 32);
+      const terrainGeo = new THREE.PlaneGeometry(600, 1200, 32, 32);
       
       const textureLoader = new THREE.TextureLoader();
       snowTexture = textureLoader.load('/assets/snow_texture.jpg', () => {
         snowTexture.wrapS = THREE.RepeatWrapping;
         snowTexture.wrapT = THREE.RepeatWrapping;
-        snowTexture.repeat.set(32, 64);
+        snowTexture.repeat.set(24, 48);
         terrainMat.map = snowTexture;
         terrainMat.needsUpdate = true;
       });
 
       const terrainMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.85,
-        metalness: 0.02,
+        color: 0xf5f9ff,
+        roughness: 0.75,
+        metalness: 0.05,
         side: THREE.DoubleSide
       });
 
       terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
-      terrainMesh.rotation.x = -Math.PI / 2;
-      terrainMesh.position.set(0, 0, -600);
+      terrainMesh.rotation.x = -Math.PI / 2.2;
+      terrainMesh.position.set(0, 0, -250);
       scene.add(terrainMesh);
     }
 
@@ -1413,9 +1421,9 @@
         treeGroup.add(p1);
         treeGroup.add(p2);
 
-        const tz = -40 - (i * 12);
+        const tz = -45 - (i * 8.5);
         const tx = (Math.random() - 0.5) * 180;
-        treeGroup.position.set(tx, 0, tz);
+        treeGroup.position.set(tx, -tz * 0.15, tz);
         treeGroup.userData = { radius: 2.2 };
         scene.add(treeGroup);
         trees.push(treeGroup);
@@ -1432,9 +1440,9 @@
       for (let i = 0; i < 14; i++) {
         const mesh = new THREE.Mesh(rampGeo, rampMat);
         mesh.rotation.x = -0.35;
-        const kz = -80 - (i * 75) - (Math.random() * 20);
+        const kz = -70 - (i * 55) - (Math.random() * 20);
         const kx = (Math.sin(i * 1.3) * 35);
-        mesh.position.set(kx, 0.7, kz);
+        mesh.position.set(kx, -kz * 0.15 + 0.6, kz);
         scene.add(mesh);
 
         kickers.push({
@@ -1454,9 +1462,9 @@
       for (let i = 0; i < 8; i++) {
         const mesh = new THREE.Mesh(railGeo, railMat);
         mesh.rotation.x = Math.PI / 2.2;
-        const rz = -100 - (i * 110);
+        const rz = -90 - (i * 80);
         const rx = (i % 2 === 0 ? 18 : -18) + (Math.random() - 0.5) * 6;
-        mesh.position.set(rx, 1.2, rz);
+        mesh.position.set(rx, -rz * 0.15 + 1.2, rz);
         scene.add(mesh);
 
         grindRails.push({
@@ -1489,10 +1497,10 @@
 
       for (let i = 0; i < 8; i++) {
         const mesh = new THREE.Mesh(iceGeo, iceMat);
-        mesh.rotation.x = -Math.PI / 2;
-        const iz = -120 - (i * 120);
+        mesh.rotation.x = -Math.PI / 2.2;
+        const iz = -110 - (i * 90);
         const ix = (Math.sin(i * 1.8) * 25);
-        mesh.position.set(ix, 0.05, iz);
+        mesh.position.set(ix, -iz * 0.15 + 0.05, iz);
         scene.add(mesh);
 
         icePatches.push({
@@ -1518,13 +1526,13 @@
         arm.position.set(-3, 23, 0);
         towerGroup.add(pylon);
         towerGroup.add(arm);
-        towerGroup.position.set(75, 0, -40 - (i * 140));
+        towerGroup.position.set(75, 0, -40 - (i * 120));
         scene.add(towerGroup);
 
         const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3.2, 4.5), cabinMat);
-        cabin.position.set(72, 18, -40 - (i * 140));
+        cabin.position.set(72, 18, -40 - (i * 120));
         scene.add(cabin);
-        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 140), offset: Math.random() * 100 });
+        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 120), offset: Math.random() * 100 });
       }
     }
 
@@ -1580,7 +1588,7 @@
         const mat = isBlue ? blueMat : redMat;
         const gateWidth = 10;
         const gateX = Math.sin(i * 0.65) * 35;
-        const gateZ = -60 - (i * 38);
+        const gateZ = -50 - (i * 48);
 
         const leftPole = new THREE.Mesh(poleGeo, mat);
         leftPole.position.set(-gateWidth / 2, 1.9, 0);
@@ -1595,7 +1603,7 @@
         group.add(rightPole);
         group.add(banner);
 
-        group.position.set(gateX, 0, gateZ);
+        group.position.set(gateX, -gateZ * 0.15, gateZ);
         scene.add(group);
 
         slalomGates.push({
@@ -1618,7 +1626,7 @@
       finishGroup.add(fLeft);
       finishGroup.add(fRight);
       finishGroup.add(fBanner);
-      finishGroup.position.set(0, 0, -RACE_FINISH_Z);
+      finishGroup.position.set(0, RACE_FINISH_Z * 0.15, -RACE_FINISH_Z);
       scene.add(finishGroup);
       finishLineMesh = finishGroup;
     }
@@ -1907,9 +1915,10 @@
 
           const relZ = -(playerZ - msg.yeti.z);
           const relX = msg.yeti.x - playerX;
-          yetiMesh.position.set(relX, 3.5, relZ);
+          const relY = -relZ * 0.15;
+          yetiMesh.position.set(relX, relY + 3.5, relZ);
           if (yetiSprite) {
-            yetiSprite.position.set(relX, 3.8, relZ);
+            yetiSprite.position.set(relX, relY + 3.8, relZ);
             yetiSprite.visible = true;
           }
         }
@@ -1937,7 +1946,8 @@
 
       const relX = skier.x - playerX;
       const relZ = -(playerZ - skier.z);
-      group.position.set(relX, 0, relZ);
+      const relY = -relZ * 0.15;
+      group.position.set(relX, relY, relZ);
       group.rotation.y = -skier.steer;
       group.visible = !skier.isDead;
     }
@@ -1961,7 +1971,8 @@
         }
         const relX = b.x - playerX;
         const relZ = -(playerZ - b.z);
-        mesh.position.set(relX, (b.radius || 2.2), relZ);
+        const relY = -relZ * 0.15;
+        mesh.position.set(relX, relY + (b.radius || 2.2), relZ);
         mesh.rotation.x += 0.08;
       });
     }
@@ -1998,7 +2009,7 @@
       const df = document.getElementById('damage-flash');
       df.style.opacity = '0.95';
       setTimeout(() => df.style.opacity = '0', 250);
-      playerSpeed = Math.min(65, playerSpeed + 18);
+      playerSpeed = Math.min(80, playerSpeed + 24);
 
       if (playerHearts <= 0) {
         document.getElementById('h1').classList.add('heart-lost');
@@ -2015,7 +2026,7 @@
       setTimeout(() => { flash.style.opacity = '0'; }, 200);
 
       playerHearts--;
-      playerSpeed = Math.max(10, playerSpeed * 0.5);
+      playerSpeed = Math.max(12, playerSpeed * 0.45);
       if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
       if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
 
@@ -2071,7 +2082,7 @@
         let targetSpeed = preset.cruiseSpeed;
         if (keys.w) targetSpeed = preset.tuckSpeed;
         if (keys.s) targetSpeed = preset.brakeSpeed;
-        if (isDrafting) targetSpeed += 14;
+        if (isDrafting) targetSpeed += 18;
 
         const maxAngle = Math.PI / 2.1;
         if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07);
@@ -2091,18 +2102,19 @@
         playerX += lateralVel;
         playerX = Math.max(-120, Math.min(120, playerX));
 
-        // Seamless Infinite Snow Ground Scroll
+        // Seamless Infinite Snow Ground Scroll (1:1 Synchronized with 3D delta movement)
         if (snowTexture) {
-          snowTexture.offset.y -= forwardVel * 0.02;
-          snowTexture.offset.x += lateralVel * 0.02;
+          snowTexture.offset.y -= forwardVel * 0.04;
+          snowTexture.offset.x += lateralVel * 0.04;
         }
 
-        // --- Synchronized Delta Scroll for All World Entities ---
+        // --- Synchronized Delta Scroll for All World Entities on Alpine Slope ---
         
         // 1. Trees
         trees.forEach(tree => {
           tree.position.z += forwardVel;
           tree.position.x -= lateralVel;
+          tree.position.y = -tree.position.z * 0.15;
           if (spawnGraceTimer <= 0 && !isAirborne && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
             onTreeHit();
             tree.position.z = 25;
@@ -2110,6 +2122,7 @@
           if (tree.position.z > 20) {
             tree.position.z = -540 - (Math.random() * 80);
             tree.position.x = (Math.random() - 0.5) * 180;
+            tree.position.y = -tree.position.z * 0.15;
           }
         });
 
@@ -2117,10 +2130,11 @@
         kickers.forEach(k => {
           k.mesh.position.z += forwardVel;
           k.mesh.position.x -= lateralVel;
+          k.mesh.position.y = -k.mesh.position.z * 0.15 + 0.6;
 
-          if (!isAirborne && Math.abs(k.mesh.position.z) < 2.0 && Math.abs(k.mesh.position.x) < k.width / 2) {
+          if (!isAirborne && Math.abs(k.mesh.position.z) < 2.5 && Math.abs(k.mesh.position.x) < k.width / 2) {
             isAirborne = true;
-            airVy = 16.0;
+            airVy = 18.0;
             soundEngine.playBigAirWhoosh();
             const airEl = document.getElementById('air-trick-indicator');
             airEl.style.opacity = '1';
@@ -2129,6 +2143,7 @@
           if (k.mesh.position.z > 20) {
             k.mesh.position.z = -600 - (Math.random() * 120);
             k.mesh.position.x = (Math.random() - 0.5) * 80;
+            k.mesh.position.y = -k.mesh.position.z * 0.15 + 0.6;
           }
         });
 
@@ -2137,16 +2152,18 @@
         grindRails.forEach(r => {
           r.mesh.position.z += forwardVel;
           r.mesh.position.x -= lateralVel;
+          r.mesh.position.y = -r.mesh.position.z * 0.15 + 1.2;
 
           if (Math.abs(r.mesh.position.z) < r.length / 2 && Math.abs(r.mesh.position.x) < 1.8) {
             isGrindingRail = true;
-            playerSpeed = Math.min(75, playerSpeed + 0.3);
+            playerSpeed = Math.min(85, playerSpeed + 0.4);
             soundEngine.playRailGrind();
             spawnPopup('⚡ RAIL GRIND +200 PTS', 'gate');
           }
           if (r.mesh.position.z > 30) {
             r.mesh.position.z = -680 - (Math.random() * 160);
             r.mesh.position.x = (Math.random() - 0.5) * 70;
+            r.mesh.position.y = -r.mesh.position.z * 0.15 + 1.2;
           }
         });
 
@@ -2155,6 +2172,7 @@
         icePatches.forEach(p => {
           p.mesh.position.z += forwardVel;
           p.mesh.position.x -= lateralVel;
+          p.mesh.position.y = -p.mesh.position.z * 0.15 + 0.05;
 
           if (Math.abs(p.mesh.position.z) < p.length / 2 && Math.abs(p.mesh.position.x) < p.width / 2) {
             onIce = true;
@@ -2162,18 +2180,19 @@
           if (p.mesh.position.z > 40) {
             p.mesh.position.z = -750 - (Math.random() * 200);
             p.mesh.position.x = (Math.random() - 0.5) * 80;
+            p.mesh.position.y = -p.mesh.position.z * 0.15 + 0.05;
           }
         });
-        if (onIce) targetSpeed += 12;
+        if (onIce) targetSpeed += 15;
 
-        const sidewaysBraking = onIce ? 0 : Math.abs(Math.sin(playerHeadingAngle)) * 14;
-        targetSpeed = Math.max(8, targetSpeed - sidewaysBraking);
+        const sidewaysBraking = onIce ? 0 : Math.abs(Math.sin(playerHeadingAngle)) * 18;
+        targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
         playerSpeed += (targetSpeed - playerSpeed) * 0.05;
 
         // Airborne Physics
         if (isAirborne) {
           airY += airVy * 0.016;
-          airVy -= 30.0 * 0.016;
+          airVy -= 32.0 * 0.016;
           airRollAngle += 0.08;
 
           if (airY <= 0) {
@@ -2181,16 +2200,17 @@
             airVy = 0;
             isAirborne = false;
             airRollAngle = 0;
-            playerSpeed = Math.min(80, playerSpeed + 14);
+            playerSpeed = Math.min(95, playerSpeed + 16);
             document.getElementById('air-trick-indicator').style.opacity = '0';
-            spawnPopup('✨ SMOOTH LANDING (+14 MPH)', 'gate');
+            spawnPopup('✨ SMOOTH LANDING (+16 MPH)', 'gate');
           }
         }
 
         // Ski-Lift Gondolas
         gondolaCabins.forEach(g => {
           const relZ = -(playerZ - (g.zBase + Math.sin(Date.now() * 0.001 + g.offset) * 35));
-          g.mesh.position.set(72 - playerX, 18, relZ);
+          const relY = -relZ * 0.15;
+          g.mesh.position.set(72 - playerX, relY + 18, relZ);
         });
 
         const hudSpeed = document.getElementById('hud-speed');
@@ -2227,13 +2247,14 @@
           slalomGates.forEach(g => {
             g.group.position.z += forwardVel;
             g.group.position.x -= lateralVel;
+            g.group.position.y = -g.group.position.z * 0.15;
 
             if (!g.cleared && !g.missed && Math.abs(g.group.position.z) < 2.2) {
               if (Math.abs(g.group.position.x) <= (g.width / 2 + 1.2)) {
                 g.cleared = true;
                 gatesHitCount++;
                 gateStreak++;
-                playerSpeed = Math.min(80, playerSpeed + 10);
+                playerSpeed = Math.min(95, playerSpeed + 12);
                 const points = 500 * gateStreak;
                 raceScore += points;
                 soundEngine.playGateChime();
@@ -2249,6 +2270,7 @@
           if (finishLineMesh) {
             finishLineMesh.position.z += forwardVel;
             finishLineMesh.position.x -= lateralVel;
+            finishLineMesh.position.y = -finishLineMesh.position.z * 0.15;
 
             if (!isRaceFinished && playerZ >= RACE_FINISH_Z) {
               isRaceFinished = true;
@@ -2569,7 +2591,31 @@
     const introOverlay = document.getElementById('intro-overlay');
     const introVideo = document.getElementById('intro-video');
     const introProgressBar = document.getElementById('intro-progress');
+    const btnUnmuteIntro = document.getElementById('btn-unmute-intro');
     let isIntroSkipped = false;
+
+    function unmuteIntroVideo() {
+      if (introVideo) {
+        introVideo.muted = false;
+        introVideo.volume = 1.0;
+      }
+      if (btnUnmuteIntro) {
+        btnUnmuteIntro.innerHTML = "🔊 SOUND ON";
+        btnUnmuteIntro.style.borderColor = "#00f0ff";
+        btnUnmuteIntro.style.color = "#00f0ff";
+        setTimeout(() => {
+          if (btnUnmuteIntro) btnUnmuteIntro.style.opacity = "0";
+        }, 1200);
+      }
+    }
+
+    if (btnUnmuteIntro) {
+      bindAction(btnUnmuteIntro, unmuteIntroVideo);
+    }
+
+    ['pointerdown', 'keydown', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, unmuteIntroVideo, { capture: true, once: true });
+    });
 
     function skipIntroVideo() {
       if (isIntroSkipped || !introOverlay) return;
