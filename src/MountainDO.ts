@@ -250,7 +250,7 @@ export class MountainDO extends DurableObject {
               this.currentWave++;
               this.yetiMaxHp = Math.floor(8000 * Math.pow(1.35, this.currentWave - 1));
               this.yetiHp = this.yetiMaxHp;
-              this.yetiZ = (furthestZ || 0) + 160;
+              this.yetiZ = (furthestZ || 0) + 65;
               this.yetiState = "CHARGING";
               this.broadcast({
                 type: "NEXT_WAVE",
@@ -330,6 +330,10 @@ export class MountainDO extends DurableObject {
         if (this.yetiState === "STAGGERED") {
           this.stateTimer -= this.tickIntervalMs / 1000;
           this.yetiSpeed = 10;
+          // Clamp distance to 65m max so Yeti does not disappear past fog distance
+          if (Math.abs(this.yetiZ - targetPlayer.z) > 65) {
+            this.yetiZ = targetPlayer.z + (this.yetiZ > targetPlayer.z ? 65 : -65);
+          }
           if (this.stateTimer <= 0) {
             this.yetiState = Math.random() < 0.4 ? "RETREATING" : "CHARGING";
             this.stateTimer = 2.0;
@@ -338,8 +342,11 @@ export class MountainDO extends DurableObject {
           this.stateTimer -= this.tickIntervalMs / 1000;
           this.yetiSpeed = 55;
           this.yetiZ += this.yetiSpeed * (this.tickIntervalMs / 1000);
-          if (this.stateTimer <= 0 || (this.yetiZ - targetPlayer.z) > 100) {
+          const dist = this.yetiZ - targetPlayer.z;
+          if (this.stateTimer <= 0 || Math.abs(dist) >= 65) {
             this.yetiState = "CHARGING";
+            if (dist > 65) this.yetiZ = targetPlayer.z + 65;
+            if (dist < -65) this.yetiZ = targetPlayer.z - 65;
           }
         } else if (this.yetiState === "CHARGING") {
           const relativeSpeed = targetPlayer.z > this.yetiZ ? 58 : -25;
@@ -353,10 +360,10 @@ export class MountainDO extends DurableObject {
               victimId: targetPlayer.id,
               victimCallsign: targetPlayer.callsign
             });
-            // Yeti bites and bounds away!
+            // Yeti bites and bounds away, clamped safely within 65m fog boundary
             this.yetiState = "RETREATING";
             this.stateTimer = 3.0;
-            this.yetiZ -= 30; // Push Yeti back 30m
+            this.yetiZ = targetPlayer.z - 30;
           }
         }
       }

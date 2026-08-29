@@ -20,6 +20,8 @@
       font-family: 'Courier New', Courier, monospace;
       color: #fff;
       cursor: crosshair;
+      touch-action: none;
+      -webkit-touch-callout: none;
     }
     #game-canvas {
       width: 100%;
@@ -457,11 +459,186 @@
       background-size: 100% 3px, 6px 100%;
       opacity: 0.45;
     }
+
+    /* Mobile Landscape Enforcement Prompt */
+    #rotate-prompt {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(10, 14, 26, 0.98);
+      z-index: 9999;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 24px;
+      touch-action: none;
+    }
+    .rotate-phone-icon {
+      font-size: 56px;
+      animation: rotatePhone 2.2s infinite ease-in-out;
+      margin-bottom: 20px;
+    }
+    .rotate-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: #00f0ff;
+      letter-spacing: 2px;
+      text-shadow: 0 0 15px #00f0ff;
+      margin-bottom: 10px;
+    }
+    .rotate-desc {
+      font-size: 14px;
+      color: #88a0c0;
+      letter-spacing: 1px;
+      line-height: 1.5;
+      max-width: 320px;
+    }
+
+    @keyframes rotatePhone {
+      0% { transform: rotate(0deg); }
+      40% { transform: rotate(-90deg); }
+      70% { transform: rotate(-90deg); }
+      100% { transform: rotate(0deg); }
+    }
+
+    @media (orientation: portrait) {
+      #rotate-prompt {
+        display: flex !important;
+      }
+    }
+
+    /* Mobile Touch Carving & Action Controls */
+    #touch-steer-zone {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50vw;
+      height: 100vh;
+      z-index: 75;
+      touch-action: none;
+      pointer-events: auto;
+    }
+
+    #touch-stick-base {
+      position: absolute;
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      border: 2px dashed rgba(0, 240, 255, 0.7);
+      background: rgba(0, 240, 255, 0.08);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 76;
+    }
+
+    #touch-stick-thumb {
+      position: absolute;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #00f0ff 0%, rgba(0, 240, 255, 0.6) 80%);
+      box-shadow: 0 0 16px #00f0ff;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 77;
+    }
+
+    #mobile-action-bar {
+      position: absolute;
+      bottom: 24px;
+      right: 20px;
+      display: flex;
+      flex-direction: row;
+      gap: 12px;
+      z-index: 80;
+      pointer-events: auto;
+    }
+
+    .touch-btn {
+      background: rgba(10, 20, 35, 0.9);
+      border: 2px solid #00f0ff;
+      border-radius: 12px;
+      color: #fff;
+      font-family: inherit;
+      font-weight: 900;
+      font-size: 13px;
+      letter-spacing: 1px;
+      padding: 14px 18px;
+      min-width: 80px;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.35);
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      cursor: pointer;
+      transition: transform 0.08s, background 0.08s, box-shadow 0.08s;
+    }
+
+    .touch-btn:active, .touch-btn.active {
+      transform: scale(0.92);
+    }
+
+    .touch-btn-shoot {
+      background: linear-gradient(135deg, rgba(255, 0, 127, 0.95), rgba(255, 0, 50, 0.95));
+      border-color: #ff0055;
+      box-shadow: 0 0 20px rgba(255, 0, 85, 0.6);
+      min-width: 100px;
+      font-size: 15px;
+    }
+    .touch-btn-shoot:active {
+      background: #ff0033;
+      box-shadow: 0 0 30px #ff0033;
+    }
+
+    .touch-btn-rearview {
+      border-color: #ff007f;
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+    }
+    .touch-btn-rearview.active {
+      background: rgba(255, 0, 127, 0.45);
+      border-color: #ff00ff;
+      box-shadow: 0 0 25px rgba(255, 0, 127, 0.8);
+    }
+
+    .touch-btn-reload {
+      border-color: #39ff14;
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+    }
+    .touch-btn-reload:active {
+      background: rgba(57, 255, 20, 0.35);
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <meta name="google-adsense-account" content="ca-pub-5487660440662949">
 </head>
 <body>
+  <!-- Mobile Landscape Orientation Enforcer -->
+  <div id="rotate-prompt">
+    <div class="rotate-phone-icon">📱 ↷</div>
+    <div class="rotate-title">ROTATE TO LANDSCAPE</div>
+    <div class="rotate-desc">SkiFree 2 requires landscape orientation for high-speed alpine hunting. Turn your device horizontally.</div>
+  </div>
+
+  <!-- Mobile Touch Controls Layer -->
+  <div id="touch-steer-zone" class="hidden"></div>
+  <div id="touch-stick-base"></div>
+  <div id="touch-stick-thumb"></div>
+
+  <div id="mobile-action-bar" class="hidden">
+    <button id="btn-touch-rearview" class="touch-btn touch-btn-rearview" type="button">👀 REARVIEW</button>
+    <button id="btn-touch-reload" class="touch-btn touch-btn-reload" type="button">🔄 RELOAD</button>
+    <button id="btn-touch-shoot" class="touch-btn touch-btn-shoot" type="button">💥 SHOOT</button>
+  </div>
+
   <div id="crt-overlay"></div>
   <div id="damage-flash"></div>
   <div id="bite-alert">🩸 YETI BITE! ARM LOST (-1 HEART)</div>
@@ -1273,22 +1450,21 @@
 
       if (intersects.length > 0) {
         isHit = true;
-        if (intersects[0].point.y > 4.5) isCrit = true;
-      } else {
+        if (intersects[0].point.y > 4.8) isCrit = true;
+      } else if (mirrorCamera && e && typeof e.clientX === 'number') {
         const mirrorBox = document.getElementById('rearview-mirror').getBoundingClientRect();
         if (e.clientX >= mirrorBox.left && e.clientX <= mirrorBox.right &&
             e.clientY >= mirrorBox.top && e.clientY <= mirrorBox.bottom) {
-          isHit = true;
-          isCrit = Math.random() < 0.4;
-        }
-      }
-
-      if (!isHit && yetiSprite && yetiSprite.visible) {
-        const yetiScreenPos = yetiSprite.position.clone().project(camera);
-        const screenDist = Math.hypot(yetiScreenPos.x - mousePos.x, yetiScreenPos.y - mousePos.y);
-        if (screenDist < 0.28) {
-          isHit = true;
-          isCrit = screenDist < 0.1;
+          const mirrorMouse = {
+            x: ((e.clientX - mirrorBox.left) / mirrorBox.width) * 2 - 1,
+            y: -((e.clientY - mirrorBox.top) / mirrorBox.height) * 2 + 1
+          };
+          raycaster.setFromCamera(mirrorMouse, mirrorCamera);
+          const mirrorIntersects = raycaster.intersectObject(yetiMesh);
+          if (mirrorIntersects.length > 0) {
+            isHit = true;
+            if (mirrorIntersects[0].point.y > 4.8) isCrit = true;
+          }
         }
       }
 
@@ -1955,6 +2131,8 @@
 
       document.getElementById('start-modal').classList.add('hidden');
       document.getElementById('hud-overlay').classList.remove('hidden');
+      document.getElementById('touch-steer-zone').classList.remove('hidden');
+      document.getElementById('mobile-action-bar').classList.remove('hidden');
       isPlaying = true;
       isWasted = false;
       playerHearts = 3;
@@ -1966,6 +2144,8 @@
     document.getElementById('btn-respawn').addEventListener('click', () => {
       document.getElementById('death-modal').classList.add('hidden');
       document.getElementById('hud-overlay').classList.remove('hidden');
+      document.getElementById('touch-steer-zone').classList.remove('hidden');
+      document.getElementById('mobile-action-bar').classList.remove('hidden');
       document.getElementById('wasted-screen').style.opacity = '0';
 
       document.getElementById('h1').classList.remove('heart-lost');
@@ -1997,6 +2177,166 @@
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
       connectWebSocket(callsign);
     });
+
+    // --- Mobile Touch Carving & Action Controls ---
+    const touchSteerZone = document.getElementById('touch-steer-zone');
+    const touchStickBase = document.getElementById('touch-stick-base');
+    const touchStickThumb = document.getElementById('touch-stick-thumb');
+    const btnTouchShoot = document.getElementById('btn-touch-shoot');
+    const btnTouchRearview = document.getElementById('btn-touch-rearview');
+    const btnTouchReload = document.getElementById('btn-touch-reload');
+
+    let steerTouchId = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    // Global WebAudio unlock on first touch
+    window.addEventListener('touchstart', () => {
+      soundEngine.init();
+      if (soundEngine.ctx && soundEngine.ctx.state === 'suspended') {
+        soundEngine.ctx.resume();
+      }
+    }, { passive: true });
+
+    // Left-screen touch drag for 90° ski carving & tuck throttle
+    if (touchSteerZone) {
+      touchSteerZone.addEventListener('touchstart', (e) => {
+        if (!isPlaying || isWasted) return;
+        soundEngine.init();
+        if (steerTouchId === null && e.changedTouches.length > 0) {
+          const touch = e.changedTouches[0];
+          steerTouchId = touch.identifier;
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+
+          touchStickBase.style.left = `${touchStartX}px`;
+          touchStickBase.style.top = `${touchStartY}px`;
+          touchStickBase.style.display = 'block';
+
+          touchStickThumb.style.left = `${touchStartX}px`;
+          touchStickThumb.style.top = `${touchStartY}px`;
+          touchStickThumb.style.display = 'block';
+        }
+      }, { passive: false });
+
+      touchSteerZone.addEventListener('touchmove', (e) => {
+        if (steerTouchId === null) return;
+        for (let i = 0; i < e.touches.length; i++) {
+          const touch = e.touches[i];
+          if (touch.identifier === steerTouchId) {
+            e.preventDefault();
+            const dx = touch.clientX - touchStartX;
+            const dy = touch.clientY - touchStartY;
+            const dist = Math.hypot(dx, dy);
+            const maxRadius = 45;
+            const clampedDist = Math.min(dist, maxRadius);
+            const angle = Math.atan2(dy, dx);
+
+            const thumbX = touchStartX + Math.cos(angle) * clampedDist;
+            const thumbY = touchStartY + Math.sin(angle) * clampedDist;
+
+            touchStickThumb.style.left = `${thumbX}px`;
+            touchStickThumb.style.top = `${thumbY}px`;
+
+            // 90° Carving Steering
+            const normX = Math.max(-1, Math.min(1, dx / 40));
+            turnSteerVelocity = normX * 1.8;
+            keys.a = normX < -0.25;
+            keys.d = normX > 0.25;
+
+            // Vertical Drag: Tuck Throttle / Snowplow Brake
+            const normY = Math.max(-1, Math.min(1, dy / 40));
+            keys.w = normY < -0.30;
+            keys.s = normY > 0.30;
+            break;
+          }
+        }
+      }, { passive: false });
+
+      const onSteerTouchEnd = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          if (e.changedTouches[i].identifier === steerTouchId) {
+            steerTouchId = null;
+            touchStickBase.style.display = 'none';
+            touchStickThumb.style.display = 'none';
+            keys.a = false;
+            keys.d = false;
+            keys.w = false;
+            keys.s = false;
+            turnSteerVelocity = 0;
+            break;
+          }
+        }
+      };
+
+      touchSteerZone.addEventListener('touchend', onSteerTouchEnd, { passive: true });
+      touchSteerZone.addEventListener('touchcancel', onSteerTouchEnd, { passive: true });
+    }
+
+    // Right-Screen Action Buttons
+    if (btnTouchShoot) {
+      btnTouchShoot.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        soundEngine.init();
+        onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+      }, { passive: false });
+
+      btnTouchShoot.addEventListener('click', (e) => {
+        e.preventDefault();
+        onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+      });
+    }
+
+    if (btnTouchRearview) {
+      btnTouchRearview.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        keys.shift = !keys.shift;
+        btnTouchRearview.classList.toggle('active', keys.shift);
+      }, { passive: false });
+
+      btnTouchRearview.addEventListener('click', (e) => {
+        e.preventDefault();
+        keys.shift = !keys.shift;
+        btnTouchRearview.classList.toggle('active', keys.shift);
+      });
+    }
+
+    if (btnTouchReload) {
+      btnTouchReload.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        soundEngine.init();
+        reloadGun();
+      }, { passive: false });
+
+      btnTouchReload.addEventListener('click', (e) => {
+        e.preventDefault();
+        reloadGun();
+      });
+    }
+
+    // Right-side screen touch drag to aim crosshair
+    window.addEventListener('touchmove', (e) => {
+      if (!isPlaying || isWasted) return;
+      for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+        if (touch.identifier !== steerTouchId && touch.clientX > window.innerWidth * 0.45) {
+          const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+          if (targetEl && (targetEl.classList.contains('touch-btn') || targetEl.closest('#mobile-action-bar'))) {
+            continue;
+          }
+          mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
+          mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+          const ch = document.getElementById('crosshair');
+          if (ch) {
+            ch.style.left = `${touch.clientX}px`;
+            ch.style.top = `${touch.clientY}px`;
+          }
+        }
+      }
+    }, { passive: true });
 
     // Instant Page Load 3D Boot
     window.addEventListener('DOMContentLoaded', () => {
