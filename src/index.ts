@@ -12,7 +12,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-  "Content-Security-Policy": "default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' ws: wss:; media-src 'self' blob:; img-src 'self' data: blob:;"
+  "Content-Security-Policy": "default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://*.googlesyndication.com https://*.google.com https://*.doubleclick.net; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.google.com; connect-src 'self' ws: wss: https://*.googlesyndication.com https://*.google.com; media-src 'self' blob:; img-src 'self' data: blob: https://*.google.com https://*.googlesyndication.com https://*.doubleclick.net; frame-src 'self' https://*.google.com https://*.googlesyndication.com https://*.doubleclick.net;"
 };
 
 function withSecurityHeaders(response: Response): Response {
