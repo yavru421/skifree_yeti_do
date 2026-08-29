@@ -37,7 +37,12 @@
       width: 100%;
       height: 100%;
       display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
+
+    /* HUD Layout */
     #hud-overlay {
       position: absolute;
       top: 0;
@@ -48,38 +53,37 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 15px 20px;
+      padding: clamp(8px, 2vh, 16px) clamp(10px, 3vw, 24px);
       z-index: 50;
     }
 
-    /* Boss / Race Top HUD */
+    /* Top Strip / Boss HUD */
     #boss-hud {
       position: absolute;
-      top: 15px;
+      top: clamp(6px, 1.5vh, 14px);
       left: 50%;
       transform: translateX(-50%);
-      width: 520px;
-      max-width: 90%;
+      width: min(500px, 85vw);
       background: rgba(10, 20, 35, 0.92);
       border: 2px solid #ff0033;
       border-radius: 8px;
-      padding: 10px 16px;
-      box-shadow: 0 0 25px rgba(255, 0, 50, 0.55);
+      padding: 6px 14px;
+      box-shadow: 0 0 20px rgba(255, 0, 50, 0.5);
       text-align: center;
     }
     .boss-label {
-      font-size: 13px;
+      font-size: clamp(10px, 2.2vw, 13px);
       font-weight: 900;
-      letter-spacing: 2px;
+      letter-spacing: 1.5px;
       color: #ff0033;
       text-shadow: 0 0 10px #ff0033;
       display: flex;
       justify-content: space-between;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .hp-bar-bg {
       width: 100%;
-      height: 14px;
+      height: clamp(8px, 1.8vh, 14px);
       background: #200508;
       border-radius: 4px;
       overflow: hidden;
@@ -89,23 +93,22 @@
       width: 100%;
       height: 100%;
       background: linear-gradient(90deg, #ff0055, #ff3300);
-      box-shadow: 0 0 12px #ff0033;
+      box-shadow: 0 0 10px #ff0033;
       transition: width 0.15s ease-out;
     }
 
     /* Race Slalom Top HUD */
     #race-hud {
       position: absolute;
-      top: 15px;
+      top: clamp(6px, 1.5vh, 14px);
       left: 50%;
       transform: translateX(-50%);
-      width: 520px;
-      max-width: 90%;
+      width: min(500px, 85vw);
       background: rgba(10, 20, 35, 0.92);
       border: 2px solid #00f0ff;
       border-radius: 8px;
-      padding: 10px 16px;
-      box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
+      padding: 6px 14px;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
       text-align: center;
       display: flex;
       justify-content: space-around;
@@ -117,13 +120,13 @@
       align-items: center;
     }
     .race-stat-title {
-      font-size: 10px;
+      font-size: clamp(8px, 1.8vw, 10px);
       color: #88a0c0;
       letter-spacing: 1px;
       font-weight: bold;
     }
     .race-stat-val {
-      font-size: 20px;
+      font-size: clamp(14px, 3.5vw, 20px);
       font-weight: 900;
       color: #00f0ff;
       text-shadow: 0 0 8px #00f0ff;
@@ -131,104 +134,92 @@
 
     #lookback-hint {
       position: absolute;
-      top: 80px;
+      top: clamp(48px, 12vh, 75px);
       left: 50%;
       transform: translateX(-50%);
-      font-size: 11px;
+      font-size: clamp(9px, 1.8vw, 11px);
       color: #00f0ff;
-      background: rgba(0,0,0,0.65);
-      padding: 4px 14px;
+      background: rgba(0,0,0,0.7);
+      padding: 3px 10px;
       border-radius: 4px;
       letter-spacing: 1px;
       border: 1px solid #00f0ff;
-      opacity: 0.9;
+      opacity: 0.85;
+      white-space: nowrap;
     }
 
-    #draft-indicator {
+    #draft-indicator, #air-trick-indicator {
       position: absolute;
-      top: 115px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 13px;
+      font-size: clamp(11px, 2.4vw, 14px);
       font-weight: 900;
-      color: #00ffff;
-      background: rgba(0, 40, 80, 0.85);
-      padding: 6px 18px;
+      padding: 4px 16px;
       border-radius: 20px;
-      border: 2px solid #00ffff;
-      box-shadow: 0 0 20px #00f0ff;
       letter-spacing: 1.5px;
       opacity: 0;
-      transition: opacity 0.2s, transform 0.2s;
+      transition: opacity 0.15s, transform 0.15s;
     }
-
+    #draft-indicator {
+      top: clamp(75px, 18vh, 110px);
+      color: #00ffff;
+      background: rgba(0, 40, 80, 0.85);
+      border: 2px solid #00ffff;
+      box-shadow: 0 0 15px #00f0ff;
+    }
     #air-trick-indicator {
-      position: absolute;
-      top: 155px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 16px;
-      font-weight: 900;
+      top: clamp(105px, 25vh, 145px);
       color: #ffff00;
       background: rgba(40, 20, 0, 0.9);
-      padding: 8px 24px;
-      border-radius: 24px;
       border: 2px solid #ffff00;
-      box-shadow: 0 0 25px #ffff00;
-      letter-spacing: 2px;
-      opacity: 0;
-      transition: opacity 0.15s, transform 0.15s;
+      box-shadow: 0 0 20px #ffff00;
     }
 
     .hud-top-sides {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: 50px;
+      margin-top: clamp(28px, 8vh, 45px);
     }
     .hud-gauge {
       background: rgba(10, 20, 35, 0.88);
       border: 2px solid #00f0ff;
       border-radius: 8px;
-      padding: 10px 16px;
-      box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+      padding: clamp(4px, 1.2vh, 8px) clamp(8px, 2vw, 14px);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
     }
     .hud-title {
-      font-size: 10px;
+      font-size: clamp(8px, 1.6vw, 10px);
       color: #88a0c0;
-      letter-spacing: 1.5px;
+      letter-spacing: 1px;
       text-transform: uppercase;
     }
     .hud-value {
-      font-size: 24px;
+      font-size: clamp(16px, 3.8vw, 22px);
       font-weight: 900;
       color: #00f0ff;
-      text-shadow: 0 0 10px #00f0ff;
+      text-shadow: 0 0 8px #00f0ff;
     }
     .hud-sub {
-      font-size: 11px;
+      font-size: clamp(8px, 1.8vw, 10px);
       color: #ff007f;
       font-weight: bold;
     }
-
     #diff-badge {
-      font-size: 11px;
+      font-size: clamp(8px, 1.6vw, 10px);
       color: #ffff00;
       font-weight: 900;
-      letter-spacing: 1px;
-      margin-top: 2px;
     }
 
     #hearts-container {
       display: flex;
-      gap: 6px;
-      margin-top: 4px;
+      gap: 4px;
+      margin-top: 2px;
     }
     .heart-icon {
-      font-size: 18px;
+      font-size: clamp(12px, 2.5vw, 16px);
       color: #ff0033;
-      text-shadow: 0 0 8px #ff0033;
-      transition: opacity 0.2s, transform 0.2s;
+      text-shadow: 0 0 6px #ff0033;
     }
     .heart-lost {
       opacity: 0.2;
@@ -237,14 +228,14 @@
     }
 
     #rearview-mirror {
-      width: 150px;
-      height: 85px;
+      width: clamp(80px, 15vw, 140px);
+      height: clamp(45px, 9vw, 80px);
       background: #000;
       border: 2px solid #ff007f;
-      border-radius: 8px;
+      border-radius: 6px;
       overflow: hidden;
       position: relative;
-      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+      box-shadow: 0 0 12px rgba(255, 0, 127, 0.4);
     }
     #rearview-canvas {
       width: 100%;
@@ -253,15 +244,15 @@
     }
     #mirror-label {
       position: absolute;
-      bottom: 2px;
+      bottom: 0;
       left: 0;
       width: 100%;
       text-align: center;
-      font-size: 9px;
+      font-size: 8px;
       color: #ff007f;
       letter-spacing: 1px;
       font-weight: bold;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
     }
 
     .hud-bottom {
@@ -273,24 +264,24 @@
       background: rgba(10, 20, 35, 0.88);
       border: 2px solid #39ff14;
       border-radius: 8px;
-      padding: 8px 14px;
-      max-height: 140px;
+      padding: 6px 10px;
+      max-height: clamp(60px, 18vh, 110px);
       overflow-y: auto;
-      box-shadow: 0 0 15px rgba(57, 255, 20, 0.35);
-      font-size: 11px;
-      min-width: 220px;
+      box-shadow: 0 0 12px rgba(57, 255, 20, 0.3);
+      font-size: clamp(9px, 1.8vw, 11px);
+      min-width: min(180px, 40vw);
     }
     .roster-item {
       display: flex;
       justify-content: space-between;
-      gap: 15px;
-      margin-bottom: 3px;
+      gap: 8px;
+      margin-bottom: 2px;
     }
     .roster-alive { color: #39ff14; }
     .roster-eaten { color: #ff0033; text-decoration: line-through; }
     .roster-ready { color: #00f0ff; font-weight: bold; }
 
-    /* Crosshair & Hitmarker */
+    /* Crosshair & FX */
     #crosshair {
       position: absolute;
       top: 50%;
@@ -301,11 +292,7 @@
       pointer-events: none;
       z-index: 70;
     }
-    .crosshair-line {
-      position: absolute;
-      background: #00f0ff;
-      box-shadow: 0 0 8px #00f0ff;
-    }
+    .crosshair-line { position: absolute; background: #00f0ff; box-shadow: 0 0 8px #00f0ff; }
     .ch-h { top: 15px; left: 0; width: 32px; height: 2px; }
     .ch-v { top: 0; left: 15px; width: 2px; height: 32px; }
     .ch-dot { top: 13px; left: 13px; width: 6px; height: 6px; border-radius: 50%; background: #ff007f; box-shadow: 0 0 8px #ff007f; }
@@ -314,8 +301,8 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       transform: translate(-50%, -50%) rotate(45deg);
       border: 2px solid #ff0033;
       opacity: 0;
@@ -323,20 +310,17 @@
       transition: opacity 0.08s;
       z-index: 75;
     }
-
     #muzzle-flash {
       position: absolute;
       bottom: 20px;
       right: 25%;
-      width: 140px;
-      height: 140px;
+      width: 120px;
+      height: 120px;
       background: radial-gradient(circle, rgba(255,255,200,1) 0%, rgba(255,150,0,0.8) 40%, rgba(255,0,0,0) 70%);
       opacity: 0;
       pointer-events: none;
       z-index: 60;
-      transition: opacity 0.05s ease-out;
     }
-
     #damage-flash {
       position: absolute;
       top: 0;
@@ -349,131 +333,22 @@
       transition: opacity 0.15s ease-out;
       z-index: 55;
     }
-
     #bite-alert {
       position: absolute;
       top: 25%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 30px;
+      font-size: clamp(16px, 4vw, 26px);
       font-weight: 900;
       color: #ff0033;
       text-shadow: 0 0 15px #ff0000, 2px 2px 0px #000;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s, transform 0.2s;
       z-index: 85;
       text-align: center;
+      width: 90%;
     }
 
-    /* Synchronized Drop Gate Countdown Overlay */
-    #countdown-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: rgba(5, 10, 20, 0.85);
-      z-index: 300;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s ease-out;
-    }
-    #countdown-number {
-      font-family: 'Arial Black', Impact, sans-serif;
-      font-size: 130px;
-      font-weight: 900;
-      color: #00f0ff;
-      text-shadow: 0 0 40px #00f0ff, 0 0 80px #00f0ff;
-      animation: pulsePop 0.8s infinite ease-out;
-    }
-    #countdown-sub {
-      font-size: 24px;
-      font-weight: 900;
-      letter-spacing: 4px;
-      color: #ffff00;
-      text-shadow: 0 0 15px #ffff00;
-      margin-top: 10px;
-    }
-
-    @keyframes pulsePop {
-      0% { transform: scale(0.85); opacity: 0.8; }
-      50% { transform: scale(1.15); opacity: 1; }
-      100% { transform: scale(1.0); opacity: 0.9; }
-    }
-
-    /* Inter-Wave Gondola Rest Overlay */
-    #gondola-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: rgba(0, 30, 60, 0.88);
-      z-index: 280;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.4s ease-in;
-    }
-    #gondola-title {
-      font-family: 'Arial Black', Impact, sans-serif;
-      font-size: 48px;
-      font-weight: 900;
-      color: #39ff14;
-      text-shadow: 0 0 30px #39ff14, 0 0 50px #00f0ff;
-      text-align: center;
-    }
-    #gondola-sub {
-      font-size: 18px;
-      color: #00f0ff;
-      margin-top: 14px;
-      letter-spacing: 2px;
-      text-align: center;
-    }
-
-    /* Slalom Race Complete Overlay */
-    #race-complete-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: rgba(5, 15, 30, 0.95);
-      z-index: 290;
-      pointer-events: auto;
-      opacity: 0;
-      transition: opacity 0.4s ease-in;
-    }
-    #race-complete-title {
-      font-family: 'Arial Black', Impact, sans-serif;
-      font-size: 52px;
-      font-weight: 900;
-      color: #ffff00;
-      text-shadow: 0 0 30px #ffff00, 0 0 50px #00f0ff;
-      text-align: center;
-    }
-    #race-complete-stats {
-      font-size: 20px;
-      color: #fff;
-      margin: 18px 0;
-      letter-spacing: 1.5px;
-      line-height: 1.6;
-      text-align: center;
-    }
-
-    /* Floating Damage / Gate Popups */
     #floating-dmg-container {
       position: absolute;
       top: 0;
@@ -486,63 +361,109 @@
     .dmg-popup {
       position: absolute;
       font-weight: 900;
-      font-size: 24px;
+      font-size: clamp(16px, 4vw, 24px);
       pointer-events: none;
       animation: floatUp 0.8s ease-out forwards;
     }
-    .dmg-normal { color: #ff3344; text-shadow: 0 0 8px #ff0000, 2px 2px 0 #000; }
-    .dmg-crit { color: #ffff00; font-size: 30px; text-shadow: 0 0 12px #ff007f, 2px 2px 0 #000; }
-    .dmg-crossfire { color: #00ffff; font-size: 36px; text-shadow: 0 0 18px #00ffff, 0 0 30px #ff007f; }
-    .dmg-gate { color: #39ff14; font-size: 28px; text-shadow: 0 0 14px #39ff14, 0 0 24px #00f0ff; }
-    .dmg-miss { color: #ff0033; font-size: 26px; text-shadow: 0 0 14px #ff0033; }
-    .dmg-trick { color: #ffff00; font-size: 32px; text-shadow: 0 0 20px #ff007f, 0 0 30px #ffff00; }
+    .dmg-normal { color: #ff3344; text-shadow: 0 0 8px #ff0000; }
+    .dmg-crit { color: #ffff00; text-shadow: 0 0 12px #ff007f; }
+    .dmg-crossfire { color: #00ffff; text-shadow: 0 0 18px #00ffff; }
+    .dmg-gate { color: #39ff14; text-shadow: 0 0 14px #39ff14; }
+    .dmg-miss { color: #ff0033; text-shadow: 0 0 14px #ff0033; }
+    .dmg-trick { color: #ffff00; text-shadow: 0 0 20px #ff007f; }
 
     @keyframes floatUp {
       0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
-      30% { transform: translate(-50%, -20px) scale(1.25); }
-      100% { opacity: 0; transform: translate(-50%, -55px) scale(1.0); }
+      30% { transform: translate(-50%, -20px) scale(1.2); }
+      100% { opacity: 0; transform: translate(-50%, -45px) scale(1.0); }
     }
 
-    /* Chalet Staging & Ready Modal - High Touch Sensitivity */
-    #start-modal, #death-modal {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(10, 18, 32, 0.96);
-      border: 3px solid #00f0ff;
-      border-radius: 14px;
-      padding: 20px 24px;
+    /* Overlays */
+    #countdown-overlay, #gondola-overlay, #race-complete-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(5, 10, 20, 0.9);
+      z-index: 300;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+      padding: 15px;
       text-align: center;
-      box-shadow: 0 0 45px rgba(0, 240, 255, 0.65);
+    }
+    #countdown-number {
+      font-size: clamp(60px, 15vw, 120px);
+      font-weight: 900;
+      color: #00f0ff;
+      text-shadow: 0 0 40px #00f0ff;
+    }
+
+    /* Chalet Staging Modal - 100% Responsive Adaptive Layout */
+    #modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       z-index: 100;
-      max-width: 600px;
-      width: 92%;
-      max-height: 94vh;
+      padding: clamp(6px, 2vh, 16px);
+      background: rgba(4, 8, 16, 0.85);
       overflow-y: auto;
+    }
+
+    #start-modal, #death-modal, #menu-modal {
+      background: rgba(10, 18, 32, 0.96);
+      border: 2px solid #00f0ff;
+      border-radius: 12px;
+      padding: clamp(10px, 2.5vh, 20px) clamp(12px, 3vw, 24px);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.55);
+      max-width: 680px;
+      width: 100%;
       pointer-events: auto;
       touch-action: auto;
+      margin: auto;
     }
+
+    .modal-grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(8px, 2vw, 16px);
+      align-items: center;
+      margin: clamp(6px, 1.5vh, 12px) 0;
+    }
+    @media (max-width: 580px) and (min-height: 480px) {
+      .modal-grid-2col { grid-template-columns: 1fr; }
+    }
+
     .modal-title {
-      font-size: 24px;
+      font-size: clamp(16px, 3.8vw, 24px);
       color: #00f0ff;
-      margin-bottom: 6px;
       text-shadow: 0 0 15px #00f0ff;
       font-weight: 900;
+      text-align: center;
     }
     .mode-select-group {
       display: flex;
-      gap: 8px;
-      margin: 10px 0;
+      gap: 6px;
+      margin: 6px 0;
     }
     .mode-btn {
       flex: 1;
-      padding: 12px 10px;
+      padding: clamp(8px, 1.8vh, 12px) 6px;
       border: 2px solid #556688;
-      border-radius: 8px;
+      border-radius: 6px;
       background: #050a14;
       color: #88a0c0;
-      font-size: 13px;
+      font-size: clamp(10px, 2.2vw, 12px);
       font-weight: 900;
       cursor: pointer;
       pointer-events: auto;
@@ -553,14 +474,14 @@
       border-color: #00f0ff;
       color: #00f0ff;
       background: rgba(0, 240, 255, 0.2);
-      box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
     }
     .squad-room-box {
       background: #050a14;
       border: 1px solid #1e3a5f;
-      border-radius: 8px;
-      padding: 8px 12px;
-      margin: 8px 0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin: 6px 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -568,81 +489,74 @@
     .squad-code {
       color: #ffff00;
       font-weight: 900;
-      letter-spacing: 1.5px;
-      font-size: 14px;
+      letter-spacing: 1px;
+      font-size: clamp(11px, 2.4vw, 13px);
     }
     .btn-copy {
       background: rgba(0, 240, 255, 0.2);
       border: 1px solid #00f0ff;
       color: #00f0ff;
       font-family: inherit;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
-      padding: 6px 10px;
+      padding: 4px 8px;
       border-radius: 4px;
       cursor: pointer;
-      pointer-events: auto;
       touch-action: manipulation;
     }
     .difficulty-group {
       display: flex;
       justify-content: center;
-      gap: 8px;
-      margin: 8px 0;
+      gap: 6px;
+      margin: 6px 0;
     }
     .diff-btn {
       flex: 1;
-      padding: 8px 10px;
+      padding: 6px 6px;
       border: 2px solid #556688;
       border-radius: 6px;
       background: #050a14;
       color: #88a0c0;
-      font-size: 11px;
+      font-size: clamp(9px, 2vw, 11px);
       font-weight: bold;
       cursor: pointer;
-      pointer-events: auto;
       touch-action: manipulation;
-      transition: 0.15s;
     }
     .diff-btn.active {
       border-color: #00f0ff;
       color: #00f0ff;
       background: rgba(0, 240, 255, 0.2);
-      box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
     }
     .modal-btn {
       background: linear-gradient(135deg, #ff007f, #7928ca);
       border: none;
       color: #fff;
-      padding: 14px 20px;
-      font-size: 16px;
+      padding: clamp(10px, 2vh, 14px) 16px;
+      font-size: clamp(13px, 2.8vw, 16px);
       font-weight: 900;
       border-radius: 8px;
       cursor: pointer;
-      margin-top: 8px;
-      box-shadow: 0 0 20px rgba(255, 0, 127, 0.5);
-      transition: transform 0.08s, box-shadow 0.08s;
+      box-shadow: 0 0 16px rgba(255, 0, 127, 0.45);
       width: 100%;
       pointer-events: auto;
       touch-action: manipulation;
+      transition: transform 0.08s;
     }
-    .modal-btn:active {
-      transform: scale(0.96);
-    }
+    .modal-btn:active { transform: scale(0.96); }
     .modal-btn-ready {
       background: linear-gradient(135deg, #00f0ff, #0088ff);
-      box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+      box-shadow: 0 0 16px rgba(0, 240, 255, 0.55);
       color: #000;
     }
     .input-field {
       width: 100%;
-      padding: 10px;
+      padding: 8px;
       background: #050a14;
       border: 2px solid #88a0c0;
       border-radius: 6px;
       color: #fff;
-      font-size: 14px;
-      margin: 6px 0;
+      font-size: clamp(11px, 2.5vw, 13px);
+      margin: 4px 0;
       font-family: inherit;
       text-align: center;
       pointer-events: auto;
@@ -661,7 +575,7 @@
       opacity: 0.45;
     }
 
-    /* Mobile Landscape Prompt */
+    /* Mobile Landscape Prompt (Only on Portrait) */
     #rotate-prompt {
       display: none;
       position: fixed;
@@ -675,75 +589,45 @@
       justify-content: center;
       align-items: center;
       text-align: center;
-      padding: 24px;
-      touch-action: none;
+      padding: 20px;
     }
-    .rotate-phone-icon {
-      font-size: 56px;
-      animation: rotatePhone 2.2s infinite ease-in-out;
-      margin-bottom: 20px;
-    }
-    .rotate-title {
-      font-size: 26px;
-      font-weight: 900;
-      color: #00f0ff;
-      letter-spacing: 2px;
-      text-shadow: 0 0 15px #00f0ff;
-      margin-bottom: 10px;
-    }
-    .rotate-desc {
-      font-size: 14px;
-      color: #88a0c0;
-      letter-spacing: 1px;
-      line-height: 1.5;
-      max-width: 320px;
-    }
-
-    @keyframes rotatePhone {
-      0% { transform: rotate(0deg); }
-      40% { transform: rotate(-90deg); }
-      70% { transform: rotate(-90deg); }
-      100% { transform: rotate(0deg); }
-    }
-
     @media (orientation: portrait) {
-      #rotate-prompt {
-        display: flex !important;
-      }
+      #rotate-prompt { display: flex !important; }
     }
 
-    /* Mobile Touch Carving & Action Controls */
+    /* Mobile Touch Zones */
     #touch-steer-zone {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 50vw;
-      height: 100vh;
+      bottom: 10px;
+      left: 10px;
+      width: min(180px, 45vw);
+      height: min(180px, 50vh);
       z-index: 75;
       touch-action: none;
       pointer-events: auto;
+      border: 2px dashed rgba(0, 240, 255, 0.35);
+      border-radius: 50%;
+      background: rgba(0, 240, 255, 0.05);
     }
-
     #touch-stick-base {
       position: absolute;
-      width: 96px;
-      height: 96px;
+      width: 72px;
+      height: 72px;
       border-radius: 50%;
       border: 2px dashed rgba(0, 240, 255, 0.7);
-      background: rgba(0, 240, 255, 0.08);
+      background: rgba(0, 240, 255, 0.12);
       pointer-events: none;
       transform: translate(-50%, -50%);
       display: none;
       z-index: 76;
     }
-
     #touch-stick-thumb {
       position: absolute;
-      width: 46px;
-      height: 46px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: radial-gradient(circle, #00f0ff 0%, rgba(0, 240, 255, 0.6) 80%);
-      box-shadow: 0 0 16px #00f0ff;
+      box-shadow: 0 0 14px #00f0ff;
       pointer-events: none;
       transform: translate(-50%, -50%);
       display: none;
@@ -752,15 +636,14 @@
 
     #mobile-action-bar {
       position: absolute;
-      bottom: 24px;
-      right: 20px;
+      bottom: 12px;
+      right: 12px;
       display: flex;
       flex-direction: row;
-      gap: 12px;
+      gap: 8px;
       z-index: 80;
       pointer-events: auto;
     }
-
     .touch-btn {
       background: rgba(10, 20, 35, 0.9);
       border: 2px solid #00f0ff;
@@ -768,117 +651,83 @@
       color: #fff;
       font-family: inherit;
       font-weight: 900;
-      font-size: 13px;
-      letter-spacing: 1px;
-      padding: 14px 18px;
-      min-width: 80px;
-      min-height: 54px;
+      font-size: clamp(10px, 2.2vw, 12px);
+      padding: clamp(8px, 1.8vh, 12px) clamp(10px, 2.2vw, 16px);
+      min-height: 46px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 15px rgba(0, 240, 255, 0.35);
-      user-select: none;
-      -webkit-user-select: none;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
       touch-action: manipulation;
       cursor: pointer;
-      transition: transform 0.08s, background 0.08s, box-shadow 0.08s;
     }
-
-    .touch-btn:active, .touch-btn.active {
-      transform: scale(0.92);
-    }
-
     .touch-btn-shoot {
       background: linear-gradient(135deg, rgba(255, 0, 127, 0.95), rgba(255, 0, 50, 0.95));
       border-color: #ff0055;
-      box-shadow: 0 0 20px rgba(255, 0, 85, 0.6);
-      min-width: 100px;
-      font-size: 15px;
-    }
-    .touch-btn-shoot:active {
-      background: #ff0033;
-      box-shadow: 0 0 30px #ff0033;
-    }
-
-    .touch-btn-rearview {
-      border-color: #ff007f;
-      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
-    }
-    .touch-btn-rearview.active {
-      background: rgba(255, 0, 127, 0.45);
-      border-color: #ff00ff;
-      box-shadow: 0 0 25px rgba(255, 0, 127, 0.8);
-    }
-
-    .touch-btn-reload {
-      border-color: #39ff14;
-      box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
-    }
-    .touch-btn-reload:active {
-      background: rgba(57, 255, 20, 0.35);
+      box-shadow: 0 0 16px rgba(255, 0, 85, 0.55);
+      min-width: 80px;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <meta name="google-adsense-account" content="ca-pub-5487660440662949">
 </head>
 <body>
   <!-- Mobile Landscape Orientation Enforcer -->
   <div id="rotate-prompt">
-    <div class="rotate-phone-icon">📱 ↷</div>
-    <div class="rotate-title">ROTATE TO LANDSCAPE</div>
-    <div class="rotate-desc">SkiFree 2 requires landscape orientation for high-speed alpine hunting. Turn your device horizontally.</div>
+    <div style="font-size:48px; margin-bottom:15px;">📱 ↷</div>
+    <div style="font-size:22px; font-weight:900; color:#00f0ff; margin-bottom:8px;">ROTATE TO LANDSCAPE</div>
+    <div style="font-size:13px; color:#88a0c0; line-height:1.5;">Turn your phone horizontally to ski.</div>
   </div>
 
   <!-- Synchronized Drop Countdown Overlay -->
   <div id="countdown-overlay">
     <div id="countdown-number">3</div>
-    <div id="countdown-sub">🎿 GATES OPENING — DROP IN!</div>
+    <div style="font-size:18px; color:#ffff00; font-weight:900; margin-top:8px;">🎿 GATES OPENING — DROP IN!</div>
   </div>
 
   <!-- Inter-Wave Gondola Rest Overlay -->
   <div id="gondola-overlay">
-    <div id="gondola-title">🚡 GONDOLA BASECAMP REST</div>
-    <div id="gondola-sub">SQUAD REVIVED • AMMO RESTOCKED • PREPARE FOR NEXT YETI WAVE</div>
+    <div style="font-size:clamp(24px, 5vw, 42px); color:#39ff14; font-weight:900;">🚡 GONDOLA BASECAMP REST</div>
+    <div id="gondola-sub" style="font-size:clamp(12px, 2.5vw, 16px); color:#00f0ff; margin-top:10px;">SQUAD REVIVED • PREPARE FOR NEXT WAVE</div>
   </div>
 
   <!-- Slalom Race Complete Overlay -->
   <div id="race-complete-overlay" class="hidden">
-    <div id="race-complete-title">🏁 COURSE CLEARED!</div>
-    <div id="race-complete-stats">
+    <div style="font-size:clamp(28px, 6vw, 48px); color:#ffff00; font-weight:900;">🏁 COURSE CLEARED!</div>
+    <div style="font-size:clamp(14px, 3vw, 18px); color:#fff; margin:12px 0; line-height:1.6;">
       TIME: <span id="finish-time" style="color:#00f0ff; font-weight:bold;">0.00s</span><br>
       GATES HIT: <span id="finish-gates" style="color:#39ff14; font-weight:bold;">0 / 30</span><br>
       MAX SPEED: <span id="finish-speed" style="color:#ffff00; font-weight:bold;">0 MPH</span><br>
       RACE SCORE: <span id="finish-score" style="color:#ff007f; font-weight:bold;">0 PTS</span>
     </div>
-    <button class="modal-btn" id="btn-race-again" style="max-width:320px;">RACE AGAIN 🚀</button>
+    <button class="modal-btn" id="btn-race-again" style="max-width:280px;" type="button">RACE AGAIN 🚀</button>
   </div>
 
-  <!-- Mobile Touch Controls Layer (Hidden during Menu) -->
+  <!-- Mobile Touch Controls -->
   <div id="touch-steer-zone" class="hidden"></div>
   <div id="touch-stick-base"></div>
   <div id="touch-stick-thumb"></div>
 
   <div id="mobile-action-bar" class="hidden">
-    <button id="btn-touch-rearview" class="touch-btn touch-btn-rearview" type="button">👀 REARVIEW</button>
-    <button id="btn-touch-reload" class="touch-btn touch-btn-reload" type="button">🔄 RELOAD</button>
+    <button id="btn-touch-rearview" class="touch-btn" type="button">👀 REAR</button>
+    <button id="btn-touch-reload" class="touch-btn" type="button">🔄 RELOAD</button>
     <button id="btn-touch-shoot" class="touch-btn touch-btn-shoot" type="button">💥 SHOOT</button>
   </div>
 
   <div id="crt-overlay"></div>
   <div id="damage-flash"></div>
-  <div id="bite-alert">🩸 YETI BITE! ARM LOST (-1 HEART)</div>
+  <div id="bite-alert">🩸 YETI BITE! (-1 HEART)</div>
 
-  <!-- Cinematic Skippable Intro Video Overlay -->
-  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.4s ease-out; pointer-events:auto;">
-    <video id="intro-video" playsinline style="width:100%; height:100%; object-fit:cover; max-height:100vh;">
+  <!-- Cinematic Skippable Intro Overlay -->
+  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.3s ease-out; pointer-events:auto;">
+    <video id="intro-video" autoplay muted loop playsinline webkit-playsinline preload="auto" style="width:100%; height:100%; object-fit:cover;">
       <source src="assets/media/teaser_trailer.mp4" type="video/mp4">
     </video>
-    <div style="position:absolute; bottom:30px; display:flex; flex-direction:column; align-items:center; gap:12px; z-index:510; pointer-events:auto;">
-      <div style="width:280px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; overflow:hidden;">
-        <div id="intro-progress" style="width:0%; height:100%; background:#00f0ff; box-shadow:0 0 10px #00f0ff; transition:width 0.1s linear;"></div>
+    <div style="position:absolute; bottom:20px; display:flex; flex-direction:column; align-items:center; gap:8px; z-index:510; pointer-events:auto;">
+      <div style="width:220px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; overflow:hidden;">
+        <div id="intro-progress" style="width:0%; height:100%; background:#00f0ff;"></div>
       </div>
-      <button id="btn-skip-intro" type="button" style="background:linear-gradient(135deg, rgba(255,0,127,0.9), rgba(121,40,202,0.9)); border:2px solid #00f0ff; color:#fff; font-family:inherit; font-weight:900; font-size:16px; letter-spacing:2px; padding:12px 32px; border-radius:30px; cursor:pointer; box-shadow:0 0 25px rgba(0,240,255,0.6); pointer-events:auto; touch-action:manipulation;">
-        SKIP INTRO [TAP / SPACE] ⏭️
+      <button id="btn-skip-intro" type="button" style="background:linear-gradient(135deg, rgba(255,0,127,0.9), rgba(121,40,202,0.9)); border:2px solid #00f0ff; color:#fff; font-weight:900; font-size:14px; letter-spacing:1px; padding:10px 24px; border-radius:24px; cursor:pointer; touch-action:manipulation;">
+        TAP ANYWHERE TO START ⏭️
       </button>
     </div>
   </div>
@@ -894,10 +743,9 @@
 
   <!-- In-Game HUD -->
   <div id="hud-overlay" class="hidden">
-    <!-- Yeti Hunt Boss HUD -->
     <div id="boss-hud">
       <div class="boss-label">
-        <span id="boss-wave-title">👹 ALPINE YETI (WAVE 1)</span>
+        <span id="boss-wave-title">👹 ALPINE YETI (W1)</span>
         <span id="boss-hp-text">8,000 / 8,000 HP</span>
       </div>
       <div class="hp-bar-bg">
@@ -905,41 +753,40 @@
       </div>
     </div>
 
-    <!-- Slalom Race Top HUD -->
     <div id="race-hud" class="hidden">
       <div class="race-stat-box">
-        <div class="race-stat-title">RACE TIME</div>
+        <div class="race-stat-title">TIME</div>
         <div class="race-stat-val" id="race-time-val">0.0s</div>
       </div>
       <div class="race-stat-box">
-        <div class="race-stat-title">GATES HIT</div>
-        <div class="race-stat-val" id="race-gates-val" style="color:#39ff14;">0 / 30</div>
+        <div class="race-stat-title">GATES</div>
+        <div class="race-stat-val" id="race-gates-val" style="color:#39ff14;">0/30</div>
       </div>
       <div class="race-stat-box">
-        <div class="race-stat-title">GATE STREAK</div>
+        <div class="race-stat-title">STREAK</div>
         <div class="race-stat-val" id="race-streak-val" style="color:#ffff00;">1x</div>
       </div>
     </div>
 
-    <div id="lookback-hint"><span id="hud-view" style="color:#00f0ff; font-weight:900;">DOWNHILL</span> • HOLD [SHIFT] OR RIGHT-CLICK TO AIM & SHOOT BEHIND YOU • [1/2/3] SPEED DIFFICULTY</div>
-    <div id="draft-indicator">💨 SLINGSHOT DRAFTING (+18 MPH)</div>
-    <div id="air-trick-indicator">🚀 BIG AIR COMBO (+1,500 PTS)</div>
+    <div id="lookback-hint"><span id="hud-view" style="color:#00f0ff; font-weight:900;">DOWNHILL</span> • [SHIFT / RIGHT-CLICK] LOOK BACK</div>
+    <div id="draft-indicator">💨 DRAFTING (+18 MPH)</div>
+    <div id="air-trick-indicator">🚀 BIG AIR (+1,500 PTS)</div>
 
     <div class="hud-top-sides">
       <div class="hud-gauge">
-        <div class="hud-title">SPEED (W/S)</div>
-        <div class="hud-value" id="hud-speed">0 <span style="font-size:14px;">MPH</span></div>
-        <div id="diff-badge">DIFFICULTY: MEDIUM</div>
+        <div class="hud-title">SPEED</div>
+        <div class="hud-value" id="hud-speed">0 <span style="font-size:11px;">MPH</span></div>
+        <div id="diff-badge">DIFF: MEDIUM</div>
       </div>
 
       <div class="hud-gauge">
-        <div class="hud-title">HEALTH / LIMBS</div>
+        <div class="hud-title">LIVES</div>
         <div id="hearts-container">
           <span class="heart-icon" id="h1">❤️</span>
           <span class="heart-icon" id="h2">❤️</span>
           <span class="heart-icon" id="h3">❤️</span>
         </div>
-        <div class="hud-sub" id="limb-status" style="color:#39ff14;">INTACT ⛷️</div>
+        <div class="hud-sub" id="limb-status" style="color:#39ff14;">INTACT</div>
       </div>
 
       <div id="rearview-mirror">
@@ -948,146 +795,128 @@
       </div>
 
       <div class="hud-gauge">
-        <div class="hud-title">SCORE / STATS</div>
-        <div class="hud-value" id="hud-dmg">0 <span style="font-size:14px;">PTS</span></div>
+        <div class="hud-title">SCORE</div>
+        <div class="hud-value" id="hud-dmg">0 <span style="font-size:11px;">PTS</span></div>
         <div class="hud-sub" id="ammo-count">AMMO: 8 / 8 [R]</div>
       </div>
 
-      <button id="btn-menu-open" style="background:rgba(10,20,35,0.9); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; padding:10px 14px; border-radius:8px; cursor:pointer; pointer-events:auto; box-shadow:0 0 15px rgba(0,240,255,0.4); touch-action:manipulation;">⚙️ MENU [ESC]</button>
+      <button id="btn-menu-open" style="background:rgba(10,20,35,0.9); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; padding:6px 10px; border-radius:6px; cursor:pointer; pointer-events:auto; touch-action:manipulation;">⚙️ MENU</button>
     </div>
 
     <div class="hud-bottom">
       <div id="skier-roster">
-        <div style="font-weight:bold; color:#00f0ff; margin-bottom:4px;">ALPINE SQUAD ROSTER</div>
+        <div style="font-weight:bold; color:#00f0ff; margin-bottom:2px;">SQUAD ROSTER</div>
         <div id="roster-list"></div>
       </div>
       <div class="hud-gauge" style="text-align:right;" id="yeti-status-gauge">
-        <div class="hud-title">YETI STATUS</div>
-        <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:18px;">CHARGING</div>
+        <div class="hud-title">YETI</div>
+        <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:14px;">CHARGING</div>
       </div>
     </div>
   </div>
 
   <canvas id="game-canvas"></canvas>
 
-  <!-- Chalet Match Staging Modal -->
-  <div id="start-modal">
-    <div class="modal-title">🎿 SKIFREE 2: ALPINE ARENA</div>
-    
-    <div style="font-size:12px; color:#88a0c0; font-weight:bold; margin-bottom:4px;">SELECT GAME MODE:</div>
-    <div class="mode-select-group">
-      <button class="mode-btn active" id="btn-mode-hunt" data-mode="hunt" type="button">👹 YETI HUNT CO-OP</button>
-      <button class="mode-btn" id="btn-mode-slalom" data-mode="slalom" type="button">⏱️ SLALOM TIME-TRIAL</button>
-    </div>
-
-    <div class="squad-room-box">
-      <div>
-        <span style="font-size:11px; color:#88a0c0;">SQUAD ROOM:</span>
-        <span class="squad-code" id="squad-room-code">MAIN-ALPS</span>
-      </div>
-      <button class="btn-copy" id="btn-copy-room" type="button">📋 COPY LINK</button>
-    </div>
-
-    <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
-    
-    <div class="difficulty-group">
-      <button class="diff-btn" data-diff="easy" type="button">🟢 EASY<br><span style="font-size:10px; color:#aaa;">20-45 MPH</span></button>
-      <button class="diff-btn active" data-diff="medium" type="button">🟡 MEDIUM<br><span style="font-size:10px; color:#aaa;">28-60 MPH</span></button>
-      <button class="diff-btn" data-diff="pro" type="button">🔴 PRO SPEED<br><span style="font-size:10px; color:#aaa;">38-85 MPH</span></button>
-    </div>
-
-    <div style="margin-top:8px; display:flex; gap:10px;">
-      <button class="modal-btn modal-btn-ready" id="btn-ready" style="flex:1;" type="button">READY UP 🎿</button>
-      <button class="modal-btn" id="btn-start" style="flex:1;" type="button">DROP NOW 🚀</button>
-    </div>
-    <p style="margin-top:6px; font-size:11px; color:#556688;">
-      [Touch / A/D] 90° Carve • [Space / Touch] Big Air Jumps • [Slingshot +18 MPH]
-    </p>
-  </div>
-
-  <!-- Death Modal -->
-  <div id="death-modal" class="hidden">
-    <div class="modal-title" style="color:#ff0033;" id="death-title">💀 RUN FAILED</div>
-    <p id="death-stat" style="color:#fff; font-size:15px; margin: 15px 0;"></p>
-    <button class="modal-btn" id="btn-respawn" type="button">RESPAWN & DROP AGAIN</button>
-  </div>
-
-  <!-- In-Game Pause, Settings & Leaderboard Modal -->
-  <div id="menu-modal" class="hidden" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,18,32,0.96); border:3px solid #00f0ff; border-radius:12px; padding:25px 30px; box-shadow:0 0 45px rgba(0,240,255,0.6); z-index:200; max-width:650px; width:92%; max-height:88vh; overflow-y:auto; pointer-events:auto;">
-    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
-      <span>⚙️ MOUNTAIN HQ & LEADERBOARD</span>
-      <button id="btn-menu-close" style="background:none; border:none; color:#ff007f; font-size:24px; cursor:pointer; font-weight:bold; touch-action:manipulation;">✕</button>
-    </div>
-
-    <div style="display:flex; gap:10px; margin:15px 0 15px 0;">
-      <button class="modal-tab-btn active" id="tab-hunt-board-btn" style="flex:1; padding:10px; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#00f0ff; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer; touch-action:manipulation;">👹 YETI HUNTS</button>
-      <button class="modal-tab-btn" id="tab-race-board-btn" style="flex:1; padding:10px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer; touch-action:manipulation;">⏱️ SLALOM RACES</button>
-      <button class="modal-tab-btn" id="tab-settings-btn" style="flex:1; padding:10px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer; touch-action:manipulation;">🎛️ AUDIO</button>
-    </div>
-
-    <!-- Yeti Leaderboard Panel -->
-    <div id="panel-hunt-board">
-      <div style="background:#050a14; border:1px solid #1a2a48; border-radius:8px; overflow:hidden;">
-        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
-          <thead>
-            <tr style="background:rgba(0,240,255,0.15); color:#00f0ff;">
-              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">RANK</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">HUNTER</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">SCORE</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">SPEED</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">DISTANCE</th>
-            </tr>
-          </thead>
-          <tbody id="hunt-leaderboard-rows">
-            <tr><td colspan="5" style="text-align:center; padding:16px; color:#88a0c0;">Syncing Edge Records...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Slalom Race Leaderboard Panel -->
-    <div id="panel-race-board" class="hidden">
-      <div style="background:#050a14; border:1px solid #1a2a48; border-radius:8px; overflow:hidden;">
-        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
-          <thead>
-            <tr style="background:rgba(57,255,20,0.15); color:#39ff14;">
-              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">RANK</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">RACER</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">TIME</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">MAX SPEED</th>
-              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">GATES</th>
-            </tr>
-          </thead>
-          <tbody id="race-leaderboard-rows">
-            <tr><td colspan="5" style="text-align:center; padding:16px; color:#88a0c0;">Syncing Slalom Records...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Settings Panel -->
-    <div id="panel-settings" class="hidden">
-      <div style="display:flex; flex-direction:column; gap:14px; text-align:left;">
+  <!-- Chalet Modal Wrapper -->
+  <div id="modal-backdrop">
+    <div id="start-modal">
+      <div class="modal-title">🎿 SKIFREE 2: ALPINE ARENA</div>
+      
+      <div class="modal-grid-2col">
+        <!-- Column 1: Mode & Room -->
         <div>
-          <label style="font-size:12px; color:#88a0c0; font-weight:bold;">SOUNDTRACK AUDIO ("WALTZ ON THE SLOPE"):</label>
-          <div style="display:flex; gap:10px; margin-top:6px;">
-            <button id="btn-soundtrack-toggle" style="flex:1; padding:8px 12px; background:#050a14; border:2px solid #39ff14; color:#39ff14; font-family:inherit; border-radius:6px; cursor:pointer; font-weight:bold;" type="button">🔊 SOUNDTRACK: ON</button>
-            <input type="range" id="soundtrack-vol" min="0" max="1" step="0.05" value="0.5" style="flex:1; cursor:pointer;">
+          <div style="font-size:11px; color:#88a0c0; font-weight:bold;">GAME MODE:</div>
+          <div class="mode-select-group">
+            <button class="mode-btn active" id="btn-mode-hunt" data-mode="hunt" type="button">👹 YETI HUNT</button>
+            <button class="mode-btn" id="btn-mode-slalom" data-mode="slalom" type="button">⏱️ SLALOM</button>
+          </div>
+          <div class="squad-room-box">
+            <span class="squad-code" id="squad-room-code">MAIN-ALPS</span>
+            <button class="btn-copy" id="btn-copy-room" type="button">📋 COPY</button>
+          </div>
+          <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
+        </div>
+
+        <!-- Column 2: Difficulty & Launch -->
+        <div>
+          <div style="font-size:11px; color:#88a0c0; font-weight:bold;">SPEED DIFFICULTY:</div>
+          <div class="difficulty-group">
+            <button class="diff-btn" data-diff="easy" type="button">🟢 EASY</button>
+            <button class="diff-btn active" data-diff="medium" type="button">🟡 MED</button>
+            <button class="diff-btn" data-diff="pro" type="button">🔴 PRO</button>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="modal-btn modal-btn-ready" id="btn-ready" style="flex:1;" type="button">READY 🎿</button>
+            <button class="modal-btn" id="btn-start" style="flex:1;" type="button">DROP NOW 🚀</button>
           </div>
         </div>
       </div>
+
+      <div style="text-align:center; margin-top:4px;">
+        <button id="btn-toggle-fullscreen" style="background:none; border:1px solid #00f0ff; color:#00f0ff; font-size:10px; padding:4px 10px; border-radius:4px; cursor:pointer; touch-action:manipulation;" type="button">⛶ ENTER FULLSCREEN</button>
+      </div>
     </div>
 
-    <button class="modal-btn" id="btn-resume-game" style="margin-top:20px;" type="button">RESUME HUNT 🎿</button>
+    <!-- Death Modal -->
+    <div id="death-modal" class="hidden">
+      <div class="modal-title" style="color:#ff0033;" id="death-title">💀 RUN FAILED</div>
+      <p id="death-stat" style="color:#fff; font-size:14px; margin: 12px 0; text-align:center;"></p>
+      <button class="modal-btn" id="btn-respawn" type="button">RESPAWN & DROP AGAIN</button>
+    </div>
+
+    <!-- In-Game Pause Modal -->
+    <div id="menu-modal" class="hidden">
+      <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>⚙️ LEADERBOARDS</span>
+        <button id="btn-menu-close" style="background:none; border:none; color:#ff007f; font-size:20px; cursor:pointer; font-weight:bold; touch-action:manipulation;">✕</button>
+      </div>
+
+      <div style="display:flex; gap:8px; margin:10px 0;">
+        <button class="modal-tab-btn active" id="tab-hunt-board-btn" style="flex:1; padding:8px; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#00f0ff; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer; touch-action:manipulation;">👹 YETI</button>
+        <button class="modal-tab-btn" id="tab-race-board-btn" style="flex:1; padding:8px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer; touch-action:manipulation;">⏱️ SLALOM</button>
+      </div>
+
+      <div id="panel-hunt-board" style="max-height:220px; overflow-y:auto;">
+        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;">
+          <thead>
+            <tr style="background:rgba(0,240,255,0.15); color:#00f0ff;">
+              <th style="padding:6px;">RANK</th>
+              <th style="padding:6px;">HUNTER</th>
+              <th style="padding:6px;">SCORE</th>
+              <th style="padding:6px;">SPEED</th>
+            </tr>
+          </thead>
+          <tbody id="hunt-leaderboard-rows">
+            <tr><td colspan="4" style="text-align:center; padding:12px; color:#88a0c0;">Syncing Edge Records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="panel-race-board" class="hidden" style="max-height:220px; overflow-y:auto;">
+        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;">
+          <thead>
+            <tr style="background:rgba(57,255,20,0.15); color:#39ff14;">
+              <th style="padding:6px;">RANK</th>
+              <th style="padding:6px;">RACER</th>
+              <th style="padding:6px;">TIME</th>
+              <th style="padding:6px;">GATES</th>
+            </tr>
+          </thead>
+          <tbody id="race-leaderboard-rows">
+            <tr><td colspan="4" style="text-align:center; padding:12px; color:#88a0c0;">Syncing Slalom Records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button class="modal-btn" id="btn-resume-game" style="margin-top:12px;" type="button">RESUME HUNT 🎿</button>
+    </div>
   </div>
 
-  <!-- Soundtrack Audio -->
   <audio id="bg-soundtrack" loop preload="auto">
     <source src="assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
   </audio>
 
   <script>
-    // Universal Touch & Pointer Event Binder (Prevents mobile touch click drop)
     function bindAction(el, callback) {
       if (!el) return;
       let triggered = false;
@@ -1098,33 +927,28 @@
       }, { passive: false });
       el.addEventListener('touchstart', (e) => {
         e.stopPropagation();
-        if (!triggered) {
-          callback(e);
-        }
+        if (!triggered) callback(e);
       }, { passive: false });
       el.addEventListener('click', (e) => {
         e.preventDefault();
-        if (!triggered) {
-          callback(e);
-        }
+        if (!triggered) callback(e);
         setTimeout(() => { triggered = false; }, 250);
       });
     }
 
     const DIFFICULTY_PRESETS = {
-      easy: { name: "EASY / CASUAL", cruiseSpeed: 20, tuckSpeed: 45, brakeSpeed: 12, lateralFactor: 0.045, forwardFactor: 0.030, badgeColor: "#39ff14" },
-      medium: { name: "MEDIUM ARCADE", cruiseSpeed: 28, tuckSpeed: 60, brakeSpeed: 16, lateralFactor: 0.055, forwardFactor: 0.038, badgeColor: "#ffff00" },
-      pro: { name: "PRO REALISTIC", cruiseSpeed: 38, tuckSpeed: 85, brakeSpeed: 20, lateralFactor: 0.068, forwardFactor: 0.046, badgeColor: "#ff007f" }
+      easy: { name: "EASY", cruiseSpeed: 20, tuckSpeed: 45, brakeSpeed: 12, lateralFactor: 0.045, forwardFactor: 0.030, badgeColor: "#39ff14" },
+      medium: { name: "MED", cruiseSpeed: 28, tuckSpeed: 60, brakeSpeed: 16, lateralFactor: 0.055, forwardFactor: 0.038, badgeColor: "#ffff00" },
+      pro: { name: "PRO", cruiseSpeed: 38, tuckSpeed: 85, brakeSpeed: 20, lateralFactor: 0.068, forwardFactor: 0.046, badgeColor: "#ff007f" }
     };
 
     let selectedDifficulty = "medium";
-    let activeGameMode = "hunt"; // "hunt" | "slalom"
+    let activeGameMode = "hunt";
 
     // --- Spatial 3D WebAudio Engine ---
     class SpatialWebAudioEngine {
       constructor() {
         this.ctx = null;
-        this.listener = null;
         this.windGain = null;
         this.windFilter = null;
         this.carveGain = null;
@@ -1135,7 +959,6 @@
         if (this.isInitialized) return;
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.ctx = new AudioContext();
-        this.listener = this.ctx.listener;
 
         const bufferSize = this.ctx.sampleRate * 2;
         const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -1144,7 +967,6 @@
           output[i] = (Math.random() * 2 - 1) * 0.5;
         }
 
-        // Wind Rush
         const whiteNoise = this.ctx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
         whiteNoise.loop = true;
@@ -1159,7 +981,6 @@
         this.windGain.connect(this.ctx.destination);
         whiteNoise.start();
 
-        // Edge Carving
         const carveNoise = this.ctx.createBufferSource();
         carveNoise.buffer = noiseBuffer;
         carveNoise.loop = true;
@@ -1174,25 +995,6 @@
         carveNoise.start();
 
         this.isInitialized = true;
-      }
-
-      create3DPanner(x, y, z) {
-        if (!this.isInitialized || !this.ctx) return null;
-        const panner = this.ctx.createPanner();
-        panner.panningModel = 'HRTF';
-        panner.distanceModel = 'exponential';
-        panner.refDistance = 3;
-        panner.maxDistance = 120;
-        panner.rolloffFactor = 1.4;
-        if (panner.positionX) {
-          panner.positionX.setValueAtTime(x, this.ctx.currentTime);
-          panner.positionY.setValueAtTime(y, this.ctx.currentTime);
-          panner.positionZ.setValueAtTime(z, this.ctx.currentTime);
-        } else {
-          panner.setPosition(x, y, z);
-        }
-        panner.connect(this.ctx.destination);
-        return panner;
       }
 
       playGunshot() {
@@ -1226,9 +1028,8 @@
         osc.stop(this.ctx.currentTime + 0.4);
       }
 
-      playBiteChomp(x = 0, y = 1.8, z = 2) {
+      playBiteChomp() {
         if (!this.isInitialized) return;
-        const panner = this.create3DPanner(x, y, z);
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
@@ -1237,8 +1038,7 @@
         gain.gain.setValueAtTime(0.95, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.32);
         osc.connect(gain);
-        if (panner) gain.connect(panner);
-        else gain.connect(this.ctx.destination);
+        gain.connect(this.ctx.destination);
         osc.start();
         osc.stop(this.ctx.currentTime + 0.32);
       }
@@ -1333,34 +1133,29 @@
 
     // --- 3D Scene State ---
     let scene, camera, renderer;
-    let mirrorScene, mirrorCamera, mirrorRenderer;
+    let mirrorCamera, mirrorRenderer;
     let leftSki, rightSki, skiGroup, rifleMesh;
     let trees = [];
     let snowParticles;
     let yetiMesh, yetiSprite, yetiTexture;
-    let skierTexture;
 
-    // 2026 Interactive Physical World Elements
     let kickers = [];
     let grindRails = [];
     let icePatches = [];
     let gondolaCabins = [];
     let mountainPeaks = [];
 
-    // 3D Airborne Physics & Big Air Tricks
     let isAirborne = false;
     let airY = 0;
     let airVy = 0;
     let airRollAngle = 0;
     let isGrindingRail = false;
 
-    // Slalom Gates & Finish Line
     let slalomGates = [];
     let finishLineMesh = null;
     const TOTAL_SLALOM_GATES = 30;
     const RACE_FINISH_Z = 1500;
 
-    // Slalom Race State
     let raceStartTime = 0;
     let raceElapsedTime = 0;
     let gatesHitCount = 0;
@@ -1369,7 +1164,6 @@
     let raceScore = 0;
     let isRaceFinished = false;
 
-    // Multiplayer Entities Pool
     const remoteSkierMeshes = new Map();
     const boulderMeshes = new Map();
 
@@ -1425,7 +1219,6 @@
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
       camera.position.set(0, 1.8, 0);
 
-      // Alpine Lighting
       const sunLight = new THREE.DirectionalLight(0xfff8ee, 1.4);
       sunLight.position.set(45, 90, -50);
       scene.add(sunLight);
@@ -1466,6 +1259,7 @@
       initRearviewMirror();
 
       window.addEventListener('resize', onWindowResize);
+      window.addEventListener('orientationchange', () => setTimeout(onWindowResize, 200));
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mousedown', onShoot);
       window.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1660,7 +1454,6 @@
 
       for (let i = 0; i < 65; i++) {
         const treeGroup = new THREE.Group();
-        // Cross-billboard for full 3D volume
         const p1 = new THREE.Mesh(treeGeo, treeMat);
         p1.position.y = 4.5;
         const p2 = new THREE.Mesh(treeGeo, treeMat);
@@ -1780,12 +1573,13 @@
     function initRearviewMirror() {
       const mirrorCanvas = document.getElementById('rearview-canvas');
       mirrorRenderer = new THREE.WebGLRenderer({ canvas: mirrorCanvas });
-      mirrorRenderer.setSize(150, 85);
-      mirrorCamera = new THREE.PerspectiveCamera(60, 150 / 85, 0.1, 400);
+      mirrorRenderer.setSize(140, 80);
+      mirrorCamera = new THREE.PerspectiveCamera(60, 140 / 80, 0.1, 400);
       mirrorCamera.rotation.y = Math.PI;
     }
 
     function onWindowResize() {
+      if (!camera || !renderer) return;
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1922,7 +1716,7 @@
         let html = '';
         msg.players.forEach(p => {
           const isMe = p.id === myPlayerId;
-          const status = p.isReady ? '✅ READY' : '⏳ STAGING';
+          const status = p.isReady ? '✅' : '⏳';
           const name = isMe ? `${p.callsign} (YOU)` : p.callsign;
           html += `<div class="roster-item"><span class="${p.isReady ? 'roster-ready' : 'roster-alive'}">${name}</span><span>${status}</span></div>`;
         });
@@ -1951,8 +1745,7 @@
     }
 
     function startMatchClient() {
-      document.getElementById('start-modal').classList.add('hidden');
-      document.getElementById('death-modal').classList.add('hidden');
+      document.getElementById('modal-backdrop').classList.add('hidden');
       document.getElementById('race-complete-overlay').classList.add('hidden');
       document.getElementById('hud-overlay').classList.remove('hidden');
       document.getElementById('touch-steer-zone').classList.remove('hidden');
@@ -2005,11 +1798,11 @@
         const isMe = skier.id === myPlayerId;
         const statusClass = skier.isDead ? 'roster-eaten' : 'roster-alive';
         const tag = isMe ? `${skier.callsign} (YOU)` : skier.callsign;
-        rosterHTML += `<div class="roster-item"><span class="${statusClass}">${tag}</span><span>${skier.damageDealt || skier.score} PTS</span></div>`;
+        rosterHTML += `<div class="roster-item"><span class="${statusClass}">${tag}</span><span>${skier.damageDealt || skier.score}</span></div>`;
 
         if (isMe) {
           if (activeGameMode === "hunt") {
-            document.getElementById('hud-dmg').innerHTML = `${skier.damageDealt} <span style="font-size:14px;">DMG</span>`;
+            document.getElementById('hud-dmg').innerHTML = `${skier.damageDealt} <span style="font-size:11px;">DMG</span>`;
           }
         } else if (!skier.isDead) {
           const dz = skier.z - playerZ;
@@ -2027,18 +1820,16 @@
       if (closestTeammateAhead) {
         isDrafting = true;
         draftEl.style.opacity = '1';
-        draftEl.style.transform = 'translateX(-50%) scale(1.08)';
       } else {
         isDrafting = false;
         draftEl.style.opacity = '0';
-        draftEl.style.transform = 'translateX(-50%) scale(1.0)';
       }
 
       if (msg.boulders) updateBoulders(msg.boulders);
 
       if (activeGameMode === "hunt") {
         currentWaveNum = msg.wave || 1;
-        document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
+        document.getElementById('boss-wave-title').innerText = `👹 YETI (W${currentWaveNum})`;
         yetiCurrentHp = msg.yeti.hp;
         yetiMaxHp = msg.yeti.maxHp;
         yetiWorldX = msg.yeti.x;
@@ -2053,7 +1844,7 @@
         if (msg.yeti.active && msg.yeti.state !== "DEAD") {
           const distFromPlayer = Math.round(msg.yeti.z - playerZ);
           const distLabel = distFromPlayer > 0 ? `${distFromPlayer}M AHEAD` : `${Math.abs(distFromPlayer)}M BEHIND`;
-          yetiHud.innerText = msg.yeti.state === "STAGGERED" ? "⚡ STAGGERED!" : (msg.yeti.state === "RETREATING" ? "💨 RETREATING!" : `CHARGING (${distLabel})`);
+          yetiHud.innerText = msg.yeti.state === "STAGGERED" ? "⚡ STAGGERED!" : (msg.yeti.state === "RETREATING" ? "💨 RETREAT" : `CHARGE (${distLabel})`);
           yetiHud.style.color = msg.yeti.state === "STAGGERED" ? "#ffff00" : (msg.yeti.state === "RETREATING" ? "#00f0ff" : "#ff0033");
 
           const relZ = -(playerZ - msg.yeti.z);
@@ -2073,12 +1864,6 @@
       let group = remoteSkierMeshes.get(skier.id);
       if (!group) {
         group = new THREE.Group();
-        const mat = new THREE.SpriteMaterial({ map: skierTexture ? skierTexture.clone() : null, transparent: true });
-        const sprite = new THREE.Sprite(mat);
-        sprite.scale.set(3.8, 3.8, 1);
-        sprite.position.y = 1.8;
-        group.add(sprite);
-
         const skiMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff });
         const skiGeo = new THREE.BoxGeometry(0.12, 0.04, 1.8);
         const lSki = new THREE.Mesh(skiGeo, skiMat);
@@ -2125,7 +1910,6 @@
 
     function handleYetiHit(msg) {
       if (msg.shooterId === myPlayerId) spawnPopup(`-${msg.damage}`, msg.isCrossfire ? 'crossfire' : (msg.isCrit ? 'crit' : 'normal'));
-      if (msg.isCrit) soundEngine.playYetiStaggerRoar();
     }
 
     function handleYetiDefeat(msg) {
@@ -2138,14 +1922,14 @@
       document.getElementById('h2').classList.remove('heart-lost');
       document.getElementById('h3').classList.remove('heart-lost');
       document.getElementById('ammo-count').innerText = `AMMO: ${ammoCount} / ${maxAmmo} [R]`;
-      document.getElementById('limb-status').innerText = "INTACT ⛷️";
+      document.getElementById('limb-status').innerText = "INTACT";
       document.getElementById('limb-status').style.color = "#39ff14";
       setTimeout(() => { gondola.style.opacity = '0'; }, 5000);
     }
 
     function handleNextWave(msg) {
       currentWaveNum = msg.wave;
-      document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
+      document.getElementById('boss-wave-title').innerText = `👹 YETI (W${currentWaveNum})`;
     }
 
     function onYetiBiteAttack() {
@@ -2188,6 +1972,9 @@
       isWasted = true;
       isPlaying = false;
       document.getElementById('death-stat').innerText = reason;
+      document.getElementById('modal-backdrop').classList.remove('hidden');
+      document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('menu-modal').classList.add('hidden');
       document.getElementById('death-modal').classList.remove('hidden');
       document.getElementById('hud-overlay').classList.add('hidden');
       document.getElementById('mobile-action-bar').classList.add('hidden');
@@ -2220,7 +2007,6 @@
         if (keys.s) targetSpeed = preset.brakeSpeed;
         if (isDrafting) targetSpeed += 18;
 
-        // Check if on Black Ice Sheet (Zero lateral friction, +15 MPH boost)
         let onIce = false;
         icePatches.forEach(p => {
           const relZ = -(playerZ - p.z);
@@ -2232,7 +2018,6 @@
         });
         if (onIce) targetSpeed += 15;
 
-        // Check if Rail Grinding
         isGrindingRail = false;
         grindRails.forEach(r => {
           const relZ = -(playerZ - r.z);
@@ -2250,7 +2035,6 @@
         targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
         playerSpeed += (targetSpeed - playerSpeed) * 0.05;
 
-        // 90° Carving Steering
         const maxAngle = Math.PI / 2.1;
         if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - (onIce ? 0.02 : 0.07));
         else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + (onIce ? 0.02 : 0.07));
@@ -2269,7 +2053,6 @@
         playerX += lateralVel;
         playerX = Math.max(-120, Math.min(120, playerX));
 
-        // --- Big Air Kicker Jumps & Aerial Flight ---
         kickers.forEach(k => {
           const relZ = -(playerZ - k.z);
           const relX = Math.abs(k.x - playerX);
@@ -2281,12 +2064,10 @@
             soundEngine.playBigAirWhoosh();
             const airEl = document.getElementById('air-trick-indicator');
             airEl.style.opacity = '1';
-            airEl.style.transform = 'translateX(-50%) scale(1.15)';
             spawnPopup('🚀 BIG AIR LAUNCH!', 'trick');
           }
         });
 
-        // Airborne Physics Trajectory
         if (isAirborne) {
           airY += airVy * 0.016;
           airVy -= 32.0 * 0.016;
@@ -2303,14 +2084,13 @@
           }
         }
 
-        // Animate Ski-Lift Gondola Cabins
         gondolaCabins.forEach(g => {
           const relZ = -(playerZ - (g.zBase + Math.sin(Date.now() * 0.001 + g.offset) * 35));
           g.mesh.position.set(72 - playerX, 18, relZ);
         });
 
         const hudSpeed = document.getElementById('hud-speed');
-        if (hudSpeed) hudSpeed.innerHTML = `${Math.floor(playerSpeed)} <span style="font-size:14px;">MPH</span>`;
+        if (hudSpeed) hudSpeed.innerHTML = `${Math.floor(playerSpeed)} <span style="font-size:11px;">MPH</span>`;
 
         isLookingBack = keys.shift;
         const hudView = document.getElementById('hud-view');
@@ -2336,7 +2116,6 @@
           rifleMesh.position.set(0.45, -0.4, -0.8);
         }
 
-        // Tree scroll
         trees.forEach(tree => {
           tree.position.z += forwardVel;
           tree.position.x -= lateralVel;
@@ -2351,14 +2130,13 @@
           }
         });
 
-        // --- Slalom Mode Gate Checking ---
         if (activeGameMode === "slalom") {
           raceElapsedTime = (Date.now() - raceStartTime) / 1000;
           maxRaceSpeed = Math.max(maxRaceSpeed, Math.floor(playerSpeed));
           document.getElementById('race-time-val').innerText = `${raceElapsedTime.toFixed(1)}s`;
-          document.getElementById('race-gates-val').innerText = `${gatesHitCount} / ${TOTAL_SLALOM_GATES}`;
+          document.getElementById('race-gates-val').innerText = `${gatesHitCount}/30`;
           document.getElementById('race-streak-val').innerText = `${gateStreak}x`;
-          document.getElementById('hud-dmg').innerHTML = `${raceScore} <span style="font-size:14px;">PTS</span>`;
+          document.getElementById('hud-dmg').innerHTML = `${raceScore} <span style="font-size:11px;">PTS</span>`;
 
           slalomGates.forEach(g => {
             const relZ = -(playerZ - g.z);
@@ -2374,7 +2152,7 @@
                 const points = 500 * gateStreak;
                 raceScore += points;
                 soundEngine.playGateChime();
-                spawnPopup(`⚡ GATE HIT! +${points} PTS (${gateStreak}x)`, 'gate');
+                spawnPopup(`⚡ +${points} (${gateStreak}x)`, 'gate');
               } else {
                 g.missed = true;
                 gateStreak = 1;
@@ -2393,7 +2171,7 @@
               raceScore += Math.floor(Math.max(0, 10000 - (raceElapsedTime * 100)));
 
               document.getElementById('finish-time').innerText = `${raceElapsedTime.toFixed(2)}s`;
-              document.getElementById('finish-gates').innerText = `${gatesHitCount} / ${TOTAL_SLALOM_GATES}`;
+              document.getElementById('finish-gates').innerText = `${gatesHitCount} / 30`;
               document.getElementById('finish-speed').innerText = `${maxRaceSpeed} MPH`;
               document.getElementById('finish-score').innerText = `${raceScore.toLocaleString()} PTS`;
               document.getElementById('race-complete-overlay').classList.remove('hidden');
@@ -2433,7 +2211,7 @@
       renderer.render(scene, camera);
     }
 
-    // --- Controls & Hotkeys ---
+    // Controls
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       if (e.key === ' ' || e.key === 'Escape' || e.key === 'Enter') {
@@ -2475,13 +2253,19 @@
     let isMenuOpen = false;
     function toggleMenu(forceState) {
       isMenuOpen = typeof forceState === 'boolean' ? forceState : !isMenuOpen;
-      const modal = document.getElementById('menu-modal');
-      if (!modal) return;
+      const backdrop = document.getElementById('modal-backdrop');
+      const startModal = document.getElementById('start-modal');
+      const menuModal = document.getElementById('menu-modal');
+      const deathModal = document.getElementById('death-modal');
+
       if (isMenuOpen) {
-        modal.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        startModal.classList.add('hidden');
+        deathModal.classList.add('hidden');
+        menuModal.classList.remove('hidden');
         fetchInGameLeaderboard();
       } else {
-        modal.classList.add('hidden');
+        if (isPlaying) backdrop.classList.add('hidden');
       }
     }
 
@@ -2497,11 +2281,10 @@
           data.leaderboard.forEach((entry, idx) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td style="padding:8px 10px; font-weight:bold;">#${idx + 1}</td>
-              <td style="padding:8px 10px; font-weight:bold;">${entry.callsign || 'Hunter'}</td>
-              <td style="padding:8px 10px; color:#39ff14;">${(entry.score || 0).toLocaleString()}</td>
-              <td style="padding:8px 10px;">${entry.max_speed || 0} MPH</td>
-              <td style="padding:8px 10px;">${entry.max_distance || 0} M</td>
+              <td style="padding:6px; font-weight:bold;">#${idx + 1}</td>
+              <td style="padding:6px;">${entry.callsign || 'Hunter'}</td>
+              <td style="padding:6px; color:#39ff14;">${(entry.score || 0).toLocaleString()}</td>
+              <td style="padding:6px;">${entry.max_speed || 0}</td>
             `;
             huntTbody.appendChild(tr);
           });
@@ -2513,11 +2296,10 @@
           data.raceLeaderboard.forEach((entry, idx) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td style="padding:8px 10px; font-weight:bold;">#${idx + 1}</td>
-              <td style="padding:8px 10px; font-weight:bold;">${entry.callsign || 'Racer'}</td>
-              <td style="padding:8px 10px; color:#00f0ff;">${(entry.clear_time_sec || 0).toFixed(2)}s</td>
-              <td style="padding:8px 10px;">${entry.max_speed || 0} MPH</td>
-              <td style="padding:8px 10px; color:#39ff14;">${entry.gates_hit || 0} / 30</td>
+              <td style="padding:6px; font-weight:bold;">#${idx + 1}</td>
+              <td style="padding:6px;">${entry.callsign || 'Racer'}</td>
+              <td style="padding:6px; color:#00f0ff;">${(entry.clear_time_sec || 0).toFixed(2)}s</td>
+              <td style="padding:6px; color:#39ff14;">${entry.gates_hit || 0}/30</td>
             `;
             raceTbody.appendChild(tr);
           });
@@ -2532,7 +2314,6 @@
     bindAction(document.getElementById('tab-hunt-board-btn'), () => {
       document.getElementById('panel-hunt-board').classList.remove('hidden');
       document.getElementById('panel-race-board').classList.add('hidden');
-      document.getElementById('panel-settings').classList.add('hidden');
       document.getElementById('tab-hunt-board-btn').style.background = 'rgba(0,240,255,0.2)';
       document.getElementById('tab-hunt-board-btn').style.borderColor = '#00f0ff';
       document.getElementById('tab-hunt-board-btn').style.color = '#00f0ff';
@@ -2544,7 +2325,6 @@
     bindAction(document.getElementById('tab-race-board-btn'), () => {
       document.getElementById('panel-race-board').classList.remove('hidden');
       document.getElementById('panel-hunt-board').classList.add('hidden');
-      document.getElementById('panel-settings').classList.add('hidden');
       document.getElementById('tab-race-board-btn').style.background = 'rgba(57,255,20,0.2)';
       document.getElementById('tab-race-board-btn').style.borderColor = '#39ff14';
       document.getElementById('tab-race-board-btn').style.color = '#39ff14';
@@ -2553,13 +2333,6 @@
       document.getElementById('tab-hunt-board-btn').style.color = '#88a0c0';
     });
 
-    bindAction(document.getElementById('tab-settings-btn'), () => {
-      document.getElementById('panel-settings').classList.remove('hidden');
-      document.getElementById('panel-hunt-board').classList.add('hidden');
-      document.getElementById('panel-race-board').classList.add('hidden');
-    });
-
-    // Game Mode Selection in Staging
     bindAction(document.getElementById('btn-mode-hunt'), () => {
       activeGameMode = "hunt";
       document.getElementById('btn-mode-hunt').classList.add('active');
@@ -2572,7 +2345,6 @@
       document.getElementById('btn-mode-hunt').classList.remove('active');
     });
 
-    // Difficulty Settings
     document.querySelectorAll('.diff-btn').forEach(btn => {
       bindAction(btn, () => {
         selectedDifficulty = btn.dataset.diff;
@@ -2583,16 +2355,22 @@
       });
     });
 
-    // Copy squad room link
     bindAction(document.getElementById('btn-copy-room'), () => {
       const url = `${window.location.origin}${window.location.pathname}?room=${currentRoom}`;
       navigator.clipboard.writeText(url).then(() => {
         document.getElementById('btn-copy-room').innerText = "COPIED! ✅";
-        setTimeout(() => { document.getElementById('btn-copy-room').innerText = "📋 COPY LINK"; }, 2000);
+        setTimeout(() => { document.getElementById('btn-copy-room').innerText = "📋 COPY"; }, 2000);
       });
     });
 
-    // Intro video controller with Instant Tap-to-Skip on Mobile
+    bindAction(document.getElementById('btn-toggle-fullscreen'), () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
     const introOverlay = document.getElementById('intro-overlay');
     const introVideo = document.getElementById('intro-video');
     const introProgressBar = document.getElementById('intro-progress');
@@ -2606,14 +2384,25 @@
       introOverlay.style.pointerEvents = 'none';
       setTimeout(() => {
         introOverlay.classList.add('hidden');
-        document.getElementById('start-modal').classList.remove('hidden');
-      }, 350);
+      }, 300);
     }
     
     bindAction(document.getElementById('btn-skip-intro'), skipIntroVideo);
-    bindAction(introOverlay, skipIntroVideo); // Single tap anywhere skips on mobile!
+    bindAction(introOverlay, skipIntroVideo);
 
     if (introVideo) {
+      introVideo.muted = true;
+      introVideo.defaultMuted = true;
+      introVideo.setAttribute('playsinline', '');
+      introVideo.setAttribute('webkit-playsinline', '');
+      
+      const tryPlayVideo = () => {
+        introVideo.play().catch(() => {});
+      };
+      tryPlayVideo();
+      window.addEventListener('touchstart', tryPlayVideo, { once: true, passive: true });
+      window.addEventListener('click', tryPlayVideo, { once: true });
+
       introVideo.addEventListener('timeupdate', () => {
         if (introVideo.duration && introProgressBar) {
           const pct = (introVideo.currentTime / introVideo.duration) * 100;
@@ -2621,17 +2410,15 @@
         }
       });
       introVideo.addEventListener('ended', skipIntroVideo);
-      introVideo.play().catch(() => {});
     }
 
-    // Ready-up button
     bindAction(document.getElementById('btn-ready'), () => {
       soundEngine.init();
       isReady = !isReady;
       const btn = document.getElementById('btn-ready');
-      btn.innerText = isReady ? "READY! (WAITING SQUAD) ⏳" : "READY UP 🎿";
+      btn.innerText = isReady ? "READY! ⏳" : "READY 🎿";
       btn.style.background = isReady ? "#39ff14" : "linear-gradient(135deg, #00f0ff, #0088ff)";
-      btn.style.color = isReady ? "#000" : "#fff";
+      btn.style.color = isReady ? "#000" : "#000";
 
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
@@ -2642,7 +2429,6 @@
       }
     });
 
-    // Start / Force drop button
     bindAction(document.getElementById('btn-start'), () => {
       soundEngine.init();
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -2652,21 +2438,17 @@
       }
     });
 
-    // Respawn button
     bindAction(document.getElementById('btn-respawn'), () => {
-      document.getElementById('death-modal').classList.add('hidden');
       startMatchClient();
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
       connectWebSocket(callsign);
     });
 
-    // Race Again button
     bindAction(document.getElementById('btn-race-again'), () => {
-      document.getElementById('race-complete-overlay').classList.add('hidden');
       startMatchClient();
     });
 
-    // Mobile touch controls setup
+    // Touch joystick
     const touchSteerZone = document.getElementById('touch-steer-zone');
     const touchStickBase = document.getElementById('touch-stick-base');
     const touchStickThumb = document.getElementById('touch-stick-thumb');
@@ -2676,9 +2458,7 @@
 
     window.addEventListener('touchstart', () => {
       soundEngine.init();
-      if (soundEngine.ctx && soundEngine.ctx.state === 'suspended') {
-        soundEngine.ctx.resume();
-      }
+      if (soundEngine.ctx && soundEngine.ctx.state === 'suspended') soundEngine.ctx.resume();
     }, { passive: true });
 
     if (touchSteerZone) {
@@ -2710,7 +2490,7 @@
             const dx = touch.clientX - touchStartX;
             const dy = touch.clientY - touchStartY;
             const dist = Math.hypot(dx, dy);
-            const maxRadius = 45;
+            const maxRadius = 36;
             const clampedDist = Math.min(dist, maxRadius);
             const angle = Math.atan2(dy, dx);
 
@@ -2720,12 +2500,12 @@
             touchStickThumb.style.left = `${thumbX}px`;
             touchStickThumb.style.top = `${thumbY}px`;
 
-            const normX = Math.max(-1, Math.min(1, dx / 40));
+            const normX = Math.max(-1, Math.min(1, dx / 30));
             turnSteerVelocity = normX * 1.8;
             keys.a = normX < -0.25;
             keys.d = normX > 0.25;
 
-            const normY = Math.max(-1, Math.min(1, dy / 40));
+            const normY = Math.max(-1, Math.min(1, dy / 30));
             keys.w = normY < -0.30;
             keys.s = normY > 0.30;
             break;
@@ -2764,14 +2544,12 @@
       reloadGun();
     });
 
-    // PWA Service Worker Registration
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
       });
     }
 
-    // Auto-boot 3D
     window.addEventListener('DOMContentLoaded', () => {
       init3D();
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
