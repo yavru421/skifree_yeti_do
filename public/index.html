@@ -385,21 +385,18 @@
     /* Mobile Touch Zones */
     #touch-steer-zone {
       position: absolute;
-      bottom: 10px;
-      left: 10px;
-      width: min(160px, 40vw);
-      height: min(160px, 45vh);
+      top: 0;
+      left: 0;
+      width: 55vw;
+      height: 100%;
       z-index: 75;
       touch-action: none;
       pointer-events: auto;
-      border: 2px dashed rgba(0, 240, 255, 0.35);
-      border-radius: 50%;
-      background: rgba(0, 240, 255, 0.05);
     }
     #touch-stick-base {
       position: absolute;
-      width: 64px;
-      height: 64px;
+      width: 72px;
+      height: 72px;
       border-radius: 50%;
       border: 2px dashed rgba(0, 240, 255, 0.7);
       background: rgba(0, 240, 255, 0.12);
@@ -410,11 +407,11 @@
     }
     #touch-stick-thumb {
       position: absolute;
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: radial-gradient(circle, #00f0ff 0%, rgba(0, 240, 255, 0.6) 80%);
-      box-shadow: 0 0 12px #00f0ff;
+      box-shadow: 0 0 14px #00f0ff;
       pointer-events: none;
       transform: translate(-50%, -50%);
       display: none;
@@ -423,36 +420,38 @@
 
     #mobile-action-bar {
       position: absolute;
-      bottom: 10px;
-      right: 10px;
+      bottom: clamp(10px, 3vh, 20px);
+      right: clamp(10px, 3vw, 20px);
       display: flex;
       flex-direction: row;
-      gap: 6px;
+      gap: clamp(6px, 1.5vw, 12px);
       z-index: 80;
       pointer-events: auto;
     }
     .touch-btn {
-      background: rgba(10, 20, 35, 0.9);
+      background: rgba(10, 20, 35, 0.92);
       border: 2px solid #00f0ff;
-      border-radius: 10px;
+      border-radius: 12px;
       color: #fff;
       font-family: inherit;
       font-weight: 900;
-      font-size: clamp(9px, 2vw, 11px);
-      padding: clamp(6px, 1.5vh, 10px) clamp(8px, 1.8vw, 14px);
-      min-height: 42px;
+      font-size: clamp(10px, 2.2vw, 12px);
+      padding: clamp(8px, 1.8vh, 12px) clamp(10px, 2.2vw, 16px);
+      min-height: 46px;
+      min-width: 58px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
       touch-action: manipulation;
       cursor: pointer;
     }
+    .touch-btn:active { transform: scale(0.94); }
     .touch-btn-shoot {
       background: linear-gradient(135deg, rgba(255, 0, 127, 0.95), rgba(255, 0, 50, 0.95));
       border-color: #ff0055;
-      box-shadow: 0 0 14px rgba(255, 0, 85, 0.55);
-      min-width: 75px;
+      box-shadow: 0 0 16px rgba(255, 0, 85, 0.6);
+      min-width: 85px;
     }
 
     /* Modal Backdrop */
@@ -934,6 +933,23 @@
     let selectedDifficulty = "medium";
     let activeGameMode = "hunt";
     let isSoundOn = true;
+    let clock = null;
+
+    // --- 2026 Mobile Haptic Vibration Engine ---
+    function triggerHaptic(type) {
+      if (!navigator.vibrate) return;
+      try {
+        switch (type) {
+          case 'shoot': navigator.vibrate(15); break;
+          case 'gate': navigator.vibrate(20); break;
+          case 'kicker': navigator.vibrate(35); break;
+          case 'land': navigator.vibrate([20, 25, 20]); break;
+          case 'grind': navigator.vibrate([10, 15, 10]); break;
+          case 'damage': navigator.vibrate([60, 40, 60]); break;
+          case 'bite': navigator.vibrate([100, 50, 150]); break;
+        }
+      } catch (e) {}
+    }
 
     // --- Autonomous WebAudio Alpine Synth Engine ---
     class SpatialWebAudioEngine {
@@ -1293,7 +1309,7 @@
       scene.background = new THREE.Color(0xb8dcfa);
       scene.fog = new THREE.FogExp2(0xb8dcfa, 0.0018);
 
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
       camera.position.set(0, 1.8, 0);
 
       const sunLight = new THREE.DirectionalLight(0xfff8ee, 1.5);
@@ -1314,17 +1330,17 @@
       const skiMatLeft = new THREE.MeshStandardMaterial({ color: 0xff007f, roughness: 0.2 });
       const skiMatRight = new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.2 });
       leftSki = new THREE.Mesh(skiGeo, skiMatLeft);
-      leftSki.position.set(-0.4, -0.9, -1.2);
+      leftSki.position.set(-0.35, -1.2, -1.2);
       rightSki = new THREE.Mesh(skiGeo, skiMatRight);
-      rightSki.position.set(0.4, -0.9, -1.2);
+      rightSki.position.set(0.35, -1.2, -1.2);
       skiGroup.add(leftSki);
       skiGroup.add(rightSki);
 
-      const rifleGeo = new THREE.BoxGeometry(0.08, 0.12, 1.2);
+      const rifleGeo = new THREE.BoxGeometry(0.06, 0.09, 0.75);
       const rifleMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 });
       rifleMesh = new THREE.Mesh(rifleGeo, rifleMat);
-      rifleMesh.position.set(0.45, -0.4, -0.8);
-      rifleMesh.rotation.x = 0.05;
+      rifleMesh.position.set(0.35, -0.38, -0.65);
+      rifleMesh.rotation.set(0.05, 0, 0);
       camera.add(rifleMesh);
 
       camera.add(skiGroup);
@@ -1368,29 +1384,29 @@
       }
     }
 
-    // 100% Solid & Textured Continuous Snow Mountain Slope
+    // 100% Solid & Textured Continuous Snow Ground
     function createContinuousSnowTerrain() {
-      const terrainGeo = new THREE.PlaneGeometry(600, 1200, 32, 32);
+      const terrainGeo = new THREE.PlaneGeometry(1600, 2400, 32, 32);
       
       const textureLoader = new THREE.TextureLoader();
       snowTexture = textureLoader.load('/assets/snow_texture.jpg', () => {
         snowTexture.wrapS = THREE.RepeatWrapping;
         snowTexture.wrapT = THREE.RepeatWrapping;
-        snowTexture.repeat.set(24, 48);
+        snowTexture.repeat.set(32, 64);
         terrainMat.map = snowTexture;
         terrainMat.needsUpdate = true;
       });
 
       const terrainMat = new THREE.MeshStandardMaterial({
-        color: 0xf5f9ff,
-        roughness: 0.75,
-        metalness: 0.05,
+        color: 0xffffff,
+        roughness: 0.85,
+        metalness: 0.02,
         side: THREE.DoubleSide
       });
 
       terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
-      terrainMesh.rotation.x = -Math.PI / 2.2;
-      terrainMesh.position.set(0, 0, -250);
+      terrainMesh.rotation.x = -Math.PI / 2;
+      terrainMesh.position.set(0, 0, -600);
       scene.add(terrainMesh);
     }
 
@@ -1421,9 +1437,9 @@
         treeGroup.add(p1);
         treeGroup.add(p2);
 
-        const tz = -45 - (i * 8.5);
+        const tz = -40 - (i * 12);
         const tx = (Math.random() - 0.5) * 180;
-        treeGroup.position.set(tx, -tz * 0.15, tz);
+        treeGroup.position.set(tx, 0, tz);
         treeGroup.userData = { radius: 2.2 };
         scene.add(treeGroup);
         trees.push(treeGroup);
@@ -1440,9 +1456,9 @@
       for (let i = 0; i < 14; i++) {
         const mesh = new THREE.Mesh(rampGeo, rampMat);
         mesh.rotation.x = -0.35;
-        const kz = -70 - (i * 55) - (Math.random() * 20);
+        const kz = -80 - (i * 75) - (Math.random() * 20);
         const kx = (Math.sin(i * 1.3) * 35);
-        mesh.position.set(kx, -kz * 0.15 + 0.6, kz);
+        mesh.position.set(kx, 0.8, kz);
         scene.add(mesh);
 
         kickers.push({
@@ -1462,9 +1478,9 @@
       for (let i = 0; i < 8; i++) {
         const mesh = new THREE.Mesh(railGeo, railMat);
         mesh.rotation.x = Math.PI / 2.2;
-        const rz = -90 - (i * 80);
+        const rz = -100 - (i * 110);
         const rx = (i % 2 === 0 ? 18 : -18) + (Math.random() - 0.5) * 6;
-        mesh.position.set(rx, -rz * 0.15 + 1.2, rz);
+        mesh.position.set(rx, 1.0, rz);
         scene.add(mesh);
 
         grindRails.push({
@@ -1497,10 +1513,10 @@
 
       for (let i = 0; i < 8; i++) {
         const mesh = new THREE.Mesh(iceGeo, iceMat);
-        mesh.rotation.x = -Math.PI / 2.2;
-        const iz = -110 - (i * 90);
+        mesh.rotation.x = -Math.PI / 2;
+        const iz = -120 - (i * 120);
         const ix = (Math.sin(i * 1.8) * 25);
-        mesh.position.set(ix, -iz * 0.15 + 0.05, iz);
+        mesh.position.set(ix, 0.05, iz);
         scene.add(mesh);
 
         icePatches.push({
@@ -1526,13 +1542,13 @@
         arm.position.set(-3, 23, 0);
         towerGroup.add(pylon);
         towerGroup.add(arm);
-        towerGroup.position.set(75, 0, -40 - (i * 120));
+        towerGroup.position.set(75, 0, -40 - (i * 140));
         scene.add(towerGroup);
 
         const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3.2, 4.5), cabinMat);
-        cabin.position.set(72, 18, -40 - (i * 120));
+        cabin.position.set(72, 18, -40 - (i * 140));
         scene.add(cabin);
-        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 120), offset: Math.random() * 100 });
+        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 140), offset: Math.random() * 100 });
       }
     }
 
@@ -1588,7 +1604,7 @@
         const mat = isBlue ? blueMat : redMat;
         const gateWidth = 10;
         const gateX = Math.sin(i * 0.65) * 35;
-        const gateZ = -50 - (i * 48);
+        const gateZ = -60 - (i * 38);
 
         const leftPole = new THREE.Mesh(poleGeo, mat);
         leftPole.position.set(-gateWidth / 2, 1.9, 0);
@@ -1603,7 +1619,7 @@
         group.add(rightPole);
         group.add(banner);
 
-        group.position.set(gateX, -gateZ * 0.15, gateZ);
+        group.position.set(gateX, 0, gateZ);
         scene.add(group);
 
         slalomGates.push({
@@ -1626,7 +1642,7 @@
       finishGroup.add(fLeft);
       finishGroup.add(fRight);
       finishGroup.add(fBanner);
-      finishGroup.position.set(0, RACE_FINISH_Z * 0.15, -RACE_FINISH_Z);
+      finishGroup.position.set(0, 0, -RACE_FINISH_Z);
       scene.add(finishGroup);
       finishLineMesh = finishGroup;
     }
@@ -1915,10 +1931,9 @@
 
           const relZ = -(playerZ - msg.yeti.z);
           const relX = msg.yeti.x - playerX;
-          const relY = -relZ * 0.15;
-          yetiMesh.position.set(relX, relY + 3.5, relZ);
+          yetiMesh.position.set(relX, 3.5, relZ);
           if (yetiSprite) {
-            yetiSprite.position.set(relX, relY + 3.8, relZ);
+            yetiSprite.position.set(relX, 3.8, relZ);
             yetiSprite.visible = true;
           }
         }
@@ -1946,8 +1961,7 @@
 
       const relX = skier.x - playerX;
       const relZ = -(playerZ - skier.z);
-      const relY = -relZ * 0.15;
-      group.position.set(relX, relY, relZ);
+      group.position.set(relX, 0, relZ);
       group.rotation.y = -skier.steer;
       group.visible = !skier.isDead;
     }
@@ -1971,8 +1985,7 @@
         }
         const relX = b.x - playerX;
         const relZ = -(playerZ - b.z);
-        const relY = -relZ * 0.15;
-        mesh.position.set(relX, relY + (b.radius || 2.2), relZ);
+        mesh.position.set(relX, (b.radius || 2.2), relZ);
         mesh.rotation.x += 0.08;
       });
     }
@@ -2064,19 +2077,22 @@
 
       if (!scene || !renderer || !camera) return;
 
+      const dt = clock ? Math.min(0.05, clock.getDelta()) : 0.016;
+      const timeScale = dt * 60;
+
       if (!isPlaying && !isWasted) {
         camera.position.x = Math.sin(Date.now() * 0.0006) * 14;
         camera.position.z = -8 + Math.cos(Date.now() * 0.0006) * 8;
         camera.position.y = 3.5;
         camera.lookAt(0, 1.5, -70);
-        if (snowParticles) snowParticles.rotation.y += 0.002;
+        if (snowParticles) snowParticles.rotation.y += 0.002 * timeScale;
         renderer.render(scene, camera);
         return;
       }
 
       if (isPlaying && !isWasted) {
-        if (spawnGraceTimer > 0) spawnGraceTimer -= 0.016;
-        if (biteInvulnerabilityTimer > 0) biteInvulnerabilityTimer -= 0.016;
+        if (spawnGraceTimer > 0) spawnGraceTimer -= dt;
+        if (biteInvulnerabilityTimer > 0) biteInvulnerabilityTimer -= dt;
 
         const preset = DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium;
         let targetSpeed = preset.cruiseSpeed;
@@ -2085,44 +2101,45 @@
         if (isDrafting) targetSpeed += 18;
 
         const maxAngle = Math.PI / 2.1;
-        if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07);
-        else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + 0.07);
+        if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07 * timeScale);
+        else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + 0.07 * timeScale);
         else {
-          turnSteerVelocity *= 0.85;
-          playerHeadingAngle *= 0.92;
+          turnSteerVelocity *= Math.pow(0.85, timeScale);
+          playerHeadingAngle *= Math.pow(0.92, timeScale);
         }
 
-        playerHeadingAngle += turnSteerVelocity * 0.04;
+        playerHeadingAngle += turnSteerVelocity * 0.04 * timeScale;
         playerHeadingAngle = Math.max(-maxAngle, Math.min(maxAngle, playerHeadingAngle));
 
-        const forwardVel = Math.cos(playerHeadingAngle) * playerSpeed * preset.forwardFactor;
-        const lateralVel = Math.sin(playerHeadingAngle) * playerSpeed * preset.lateralFactor;
+        const forwardVel = Math.cos(playerHeadingAngle) * playerSpeed * preset.forwardFactor * timeScale;
+        const lateralVel = Math.sin(playerHeadingAngle) * playerSpeed * preset.lateralFactor * timeScale;
 
         playerZ += forwardVel;
         playerX += lateralVel;
         playerX = Math.max(-120, Math.min(120, playerX));
 
-        // Seamless Infinite Snow Ground Scroll (1:1 Synchronized with 3D delta movement)
+        // Seamless Infinite Snow Ground Scroll
         if (snowTexture) {
-          snowTexture.offset.y -= forwardVel * 0.04;
-          snowTexture.offset.x += lateralVel * 0.04;
+          snowTexture.offset.y -= forwardVel * 0.02;
+          snowTexture.offset.x += lateralVel * 0.02;
         }
 
-        // --- Synchronized Delta Scroll for All World Entities on Alpine Slope ---
+        // --- Synchronized Delta Scroll for All World Entities on Ground Plane ---
         
         // 1. Trees
         trees.forEach(tree => {
           tree.position.z += forwardVel;
           tree.position.x -= lateralVel;
-          tree.position.y = -tree.position.z * 0.15;
+          tree.position.y = 0;
           if (spawnGraceTimer <= 0 && !isAirborne && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
             onTreeHit();
+            triggerHaptic('damage');
             tree.position.z = 25;
           }
           if (tree.position.z > 20) {
             tree.position.z = -540 - (Math.random() * 80);
             tree.position.x = (Math.random() - 0.5) * 180;
-            tree.position.y = -tree.position.z * 0.15;
+            tree.position.y = 0;
           }
         });
 
@@ -2130,12 +2147,13 @@
         kickers.forEach(k => {
           k.mesh.position.z += forwardVel;
           k.mesh.position.x -= lateralVel;
-          k.mesh.position.y = -k.mesh.position.z * 0.15 + 0.6;
+          k.mesh.position.y = 0.8;
 
           if (!isAirborne && Math.abs(k.mesh.position.z) < 2.5 && Math.abs(k.mesh.position.x) < k.width / 2) {
             isAirborne = true;
             airVy = 18.0;
             soundEngine.playBigAirWhoosh();
+            triggerHaptic('kicker');
             const airEl = document.getElementById('air-trick-indicator');
             airEl.style.opacity = '1';
             spawnPopup('🚀 BIG AIR LAUNCH!', 'trick');
@@ -2143,7 +2161,7 @@
           if (k.mesh.position.z > 20) {
             k.mesh.position.z = -600 - (Math.random() * 120);
             k.mesh.position.x = (Math.random() - 0.5) * 80;
-            k.mesh.position.y = -k.mesh.position.z * 0.15 + 0.6;
+            k.mesh.position.y = 0.8;
           }
         });
 
@@ -2152,18 +2170,19 @@
         grindRails.forEach(r => {
           r.mesh.position.z += forwardVel;
           r.mesh.position.x -= lateralVel;
-          r.mesh.position.y = -r.mesh.position.z * 0.15 + 1.2;
+          r.mesh.position.y = 1.0;
 
           if (Math.abs(r.mesh.position.z) < r.length / 2 && Math.abs(r.mesh.position.x) < 1.8) {
             isGrindingRail = true;
-            playerSpeed = Math.min(85, playerSpeed + 0.4);
+            playerSpeed = Math.min(85, playerSpeed + 0.4 * timeScale);
             soundEngine.playRailGrind();
+            triggerHaptic('grind');
             spawnPopup('⚡ RAIL GRIND +200 PTS', 'gate');
           }
           if (r.mesh.position.z > 30) {
             r.mesh.position.z = -680 - (Math.random() * 160);
             r.mesh.position.x = (Math.random() - 0.5) * 70;
-            r.mesh.position.y = -r.mesh.position.z * 0.15 + 1.2;
+            r.mesh.position.y = 1.0;
           }
         });
 
@@ -2172,7 +2191,7 @@
         icePatches.forEach(p => {
           p.mesh.position.z += forwardVel;
           p.mesh.position.x -= lateralVel;
-          p.mesh.position.y = -p.mesh.position.z * 0.15 + 0.05;
+          p.mesh.position.y = 0.05;
 
           if (Math.abs(p.mesh.position.z) < p.length / 2 && Math.abs(p.mesh.position.x) < p.width / 2) {
             onIce = true;
@@ -2180,20 +2199,20 @@
           if (p.mesh.position.z > 40) {
             p.mesh.position.z = -750 - (Math.random() * 200);
             p.mesh.position.x = (Math.random() - 0.5) * 80;
-            p.mesh.position.y = -p.mesh.position.z * 0.15 + 0.05;
+            p.mesh.position.y = 0.05;
           }
         });
         if (onIce) targetSpeed += 15;
 
         const sidewaysBraking = onIce ? 0 : Math.abs(Math.sin(playerHeadingAngle)) * 18;
         targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
-        playerSpeed += (targetSpeed - playerSpeed) * 0.05;
+        playerSpeed += (targetSpeed - playerSpeed) * 0.05 * timeScale;
 
         // Airborne Physics
         if (isAirborne) {
-          airY += airVy * 0.016;
-          airVy -= 32.0 * 0.016;
-          airRollAngle += 0.08;
+          airY += airVy * dt;
+          airVy -= 32.0 * dt;
+          airRollAngle += 0.08 * timeScale;
 
           if (airY <= 0) {
             airY = 0;
@@ -2201,16 +2220,23 @@
             isAirborne = false;
             airRollAngle = 0;
             playerSpeed = Math.min(95, playerSpeed + 16);
+            triggerHaptic('land');
             document.getElementById('air-trick-indicator').style.opacity = '0';
             spawnPopup('✨ SMOOTH LANDING (+16 MPH)', 'gate');
           }
         }
 
+        // Dynamic 2026 FOV Speed Dilation ($60^\circ \to 76^\circ$)
+        const targetFov = 60 + Math.min(16, Math.max(0, (playerSpeed - 30) / 45) * 16);
+        if (Math.abs(camera.fov - targetFov) > 0.2) {
+          camera.fov += (targetFov - camera.fov) * 0.08 * timeScale;
+          camera.updateProjectionMatrix();
+        }
+
         // Ski-Lift Gondolas
         gondolaCabins.forEach(g => {
           const relZ = -(playerZ - (g.zBase + Math.sin(Date.now() * 0.001 + g.offset) * 35));
-          const relY = -relZ * 0.15;
-          g.mesh.position.set(72 - playerX, relY + 18, relZ);
+          g.mesh.position.set(72 - playerX, 18, relZ);
         });
 
         const hudSpeed = document.getElementById('hud-speed');
@@ -2219,20 +2245,23 @@
         isLookingBack = keys.shift;
 
         const targetYaw = isLookingBack ? Math.PI : -playerHeadingAngle * 0.9;
-        camera.position.y = 1.8 + airY + Math.sin(Date.now() * 0.015) * 0.03;
+        const tuckDip = keys.w ? -0.35 : 0;
+        camera.position.y = 1.8 + airY + tuckDip + Math.sin(Date.now() * 0.015) * 0.03;
+        camera.rotation.x = isLookingBack ? 0.05 : -0.05;
         camera.rotation.y = targetYaw;
         camera.rotation.z = isLookingBack ? 0 : (-playerHeadingAngle * 0.35 + airRollAngle * 0.15);
 
         skiGroup.position.y = isAirborne ? -airY * 0.3 : 0;
+        skiGroup.rotation.x = 0;
         skiGroup.rotation.y = -playerHeadingAngle;
         skiGroup.rotation.z = -playerHeadingAngle * 0.4;
 
         if (isLookingBack) {
           rifleMesh.rotation.y = Math.PI;
-          rifleMesh.position.set(-0.45, -0.4, 0.8);
+          rifleMesh.position.set(-0.35, -0.38, 0.65);
         } else {
           rifleMesh.rotation.y = 0;
-          rifleMesh.position.set(0.45, -0.4, -0.8);
+          rifleMesh.position.set(0.35, -0.38, -0.65);
         }
 
         // --- Slalom Mode Gate Checking ---
@@ -2247,7 +2276,7 @@
           slalomGates.forEach(g => {
             g.group.position.z += forwardVel;
             g.group.position.x -= lateralVel;
-            g.group.position.y = -g.group.position.z * 0.15;
+            g.group.position.y = 0;
 
             if (!g.cleared && !g.missed && Math.abs(g.group.position.z) < 2.2) {
               if (Math.abs(g.group.position.x) <= (g.width / 2 + 1.2)) {
@@ -2258,6 +2287,7 @@
                 const points = 500 * gateStreak;
                 raceScore += points;
                 soundEngine.playGateChime();
+                triggerHaptic('gate');
                 spawnPopup(`⚡ +${points} (${gateStreak}x)`, 'gate');
               } else {
                 g.missed = true;
@@ -2270,7 +2300,7 @@
           if (finishLineMesh) {
             finishLineMesh.position.z += forwardVel;
             finishLineMesh.position.x -= lateralVel;
-            finishLineMesh.position.y = -finishLineMesh.position.z * 0.15;
+            finishLineMesh.position.y = 0;
 
             if (!isRaceFinished && playerZ >= RACE_FINISH_Z) {
               isRaceFinished = true;
@@ -2686,7 +2716,7 @@
       startMatchClient();
     });
 
-    // Touch joystick
+    // Touch joystick & Fluid Analog Left-Thumb Steering
     const touchSteerZone = document.getElementById('touch-steer-zone');
     const touchStickBase = document.getElementById('touch-stick-base');
     const touchStickThumb = document.getElementById('touch-stick-thumb');
@@ -2727,7 +2757,7 @@
             const dx = touch.clientX - touchStartX;
             const dy = touch.clientY - touchStartY;
             const dist = Math.hypot(dx, dy);
-            const maxRadius = 36;
+            const maxRadius = 50;
             const clampedDist = Math.min(dist, maxRadius);
             const angle = Math.atan2(dy, dx);
 
@@ -2737,14 +2767,19 @@
             touchStickThumb.style.left = `${thumbX}px`;
             touchStickThumb.style.top = `${thumbY}px`;
 
-            const normX = Math.max(-1, Math.min(1, dx / 30));
-            turnSteerVelocity = normX * 1.8;
-            keys.a = normX < -0.25;
-            keys.d = normX > 0.25;
+            let rawX = Math.max(-1, Math.min(1, dx / 45));
+            let rawY = Math.max(-1, Math.min(1, dy / 45));
 
-            const normY = Math.max(-1, Math.min(1, dy / 30));
-            keys.w = normY < -0.30;
-            keys.s = normY > 0.30;
+            // 10% deadzone & quadratic response curve for silky-smooth mobile thumb control
+            const deadzone = 0.08;
+            if (Math.abs(rawX) < deadzone) rawX = 0;
+            else rawX = (rawX > 0 ? 1 : -1) * Math.pow((Math.abs(rawX) - deadzone) / (1 - deadzone), 1.6);
+
+            const targetAngle = rawX * (Math.PI / 2.1);
+            playerHeadingAngle += (targetAngle - playerHeadingAngle) * 0.35;
+
+            keys.w = rawY < -0.35;
+            keys.s = rawY > 0.35;
             break;
           }
         }
@@ -2756,11 +2791,8 @@
             steerTouchId = null;
             touchStickBase.style.display = 'none';
             touchStickThumb.style.display = 'none';
-            keys.a = false;
-            keys.d = false;
             keys.w = false;
             keys.s = false;
-            turnSteerVelocity = 0;
             break;
           }
         }
@@ -2769,6 +2801,21 @@
       touchSteerZone.addEventListener('touchend', onSteerTouchEnd, { passive: true });
       touchSteerZone.addEventListener('touchcancel', onSteerTouchEnd, { passive: true });
     }
+
+    // Direct Right-Screen Tap to Shoot on Mobile
+    window.addEventListener('touchstart', (e) => {
+      if (!isPlaying || isWasted) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.clientX > window.innerWidth * 0.52 && steerTouchId !== touch.identifier) {
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          if (target && target.closest && target.closest('#mobile-action-bar, #btn-menu-open, #btn-sound-toggle')) {
+            return;
+          }
+          onShoot({ clientX: touch.clientX, clientY: touch.clientY });
+        }
+      }
+    }, { passive: true });
 
     bindAction(document.getElementById('btn-touch-shoot'), () => {
       onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
