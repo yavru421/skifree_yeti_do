@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SkiFree 2: The Hunt for the Yeti — Co-Op Alpine Raid</title>
+  <title>SkiFree 2: The Hunt for the Yeti & Slalom Alpine Raid</title>
   <style>
     * {
       box-sizing: border-box;
@@ -42,7 +42,7 @@
       z-index: 50;
     }
 
-    /* Boss Health Bar */
+    /* Boss / Race Top HUD */
     #boss-hud {
       position: absolute;
       top: 15px;
@@ -81,6 +81,42 @@
       background: linear-gradient(90deg, #ff0055, #ff3300);
       box-shadow: 0 0 12px #ff0033;
       transition: width 0.15s ease-out;
+    }
+
+    /* Race Slalom Top HUD */
+    #race-hud {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 520px;
+      max-width: 90%;
+      background: rgba(10, 20, 35, 0.92);
+      border: 2px solid #00f0ff;
+      border-radius: 8px;
+      padding: 10px 16px;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.55);
+      text-align: center;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+    }
+    .race-stat-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .race-stat-title {
+      font-size: 10px;
+      color: #88a0c0;
+      letter-spacing: 1px;
+      font-weight: bold;
+    }
+    .race-stat-val {
+      font-size: 20px;
+      font-weight: 900;
+      color: #00f0ff;
+      text-shadow: 0 0 8px #00f0ff;
     }
 
     #lookback-hint {
@@ -375,7 +411,41 @@
       text-align: center;
     }
 
-    /* Floating Damage Popups */
+    /* Race Complete Overlay */
+    #race-complete-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(5, 15, 30, 0.95);
+      z-index: 290;
+      pointer-events: auto;
+      opacity: 0;
+      transition: opacity 0.4s ease-in;
+    }
+    #race-complete-title {
+      font-family: 'Arial Black', Impact, sans-serif;
+      font-size: 52px;
+      font-weight: 900;
+      color: #ffff00;
+      text-shadow: 0 0 30px #ffff00, 0 0 50px #00f0ff;
+      text-align: center;
+    }
+    #race-complete-stats {
+      font-size: 20px;
+      color: #fff;
+      margin: 18px 0;
+      letter-spacing: 1.5px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    /* Floating Damage / Gate Popups */
     #floating-dmg-container {
       position: absolute;
       top: 0;
@@ -395,6 +465,8 @@
     .dmg-normal { color: #ff3344; text-shadow: 0 0 8px #ff0000, 2px 2px 0 #000; }
     .dmg-crit { color: #ffff00; font-size: 30px; text-shadow: 0 0 12px #ff007f, 2px 2px 0 #000; }
     .dmg-crossfire { color: #00ffff; font-size: 36px; text-shadow: 0 0 18px #00ffff, 0 0 30px #ff007f; }
+    .dmg-gate { color: #39ff14; font-size: 28px; text-shadow: 0 0 14px #39ff14, 0 0 24px #00f0ff; }
+    .dmg-miss { color: #ff0033; font-size: 26px; text-shadow: 0 0 14px #ff0033; }
 
     @keyframes floatUp {
       0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
@@ -415,7 +487,7 @@
       text-align: center;
       box-shadow: 0 0 45px rgba(0, 240, 255, 0.65);
       z-index: 100;
-      max-width: 580px;
+      max-width: 600px;
       width: 92%;
     }
     .modal-title {
@@ -425,12 +497,35 @@
       text-shadow: 0 0 15px #00f0ff;
       font-weight: 900;
     }
+    .mode-select-group {
+      display: flex;
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .mode-btn {
+      flex: 1;
+      padding: 12px 14px;
+      border: 2px solid #556688;
+      border-radius: 8px;
+      background: #050a14;
+      color: #88a0c0;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .mode-btn.active {
+      border-color: #00f0ff;
+      color: #00f0ff;
+      background: rgba(0, 240, 255, 0.15);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+    }
     .squad-room-box {
       background: #050a14;
       border: 1px solid #1e3a5f;
       border-radius: 8px;
       padding: 10px 14px;
-      margin: 12px 0;
+      margin: 10px 0;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -456,7 +551,7 @@
       display: flex;
       justify-content: center;
       gap: 10px;
-      margin: 12px 0;
+      margin: 10px 0;
     }
     .diff-btn {
       flex: 1;
@@ -485,7 +580,7 @@
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
-      margin-top: 12px;
+      margin-top: 10px;
       box-shadow: 0 0 20px rgba(255, 0, 127, 0.5);
       transition: 0.2s;
       width: 100%;
@@ -506,7 +601,7 @@
       border-radius: 6px;
       color: #fff;
       font-size: 14px;
-      margin: 8px 0;
+      margin: 6px 0;
       font-family: inherit;
       text-align: center;
     }
@@ -704,6 +799,18 @@
     <div id="gondola-sub">SQUAD REVIVED • AMMO RESTOCKED • PREPARE FOR NEXT YETI WAVE</div>
   </div>
 
+  <!-- Slalom Race Complete Overlay -->
+  <div id="race-complete-overlay" class="hidden">
+    <div id="race-complete-title">🏁 COURSE CLEARED!</div>
+    <div id="race-complete-stats">
+      TIME: <span id="finish-time" style="color:#00f0ff; font-weight:bold;">0.00s</span><br>
+      GATES HIT: <span id="finish-gates" style="color:#39ff14; font-weight:bold;">0 / 30</span><br>
+      MAX SPEED: <span id="finish-speed" style="color:#ffff00; font-weight:bold;">0 MPH</span><br>
+      RACE SCORE: <span id="finish-score" style="color:#ff007f; font-weight:bold;">0 PTS</span>
+    </div>
+    <button class="modal-btn" id="btn-race-again" style="max-width:320px;">RACE AGAIN 🚀</button>
+  </div>
+
   <!-- Mobile Touch Controls Layer -->
   <div id="touch-steer-zone" class="hidden"></div>
   <div id="touch-stick-base"></div>
@@ -720,7 +827,7 @@
   <div id="bite-alert">🩸 YETI BITE! ARM LOST (-1 HEART)</div>
 
   <!-- Cinematic Skippable Intro Video Overlay -->
-  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.6s ease-out;">
+  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.5s ease-out;">
     <video id="intro-video" playsinline style="width:100%; height:100%; object-fit:cover; max-height:100vh;">
       <source src="assets/media/teaser_trailer.mp4" type="video/mp4">
     </video>
@@ -745,6 +852,7 @@
 
   <!-- In-Game HUD -->
   <div id="hud-overlay" class="hidden">
+    <!-- Yeti Hunt Boss HUD -->
     <div id="boss-hud">
       <div class="boss-label">
         <span id="boss-wave-title">👹 ALPINE YETI (WAVE 1)</span>
@@ -752,6 +860,22 @@
       </div>
       <div class="hp-bar-bg">
         <div class="hp-bar-fill" id="boss-hp-fill"></div>
+      </div>
+    </div>
+
+    <!-- Slalom Race Top HUD -->
+    <div id="race-hud" class="hidden">
+      <div class="race-stat-box">
+        <div class="race-stat-title">RACE TIME</div>
+        <div class="race-stat-val" id="race-time-val">0.0s</div>
+      </div>
+      <div class="race-stat-box">
+        <div class="race-stat-title">GATES HIT</div>
+        <div class="race-stat-val" id="race-gates-val" style="color:#39ff14;">0 / 30</div>
+      </div>
+      <div class="race-stat-box">
+        <div class="race-stat-title">GATE STREAK</div>
+        <div class="race-stat-val" id="race-streak-val" style="color:#ffff00;">1x</div>
       </div>
     </div>
 
@@ -781,8 +905,8 @@
       </div>
 
       <div class="hud-gauge">
-        <div class="hud-title">DAMAGE DEALT</div>
-        <div class="hud-value" id="hud-dmg">0 <span style="font-size:14px;">DMG</span></div>
+        <div class="hud-title">SCORE / STATS</div>
+        <div class="hud-value" id="hud-dmg">0 <span style="font-size:14px;">PTS</span></div>
         <div class="hud-sub" id="ammo-count">AMMO: 8 / 8 [R]</div>
       </div>
 
@@ -791,10 +915,10 @@
 
     <div class="hud-bottom">
       <div id="skier-roster">
-        <div style="font-weight:bold; color:#00f0ff; margin-bottom:4px;">YETI HUNTER SQUAD</div>
+        <div style="font-weight:bold; color:#00f0ff; margin-bottom:4px;">ALPINE SQUAD ROSTER</div>
         <div id="roster-list"></div>
       </div>
-      <div class="hud-gauge" style="text-align:right;">
+      <div class="hud-gauge" style="text-align:right;" id="yeti-status-gauge">
         <div class="hud-title">YETI STATUS</div>
         <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:18px;">CHARGING</div>
       </div>
@@ -805,8 +929,14 @@
 
   <!-- Chalet Match Staging Modal -->
   <div id="start-modal">
-    <div class="modal-title">🎿 SKI CHALET: SQUAD STAGING</div>
+    <div class="modal-title">🎿 SKIFREE 2: ALPINE ARENA</div>
     
+    <div style="font-size:12px; color:#88a0c0; font-weight:bold; margin-bottom:4px;">SELECT GAME MODE:</div>
+    <div class="mode-select-group">
+      <button class="mode-btn active" id="btn-mode-hunt" data-mode="hunt">👹 YETI HUNT CO-OP</button>
+      <button class="mode-btn" id="btn-mode-slalom" data-mode="slalom">⏱️ SLALOM TIME-TRIAL</button>
+    </div>
+
     <div class="squad-room-box">
       <div>
         <span style="font-size:11px; color:#88a0c0;">SQUAD ROOM:</span>
@@ -815,7 +945,6 @@
       <button class="btn-copy" id="btn-copy-room">📋 COPY LINK</button>
     </div>
 
-    <div style="color:#ff007f; font-weight:bold; font-size:12px; margin-top:8px;">HUNTER CALLSIGN & SPEED</div>
     <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
     
     <div class="difficulty-group">
@@ -824,20 +953,20 @@
       <button class="diff-btn" data-diff="pro">🔴 PRO SPEED<br><span style="font-size:10px; color:#aaa;">38-85 MPH</span></button>
     </div>
 
-    <div style="margin-top:12px; display:flex; gap:10px;">
+    <div style="margin-top:10px; display:flex; gap:10px;">
       <button class="modal-btn modal-btn-ready" id="btn-ready" style="flex:1;">READY UP 🎿</button>
       <button class="modal-btn" id="btn-start" style="flex:1;">DROP NOW 🚀</button>
     </div>
-    <p style="margin-top:10px; font-size:11px; color:#556688;">
-      [A / D] 90° Carve • [W / S] Throttle • [Hold Shift / Right-Click] Look Back • [Left Click] Shoot • [Draft behind teammates for +18 MPH]
+    <p style="margin-top:8px; font-size:11px; color:#556688;">
+      [A / D] 90° Carve • [W / S] Throttle • [Shift / Right-Click] Look Back • [Slingshot Draft +18 MPH]
     </p>
   </div>
 
   <!-- Death Modal -->
   <div id="death-modal" class="hidden">
-    <div class="modal-title" style="color:#ff0033;" id="death-title">💀 HUNT FAILED</div>
+    <div class="modal-title" style="color:#ff0033;" id="death-title">💀 RUN FAILED</div>
     <p id="death-stat" style="color:#fff; font-size:15px; margin: 15px 0;"></p>
-    <button class="modal-btn" id="btn-respawn">RESPAWN & HUNT AGAIN</button>
+    <button class="modal-btn" id="btn-respawn">RESPAWN & DROP AGAIN</button>
   </div>
 
   <!-- In-Game Pause, Settings & Leaderboard Modal -->
@@ -847,26 +976,47 @@
       <button id="btn-menu-close" style="background:none; border:none; color:#ff007f; font-size:24px; cursor:pointer; font-weight:bold;">✕</button>
     </div>
 
-    <div style="display:flex; gap:10px; margin:15px 0 20px 0;">
-      <button class="modal-tab-btn active" id="tab-leaderboard-btn" style="flex:1; padding:10px; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#00f0ff; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">🏆 LIVE LEADERBOARD</button>
-      <button class="modal-tab-btn" id="tab-settings-btn" style="flex:1; padding:10px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">🎛️ SETTINGS & AUDIO</button>
+    <div style="display:flex; gap:10px; margin:15px 0 15px 0;">
+      <button class="modal-tab-btn active" id="tab-hunt-board-btn" style="flex:1; padding:10px; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#00f0ff; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">👹 YETI HUNTS</button>
+      <button class="modal-tab-btn" id="tab-race-board-btn" style="flex:1; padding:10px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">⏱️ SLALOM RACES</button>
+      <button class="modal-tab-btn" id="tab-settings-btn" style="flex:1; padding:10px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">🎛️ AUDIO</button>
     </div>
 
-    <!-- Leaderboard Panel -->
-    <div id="panel-leaderboard">
+    <!-- Yeti Leaderboard Panel -->
+    <div id="panel-hunt-board">
       <div style="background:#050a14; border:1px solid #1a2a48; border-radius:8px; overflow:hidden;">
         <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
           <thead>
             <tr style="background:rgba(0,240,255,0.15); color:#00f0ff;">
-              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">RANK</th>
-              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">HUNTER</th>
-              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">SCORE</th>
-              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">SPEED</th>
-              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">DISTANCE</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">RANK</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">HUNTER</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">SCORE</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">SPEED</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #00f0ff;">DISTANCE</th>
             </tr>
           </thead>
-          <tbody id="in-game-leaderboard-rows">
+          <tbody id="hunt-leaderboard-rows">
             <tr><td colspan="5" style="text-align:center; padding:16px; color:#88a0c0;">Syncing Edge Records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Slalom Race Leaderboard Panel -->
+    <div id="panel-race-board" class="hidden">
+      <div style="background:#050a14; border:1px solid #1a2a48; border-radius:8px; overflow:hidden;">
+        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+          <thead>
+            <tr style="background:rgba(57,255,20,0.15); color:#39ff14;">
+              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">RANK</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">RACER</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">TIME</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">MAX SPEED</th>
+              <th style="padding:8px 10px; border-bottom:2px solid #39ff14;">GATES</th>
+            </tr>
+          </thead>
+          <tbody id="race-leaderboard-rows">
+            <tr><td colspan="5" style="text-align:center; padding:16px; color:#88a0c0;">Syncing Slalom Records...</td></tr>
           </tbody>
         </table>
       </div>
@@ -894,40 +1044,16 @@
   </audio>
 
   <script>
-    // --- Speed Difficulty Settings ---
     const DIFFICULTY_PRESETS = {
-      easy: {
-        name: "EASY / CASUAL",
-        cruiseSpeed: 20,
-        tuckSpeed: 45,
-        brakeSpeed: 12,
-        lateralFactor: 0.045,
-        forwardFactor: 0.030,
-        badgeColor: "#39ff14"
-      },
-      medium: {
-        name: "MEDIUM ARCADE",
-        cruiseSpeed: 28,
-        tuckSpeed: 60,
-        brakeSpeed: 16,
-        lateralFactor: 0.055,
-        forwardFactor: 0.038,
-        badgeColor: "#ffff00"
-      },
-      pro: {
-        name: "PRO REALISTIC",
-        cruiseSpeed: 38,
-        tuckSpeed: 85,
-        brakeSpeed: 20,
-        lateralFactor: 0.068,
-        forwardFactor: 0.046,
-        badgeColor: "#ff007f"
-      }
+      easy: { name: "EASY / CASUAL", cruiseSpeed: 20, tuckSpeed: 45, brakeSpeed: 12, lateralFactor: 0.045, forwardFactor: 0.030, badgeColor: "#39ff14" },
+      medium: { name: "MEDIUM ARCADE", cruiseSpeed: 28, tuckSpeed: 60, brakeSpeed: 16, lateralFactor: 0.055, forwardFactor: 0.038, badgeColor: "#ffff00" },
+      pro: { name: "PRO REALISTIC", cruiseSpeed: 38, tuckSpeed: 85, brakeSpeed: 20, lateralFactor: 0.068, forwardFactor: 0.046, badgeColor: "#ff007f" }
     };
 
     let selectedDifficulty = "medium";
+    let activeGameMode = "hunt"; // "hunt" | "slalom"
 
-    // --- Spatial 3D Positional WebAudio Engine ---
+    // --- Spatial 3D WebAudio Engine ---
     class SpatialWebAudioEngine {
       constructor() {
         this.ctx = null;
@@ -951,36 +1077,30 @@
           output[i] = (Math.random() * 2 - 1) * 0.5;
         }
 
-        // Wind Rush Sound
+        // Wind Rush
         const whiteNoise = this.ctx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
         whiteNoise.loop = true;
-
         this.windFilter = this.ctx.createBiquadFilter();
         this.windFilter.type = 'bandpass';
         this.windFilter.frequency.value = 400;
         this.windFilter.Q.value = 3.0;
-
         this.windGain = this.ctx.createGain();
         this.windGain.gain.value = 0.05;
-
         whiteNoise.connect(this.windFilter);
         this.windFilter.connect(this.windGain);
         this.windGain.connect(this.ctx.destination);
         whiteNoise.start();
 
-        // Edge Carving Sound
+        // Edge Carving
         const carveNoise = this.ctx.createBufferSource();
         carveNoise.buffer = noiseBuffer;
         carveNoise.loop = true;
-
         const carveFilter = this.ctx.createBiquadFilter();
         carveFilter.type = 'highpass';
         carveFilter.frequency.value = 1200;
-
         this.carveGain = this.ctx.createGain();
         this.carveGain.gain.value = 0.0;
-
         carveNoise.connect(carveFilter);
         carveFilter.connect(this.carveGain);
         this.carveGain.connect(this.ctx.destination);
@@ -997,7 +1117,6 @@
         panner.refDistance = 3;
         panner.maxDistance = 120;
         panner.rolloffFactor = 1.4;
-
         if (panner.positionX) {
           panner.positionX.setValueAtTime(x, this.ctx.currentTime);
           panner.positionY.setValueAtTime(y, this.ctx.currentTime);
@@ -1016,10 +1135,8 @@
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(480, this.ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(75, this.ctx.currentTime + 0.16);
-
         gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
-
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
@@ -1034,10 +1151,8 @@
         osc.frequency.setValueAtTime(300, this.ctx.currentTime);
         osc.frequency.setValueAtTime(550, this.ctx.currentTime + 0.15);
         osc.frequency.setValueAtTime(800, this.ctx.currentTime + 0.3);
-
         gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
-
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
@@ -1052,10 +1167,8 @@
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(350, this.ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.28);
-
         gain.gain.setValueAtTime(0.95, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.32);
-
         osc.connect(gain);
         if (panner) gain.connect(panner);
         else gain.connect(this.ctx.destination);
@@ -1070,50 +1183,27 @@
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(250, this.ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(55, this.ctx.currentTime + 0.14);
-
         gain.gain.setValueAtTime(0.75, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.16);
-
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
         osc.stop(this.ctx.currentTime + 0.16);
       }
 
-      playYetiStaggerRoar(x = 0, y = 3.5, z = 20) {
-        if (!this.isInitialized) return;
-        const panner = this.create3DPanner(x, y, z);
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(210, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.85);
-
-        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.9);
-
-        osc.connect(gain);
-        if (panner) gain.connect(panner);
-        else gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.9);
-      }
-
-      playCrossfireBoom() {
+      playGateChime() {
         if (!this.isInitialized) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.6);
-
-        gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.65);
-
+        osc.frequency.setValueAtTime(520, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(880, this.ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.65);
+        osc.stop(this.ctx.currentTime + 0.3);
       }
 
       playTreeThud() {
@@ -1123,10 +1213,8 @@
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(130, this.ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.32);
-
         gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.38);
-
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
@@ -1138,7 +1226,6 @@
         const ratio = Math.min(1.0, speedMph / 80);
         this.windFilter.frequency.setTargetAtTime(300 + ratio * 1600, this.ctx.currentTime, 0.05);
         this.windGain.gain.setTargetAtTime(0.02 + ratio * 0.25, this.ctx.currentTime, 0.05);
-
         const sidewaysFactor = Math.abs(Math.sin(carveAngleRad));
         const carveVolume = Math.min(0.40, (sidewaysFactor * 0.30) + (speedMph / 70 * 0.1));
         this.carveGain.gain.setTargetAtTime(carveVolume, this.ctx.currentTime, 0.05);
@@ -1154,7 +1241,22 @@
     let trees = [];
     let snowParticles;
     let yetiMesh, yetiSprite, yetiTexture;
-    let wastedSkierSprite, skierTexture;
+    let skierTexture;
+
+    // Slalom Gates & Finish Line
+    let slalomGates = []; // Array of { id, z, x, width, cleared, missed, group }
+    let finishLineMesh = null;
+    const TOTAL_SLALOM_GATES = 30;
+    const RACE_FINISH_Z = 1500; // Finish line at 1500m
+
+    // Slalom Race State
+    let raceStartTime = 0;
+    let raceElapsedTime = 0;
+    let gatesHitCount = 0;
+    let gateStreak = 1;
+    let maxRaceSpeed = 0;
+    let raceScore = 0;
+    let isRaceFinished = false;
 
     // Multiplayer Entities Pool
     const remoteSkierMeshes = new Map();
@@ -1165,7 +1267,6 @@
     let isPlaying = false;
     let isReady = false;
     let isWasted = false;
-    let wastedTime = 0;
     let spawnGraceTimer = 0;
     let biteInvulnerabilityTimer = 0;
 
@@ -1183,7 +1284,6 @@
     let playerSpeed = 28;
     let playerHeadingAngle = 0;
     let turnSteerVelocity = 0;
-    let damageDealtTotal = 0;
 
     let currentRoom = "main-alps";
     let currentWaveNum = 1;
@@ -1219,7 +1319,7 @@
       scene.add(dirLight);
       scene.add(new THREE.AmbientLight(0x88aacc, 0.8));
 
-      // Snow Slope
+      // Snow Terrain
       const terrainGeo = new THREE.PlaneGeometry(350, 600, 32, 32);
       const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
       const terrain = new THREE.Mesh(terrainGeo, terrainMat);
@@ -1232,7 +1332,6 @@
       const skiGeo = new THREE.BoxGeometry(0.14, 0.05, 2.2);
       const skiMatLeft = new THREE.MeshStandardMaterial({ color: 0xff007f, roughness: 0.2 });
       const skiMatRight = new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.2 });
-
       leftSki = new THREE.Mesh(skiGeo, skiMatLeft);
       leftSki.position.set(-0.4, -0.9, -1.2);
       rightSki = new THREE.Mesh(skiGeo, skiMatRight);
@@ -1254,6 +1353,7 @@
       createCleanSpacedTrees();
       createSnowParticles();
       createRealisticYetiV2();
+      createSlalomGates();
       initRearviewMirror();
 
       window.addEventListener('resize', onWindowResize);
@@ -1265,7 +1365,6 @@
     function createCleanSpacedTrees() {
       trees.forEach(t => scene.remove(t));
       trees = [];
-
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a3d28 });
       const leavesMat = new THREE.MeshLambertMaterial({ color: 0x1d4d2d });
 
@@ -1276,12 +1375,10 @@
         leaves.position.y = 3.2;
         tree.add(trunk);
         tree.add(leaves);
-
         tree.position.x = (Math.random() - 0.5) * 180;
         tree.position.z = -45 - (i * 8.5);
         tree.position.y = -tree.position.z * 0.15;
         tree.userData = { radius: 2.0 };
-
         scene.add(tree);
         trees.push(tree);
       }
@@ -1317,13 +1414,74 @@
         yetiTexture.minFilter = THREE.NearestFilter;
         yetiTexture.repeat.set(1 / 6, 1 / 3.4);
         yetiTexture.offset.set(0, 0.68);
-
         const mat = new THREE.SpriteMaterial({ map: yetiTexture, transparent: true });
         yetiSprite = new THREE.Sprite(mat);
         yetiSprite.scale.set(8.0, 8.0, 1);
         yetiSprite.position.set(0, 4.0, 65);
         scene.add(yetiSprite);
       });
+    }
+
+    function createSlalomGates() {
+      slalomGates.forEach(g => scene.remove(g.group));
+      slalomGates = [];
+
+      const poleGeo = new THREE.CylinderGeometry(0.12, 0.12, 3.8, 8);
+      const blueMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x0088ff, emissiveIntensity: 0.5 });
+      const redMat = new THREE.MeshStandardMaterial({ color: 0xff0055, emissive: 0xff0033, emissiveIntensity: 0.5 });
+
+      for (let i = 0; i < TOTAL_SLALOM_GATES; i++) {
+        const group = new THREE.Group();
+        const isBlue = (i % 2 === 0);
+        const mat = isBlue ? blueMat : redMat;
+        const gateWidth = 10;
+        const gateX = Math.sin(i * 0.65) * 35;
+        const gateZ = 50 + (i * 48); // Gates every 48m
+
+        const leftPole = new THREE.Mesh(poleGeo, mat);
+        leftPole.position.set(-gateWidth / 2, 1.9, 0);
+        const rightPole = new THREE.Mesh(poleGeo, mat);
+        rightPole.position.set(gateWidth / 2, 1.9, 0);
+
+        // Banner line connecting poles
+        const bannerGeo = new THREE.BoxGeometry(gateWidth, 0.35, 0.05);
+        const banner = new THREE.Mesh(bannerGeo, mat);
+        banner.position.set(0, 3.2, 0);
+
+        group.add(leftPole);
+        group.add(rightPole);
+        group.add(banner);
+
+        group.position.set(gateX, 0, -gateZ);
+        scene.add(group);
+
+        slalomGates.push({
+          id: i,
+          z: gateZ,
+          x: gateX,
+          width: gateWidth,
+          cleared: false,
+          missed: false,
+          group
+        });
+      }
+
+      // Finish Line Gate at 1500m
+      if (finishLineMesh) scene.remove(finishLineMesh);
+      const finishGroup = new THREE.Group();
+      const finishPoleMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 0.6 });
+      const fLeft = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 5.0, 8), finishPoleMat);
+      fLeft.position.set(-12, 2.5, 0);
+      const fRight = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 5.0, 8), finishPoleMat);
+      fRight.position.set(12, 2.5, 0);
+      const fBanner = new THREE.Mesh(new THREE.BoxGeometry(24, 1.2, 0.1), finishPoleMat);
+      fBanner.position.set(0, 4.2, 0);
+      finishGroup.add(fLeft);
+      finishGroup.add(fRight);
+      finishGroup.add(fBanner);
+      finishGroup.position.set(0, 0, -RACE_FINISH_Z);
+      scene.add(finishGroup);
+      finishLineMesh = finishGroup;
     }
 
     function initRearviewMirror() {
@@ -1343,7 +1501,6 @@
     function onMouseMove(e) {
       mousePos.x = (e.clientX / window.innerWidth) * 2 - 1;
       mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
       const ch = document.getElementById('crosshair');
       if (ch) {
         ch.style.left = `${e.clientX}px`;
@@ -1352,12 +1509,11 @@
     }
 
     function reloadGun() {
-      if (isReloading || ammoCount === maxAmmo) return;
+      if (isReloading || ammoCount === maxAmmo || activeGameMode === "slalom") return;
       isReloading = true;
       soundEngine.playReload();
       document.getElementById('ammo-count').innerText = "RELOADING...";
       document.getElementById('ammo-count').style.color = "#ffff00";
-
       setTimeout(() => {
         ammoCount = maxAmmo;
         isReloading = false;
@@ -1367,12 +1523,8 @@
     }
 
     function onShoot(e) {
-      if (!isPlaying || isWasted || yetiStateStr === "DEAD") return;
-
-      if (ammoCount <= 0) {
-        reloadGun();
-        return;
-      }
+      if (!isPlaying || isWasted || activeGameMode === "slalom" || yetiStateStr === "DEAD") return;
+      if (ammoCount <= 0) { reloadGun(); return; }
       if (isReloading) return;
 
       ammoCount--;
@@ -1396,21 +1548,6 @@
       if (intersects.length > 0) {
         isHit = true;
         if (intersects[0].point.y > 4.8) isCrit = true;
-      } else if (mirrorCamera && e && typeof e.clientX === 'number') {
-        const mirrorBox = document.getElementById('rearview-mirror').getBoundingClientRect();
-        if (e.clientX >= mirrorBox.left && e.clientX <= mirrorBox.right &&
-            e.clientY >= mirrorBox.top && e.clientY <= mirrorBox.bottom) {
-          const mirrorMouse = {
-            x: ((e.clientX - mirrorBox.left) / mirrorBox.width) * 2 - 1,
-            y: -((e.clientY - mirrorBox.top) / mirrorBox.height) * 2 + 1
-          };
-          raycaster.setFromCamera(mirrorMouse, mirrorCamera);
-          const mirrorIntersects = raycaster.intersectObject(yetiMesh);
-          if (mirrorIntersects.length > 0) {
-            isHit = true;
-            if (mirrorIntersects[0].point.y > 4.8) isCrit = true;
-          }
-        }
       }
 
       if (isHit) {
@@ -1426,9 +1563,7 @@
         }));
       }
 
-      if (ammoCount === 0) {
-        setTimeout(reloadGun, 300);
-      }
+      if (ammoCount === 0) setTimeout(reloadGun, 300);
     }
 
     function showHitmarker() {
@@ -1440,37 +1575,25 @@
       setTimeout(() => hm.style.opacity = '0', 90);
     }
 
-    function spawnDamagePopup(dmg, isCrit, isCrossfire) {
+    function spawnPopup(text, type) {
       const container = document.getElementById('floating-dmg-container');
       const el = document.createElement('div');
-      
-      let text = `-${dmg}`;
-      if (isCrossfire) {
-        el.className = 'dmg-popup dmg-crossfire';
-        text = `⚡ -${dmg} CROSSFIRE x2.5!`;
-      } else if (isCrit) {
-        el.className = 'dmg-popup dmg-crit';
-        text = `-${dmg} CRIT!`;
-      } else {
-        el.className = 'dmg-popup dmg-normal';
-      }
+      el.className = `dmg-popup dmg-${type}`;
       el.innerText = text;
-      
       const ch = document.getElementById('crosshair').getBoundingClientRect();
       el.style.left = `${ch.left + 16}px`;
       el.style.top = `${ch.top - 20}px`;
-
       container.appendChild(el);
       setTimeout(() => el.remove(), 850);
     }
 
-    // --- Networking & WebSocket Handlers ---
+    // --- Networking & WebSocket ---
     function connectWebSocket(callsign) {
       currentRoom = getRoomParam();
       document.getElementById('squad-room-code').innerText = currentRoom.toUpperCase();
 
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${location.host}/ws?room=${encodeURIComponent(currentRoom)}&callsign=${encodeURIComponent(callsign)}`;
+      const wsUrl = `${protocol}//${location.host}/ws?room=${encodeURIComponent(currentRoom)}&callsign=${encodeURIComponent(callsign)}&mode=${activeGameMode}`;
       ws = new WebSocket(wsUrl);
 
       ws.onmessage = (event) => {
@@ -1493,13 +1616,9 @@
         } else if (msg.type === "NEXT_WAVE") {
           handleNextWave(msg);
         } else if (msg.type === "BOULDER_HIT") {
-          if (msg.victimId === myPlayerId && !isWasted) {
-            onTreeHit();
-          }
+          if (msg.victimId === myPlayerId && !isWasted) onTreeHit();
         } else if (msg.type === "YETI_BITE_ATTACK") {
-          if (msg.victimId === myPlayerId && !isWasted) {
-            onYetiBiteAttack();
-          }
+          if (msg.victimId === myPlayerId && !isWasted) onYetiBiteAttack();
         }
       };
     }
@@ -1526,9 +1645,8 @@
       let remaining = sec;
       const interval = setInterval(() => {
         remaining--;
-        if (remaining > 0) {
-          num.innerText = remaining;
-        } else {
+        if (remaining > 0) num.innerText = remaining;
+        else {
           num.innerText = "GO!";
           clearInterval(interval);
         }
@@ -1536,30 +1654,55 @@
     }
 
     function hideCountdownOverlay() {
-      const overlay = document.getElementById('countdown-overlay');
-      overlay.style.opacity = '0';
+      document.getElementById('countdown-overlay').style.opacity = '0';
     }
 
     function startMatchClient() {
       document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('death-modal').classList.add('hidden');
+      document.getElementById('race-complete-overlay').classList.add('hidden');
       document.getElementById('hud-overlay').classList.remove('hidden');
       document.getElementById('touch-steer-zone').classList.remove('hidden');
       document.getElementById('mobile-action-bar').classList.remove('hidden');
+
       isPlaying = true;
       isWasted = false;
+      isRaceFinished = false;
       playerHearts = 3;
       ammoCount = maxAmmo;
       spawnGraceTimer = 3.0;
       playerX = 0;
       playerZ = 0;
       playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
+
+      // Mode-specific HUD setup
+      if (activeGameMode === "slalom") {
+        document.getElementById('boss-hud').classList.add('hidden');
+        document.getElementById('rearview-mirror').classList.add('hidden');
+        document.getElementById('yeti-status-gauge').classList.add('hidden');
+        document.getElementById('race-hud').classList.remove('hidden');
+        document.getElementById('ammo-count').innerText = "MODE: SLALOM";
+        rifleMesh.visible = false;
+        raceStartTime = Date.now();
+        gatesHitCount = 0;
+        gateStreak = 1;
+        maxRaceSpeed = 0;
+        raceScore = 0;
+        createSlalomGates();
+      } else {
+        document.getElementById('boss-hud').classList.remove('hidden');
+        document.getElementById('rearview-mirror').classList.remove('hidden');
+        document.getElementById('yeti-status-gauge').classList.remove('hidden');
+        document.getElementById('race-hud').classList.add('hidden');
+        document.getElementById('ammo-count').innerText = `AMMO: ${ammoCount} / ${maxAmmo} [R]`;
+        rifleMesh.visible = true;
+      }
     }
 
     function handleFrame(msg) {
       // 1. Roster Update
       const rosterList = document.getElementById('roster-list');
       let rosterHTML = '';
-
       let closestTeammateAhead = null;
       let minDraftDist = 999;
 
@@ -1567,27 +1710,25 @@
         const isMe = skier.id === myPlayerId;
         const statusClass = skier.isDead ? 'roster-eaten' : 'roster-alive';
         const tag = isMe ? `${skier.callsign} (YOU)` : skier.callsign;
-        rosterHTML += `<div class="roster-item"><span class="${statusClass}">${tag}</span><span>${skier.damageDealt} DMG</span></div>`;
+        rosterHTML += `<div class="roster-item"><span class="${statusClass}">${tag}</span><span>${skier.damageDealt || skier.score} PTS</span></div>`;
 
         if (isMe) {
-          damageDealtTotal = skier.damageDealt;
-          document.getElementById('hud-dmg').innerHTML = `${damageDealtTotal} <span style="font-size:14px;">DMG</span>`;
+          if (activeGameMode === "hunt") {
+            document.getElementById('hud-dmg').innerHTML = `${skier.damageDealt} <span style="font-size:14px;">DMG</span>`;
+          }
         } else if (!skier.isDead) {
-          // Check for Slingshot Drafting
           const dz = skier.z - playerZ;
           const dx = Math.abs(skier.x - playerX);
           if (dz > 0 && dz < 10 && dx < 2.5 && dz < minDraftDist) {
             minDraftDist = dz;
             closestTeammateAhead = skier;
           }
-
-          // 2. Render Remote 3D Skier Mesh
           updateRemoteSkierMesh(skier);
         }
       });
       rosterList.innerHTML = rosterHTML;
 
-      // Drafting Status Update
+      // Drafting
       const draftEl = document.getElementById('draft-indicator');
       if (closestTeammateAhead) {
         isDrafting = true;
@@ -1599,44 +1740,40 @@
         draftEl.style.transform = 'translateX(-50%) scale(1.0)';
       }
 
-      // 3. Render Wave 2+ Avalanche Boulders
-      if (msg.boulders) {
-        updateBoulders(msg.boulders);
-      }
+      // Boulders
+      if (msg.boulders) updateBoulders(msg.boulders);
 
-      // 4. Update Yeti Boss
-      currentWaveNum = msg.wave || 1;
-      document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
+      // Yeti Updates (Only in Hunt Mode)
+      if (activeGameMode === "hunt") {
+        currentWaveNum = msg.wave || 1;
+        document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
+        yetiCurrentHp = msg.yeti.hp;
+        yetiMaxHp = msg.yeti.maxHp;
+        yetiWorldX = msg.yeti.x;
+        yetiWorldZ = msg.yeti.z;
+        yetiStateStr = msg.yeti.state;
 
-      yetiCurrentHp = msg.yeti.hp;
-      yetiMaxHp = msg.yeti.maxHp;
-      yetiWorldX = msg.yeti.x;
-      yetiWorldZ = msg.yeti.z;
-      yetiStateStr = msg.yeti.state;
+        const hpPct = Math.max(0, Math.min(100, (yetiCurrentHp / yetiMaxHp) * 100));
+        document.getElementById('boss-hp-fill').style.width = `${hpPct}%`;
+        document.getElementById('boss-hp-text').innerText = `${yetiCurrentHp.toLocaleString()} / ${yetiMaxHp.toLocaleString()} HP`;
 
-      const hpPct = Math.max(0, Math.min(100, (yetiCurrentHp / yetiMaxHp) * 100));
-      document.getElementById('boss-hp-fill').style.width = `${hpPct}%`;
-      document.getElementById('boss-hp-text').innerText = `${yetiCurrentHp.toLocaleString()} / ${yetiMaxHp.toLocaleString()} HP`;
+        const yetiHud = document.getElementById('hud-yeti');
+        if (msg.yeti.active && msg.yeti.state !== "DEAD") {
+          const distFromPlayer = Math.round(msg.yeti.z - playerZ);
+          const distLabel = distFromPlayer > 0 ? `${distFromPlayer}M AHEAD` : `${Math.abs(distFromPlayer)}M BEHIND`;
+          yetiHud.innerText = msg.yeti.state === "STAGGERED" ? "⚡ STAGGERED!" : (msg.yeti.state === "RETREATING" ? "💨 RETREATING!" : `CHARGING (${distLabel})`);
+          yetiHud.style.color = msg.yeti.state === "STAGGERED" ? "#ffff00" : (msg.yeti.state === "RETREATING" ? "#00f0ff" : "#ff0033");
 
-      const yetiHud = document.getElementById('hud-yeti');
-      if (msg.yeti.active && msg.yeti.state !== "DEAD") {
-        const distFromPlayer = Math.round(msg.yeti.z - playerZ);
-        const distLabel = distFromPlayer > 0 ? `${distFromPlayer}M AHEAD` : `${Math.abs(distFromPlayer)}M BEHIND`;
-        
-        yetiHud.innerText = msg.yeti.state === "STAGGERED" ? "⚡ STAGGERED!" : (msg.yeti.state === "RETREATING" ? "💨 RETREATING!" : `CHARGING (${distLabel})`);
-        yetiHud.style.color = msg.yeti.state === "STAGGERED" ? "#ffff00" : (msg.yeti.state === "RETREATING" ? "#00f0ff" : "#ff0033");
-
-        const relZ = -(playerZ - msg.yeti.z);
-        const relX = msg.yeti.x - playerX;
-        
-        yetiMesh.position.set(relX, 3.5, relZ);
-        if (yetiSprite) {
-          yetiSprite.position.set(relX, 3.8, relZ);
-          yetiSprite.visible = true;
+          const relZ = -(playerZ - msg.yeti.z);
+          const relX = msg.yeti.x - playerX;
+          yetiMesh.position.set(relX, 3.5, relZ);
+          if (yetiSprite) {
+            yetiSprite.position.set(relX, 3.8, relZ);
+            yetiSprite.visible = true;
+          }
         }
-      } else if (msg.yeti.state === "DEAD") {
-        yetiHud.innerText = "💀 DEFEATED";
-        yetiHud.style.color = "#39ff14";
+      } else {
+        if (yetiSprite) yetiSprite.visible = false;
       }
     }
 
@@ -1644,15 +1781,12 @@
       let group = remoteSkierMeshes.get(skier.id);
       if (!group) {
         group = new THREE.Group();
-        
-        // Skier body sprite
         const mat = new THREE.SpriteMaterial({ map: skierTexture ? skierTexture.clone() : null, transparent: true });
         const sprite = new THREE.Sprite(mat);
         sprite.scale.set(3.8, 3.8, 1);
         sprite.position.y = 1.8;
         group.add(sprite);
 
-        // Skis
         const skiMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff });
         const skiGeo = new THREE.BoxGeometry(0.12, 0.04, 1.8);
         const lSki = new THREE.Mesh(skiGeo, skiMat);
@@ -1675,16 +1809,12 @@
 
     function updateBoulders(bouldersList) {
       const activeIds = new Set(bouldersList.map(b => b.id));
-
-      // Remove despawned
       for (const [id, mesh] of boulderMeshes.entries()) {
         if (!activeIds.has(id)) {
           scene.remove(mesh);
           boulderMeshes.delete(id);
         }
       }
-
-      // Add/Update
       bouldersList.forEach(b => {
         let mesh = boulderMeshes.get(b.id);
         if (!mesh) {
@@ -1694,7 +1824,6 @@
           scene.add(mesh);
           boulderMeshes.set(b.id, mesh);
         }
-
         const relX = b.x - playerX;
         const relZ = -(playerZ - b.z);
         mesh.position.set(relX, (b.radius || 2.2), relZ);
@@ -1703,22 +1832,14 @@
     }
 
     function handleYetiHit(msg) {
-      if (msg.shooterId === myPlayerId) {
-        spawnDamagePopup(msg.damage, msg.isCrit, msg.isCrossfire);
-      }
-      if (msg.isCrossfire) {
-        soundEngine.playCrossfireBoom();
-      } else if (msg.isCrit) {
-        soundEngine.playYetiStaggerRoar();
-      }
+      if (msg.shooterId === myPlayerId) spawnPopup(`-${msg.damage}`, msg.isCrossfire ? 'crossfire' : (msg.isCrit ? 'crit' : 'normal'));
+      if (msg.isCrit) soundEngine.playYetiStaggerRoar();
     }
 
     function handleYetiDefeat(msg) {
       const gondola = document.getElementById('gondola-overlay');
       document.getElementById('gondola-sub').innerText = `WAVE ${msg.wave} CLEARED! SQUAD REVIVED • PREPARING FOR WAVE ${msg.wave + 1}`;
       gondola.style.opacity = '1';
-      
-      // Auto-replenish ammo and hearts
       playerHearts = 3;
       ammoCount = maxAmmo;
       document.getElementById('h1').classList.remove('heart-lost');
@@ -1727,10 +1848,7 @@
       document.getElementById('ammo-count').innerText = `AMMO: ${ammoCount} / ${maxAmmo} [R]`;
       document.getElementById('limb-status').innerText = "INTACT ⛷️";
       document.getElementById('limb-status').style.color = "#39ff14";
-
-      setTimeout(() => {
-        gondola.style.opacity = '0';
-      }, (msg.restDurationSec || 5) * 1000);
+      setTimeout(() => { gondola.style.opacity = '0'; }, 5000);
     }
 
     function handleNextWave(msg) {
@@ -1743,39 +1861,15 @@
       biteInvulnerabilityTimer = 2.5;
       playerHearts--;
       soundEngine.playBiteChomp();
-
       const df = document.getElementById('damage-flash');
       df.style.opacity = '0.95';
       setTimeout(() => df.style.opacity = '0', 250);
-
       playerSpeed = Math.min(80, playerSpeed + 24);
-
-      const biteToast = document.getElementById('bite-alert');
-      let limbMsg = "🩸 YETI BITE! ARM LOST (-1 HEART)";
-      if (playerHearts === 2) {
-        document.getElementById('h3').classList.add('heart-lost');
-        document.getElementById('limb-status').innerText = "LEFT ARM LOST 🩸";
-        document.getElementById('limb-status').style.color = "#ffff00";
-        limbMsg = "🩸 YETI CHOMPED YOUR LEFT ARM! (-1 HEART)";
-      } else if (playerHearts === 1) {
-        document.getElementById('h2').classList.add('heart-lost');
-        document.getElementById('limb-status').innerText = "BOTH ARMS LOST 🩸🩸";
-        document.getElementById('limb-status').style.color = "#ff8800";
-        limbMsg = "🩸 YETI CHOMPED YOUR RIGHT ARM! (-1 HEART)";
-      }
-
-      biteToast.innerText = limbMsg;
-      biteToast.style.opacity = '1';
-      setTimeout(() => { biteToast.style.opacity = '0'; }, 1500);
 
       if (playerHearts <= 0) {
         document.getElementById('h1').classList.add('heart-lost');
-        document.getElementById('limb-status').innerText = "SKELETONIZED 💀";
-        document.getElementById('limb-status').style.color = "#ff0033";
         triggerWastedSequence("SKELETONIZED BY THE YETI");
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
-        }
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
       }
     }
 
@@ -1788,16 +1882,13 @@
 
       playerHearts--;
       playerSpeed = Math.max(12, playerSpeed * 0.45);
-
       if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
       if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
 
       if (playerHearts <= 0) {
         document.getElementById('h1').classList.add('heart-lost');
-        triggerWastedSequence("SMACKED INTO A ROCK / PINE TREE");
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
-        }
+        triggerWastedSequence("CRASHED INTO ALPINE HAZARD");
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
       }
     }
 
@@ -1832,15 +1923,10 @@
         if (biteInvulnerabilityTimer > 0) biteInvulnerabilityTimer -= 0.016;
 
         const preset = DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium;
-
         let targetSpeed = preset.cruiseSpeed;
         if (keys.w) targetSpeed = preset.tuckSpeed;
         if (keys.s) targetSpeed = preset.brakeSpeed;
-
-        // Slingshot Draft Boost (+18 MPH)
-        if (isDrafting) {
-          targetSpeed += 18;
-        }
+        if (isDrafting) targetSpeed += 18;
 
         const sidewaysBraking = Math.abs(Math.sin(playerHeadingAngle)) * 18;
         targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
@@ -1891,12 +1977,11 @@
           rifleMesh.position.set(0.45, -0.4, -0.8);
         }
 
-        // Tree scroll & Collision
+        // Tree scroll
         trees.forEach(tree => {
           tree.position.z += forwardVel;
           tree.position.x -= lateralVel;
           tree.position.y = -tree.position.z * 0.15;
-
           if (spawnGraceTimer <= 0 && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
             onTreeHit();
             tree.position.z = 25;
@@ -1906,6 +1991,71 @@
             tree.position.x = (Math.random() - 0.5) * 180;
           }
         });
+
+        // --- Slalom Mode Gate Checking ---
+        if (activeGameMode === "slalom") {
+          raceElapsedTime = (Date.now() - raceStartTime) / 1000;
+          maxRaceSpeed = Math.max(maxRaceSpeed, Math.floor(playerSpeed));
+          document.getElementById('race-time-val').innerText = `${raceElapsedTime.toFixed(1)}s`;
+          document.getElementById('race-gates-val').innerText = `${gatesHitCount} / ${TOTAL_SLALOM_GATES}`;
+          document.getElementById('race-streak-val').innerText = `${gateStreak}x`;
+          document.getElementById('hud-dmg').innerHTML = `${raceScore} <span style="font-size:14px;">PTS</span>`;
+
+          slalomGates.forEach(g => {
+            const relZ = -(playerZ - g.z);
+            const relX = g.x - playerX;
+            g.group.position.set(relX, 0, relZ);
+
+            // Crossing plane check
+            if (!g.cleared && !g.missed && Math.abs(relZ) < 2.0) {
+              if (Math.abs(relX) <= (g.width / 2 + 1.2)) {
+                // Gate hit!
+                g.cleared = true;
+                gatesHitCount++;
+                gateStreak++;
+                playerSpeed = Math.min(95, playerSpeed + 12);
+                const points = 500 * gateStreak;
+                raceScore += points;
+                soundEngine.playGateChime();
+                spawnPopup(`⚡ GATE HIT! +${points} PTS (${gateStreak}x)`, 'gate');
+              } else {
+                // Gate missed
+                g.missed = true;
+                gateStreak = 1;
+                spawnPopup(`❌ MISS!`, 'miss');
+              }
+            }
+          });
+
+          // Finish Line Check
+          if (finishLineMesh) {
+            const relZ = -(playerZ - RACE_FINISH_Z);
+            finishLineMesh.position.set(-playerX, 0, relZ);
+
+            if (!isRaceFinished && playerZ >= RACE_FINISH_Z) {
+              isRaceFinished = true;
+              isPlaying = false;
+              raceScore += Math.floor(Math.max(0, 10000 - (raceElapsedTime * 100)));
+
+              document.getElementById('finish-time').innerText = `${raceElapsedTime.toFixed(2)}s`;
+              document.getElementById('finish-gates').innerText = `${gatesHitCount} / ${TOTAL_SLALOM_GATES}`;
+              document.getElementById('finish-speed').innerText = `${maxRaceSpeed} MPH`;
+              document.getElementById('finish-score').innerText = `${raceScore.toLocaleString()} PTS`;
+              document.getElementById('race-complete-overlay').classList.remove('hidden');
+              document.getElementById('race-complete-overlay').style.opacity = '1';
+
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: "RACE_FINISH",
+                  clearTimeSec: raceElapsedTime,
+                  maxSpeed: maxRaceSpeed,
+                  gatesHit: gatesHitCount,
+                  score: raceScore
+                }));
+              }
+            }
+          }
+        }
 
         soundEngine.updateSpeed(playerSpeed, playerHeadingAngle);
 
@@ -1918,7 +2068,7 @@
           }));
         }
 
-        if (mirrorRenderer && mirrorCamera) {
+        if (mirrorRenderer && mirrorCamera && activeGameMode === "hunt") {
           mirrorCamera.position.copy(camera.position);
           mirrorCamera.rotation.y = Math.PI - playerHeadingAngle * 0.5;
           mirrorRenderer.render(scene, mirrorCamera);
@@ -1940,9 +2090,7 @@
       if (k === 's' || e.key === 'ArrowDown') keys.s = true;
       if (k === 'r') reloadGun();
       if (e.key === 'Shift') keys.shift = true;
-      if (k === 'm' || e.key === 'Escape') {
-        toggleMenu();
-      }
+      if (k === 'm' || e.key === 'Escape') toggleMenu();
     });
 
     window.addEventListener('keyup', (e) => {
@@ -1957,7 +2105,6 @@
     window.addEventListener('mousedown', (e) => {
       if (e.button === 2) keys.shift = true;
     });
-
     window.addEventListener('mouseup', (e) => {
       if (e.button === 2) keys.shift = false;
     });
@@ -1977,37 +2124,105 @@
     }
 
     async function fetchInGameLeaderboard() {
-      const tbody = document.getElementById('in-game-leaderboard-rows');
-      if (!tbody) return;
       try {
         const res = await fetch('/api/scores');
         if (!res.ok) throw new Error();
         const data = await res.json();
-        tbody.innerHTML = '';
-        if (!data.leaderboard || data.leaderboard.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#88a0c0;">No hunts recorded yet. Be the first to strike down the Yeti!</td></tr>';
-          return;
+
+        // 1. Yeti Hunt Leaderboard
+        const huntTbody = document.getElementById('hunt-leaderboard-rows');
+        if (huntTbody && data.leaderboard) {
+          huntTbody.innerHTML = '';
+          data.leaderboard.forEach((entry, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td style="padding:8px 10px; font-weight:bold;">#${idx + 1}</td>
+              <td style="padding:8px 10px; font-weight:bold;">${entry.callsign || 'Hunter'}</td>
+              <td style="padding:8px 10px; color:#39ff14;">${(entry.score || 0).toLocaleString()}</td>
+              <td style="padding:8px 10px;">${entry.max_speed || 0} MPH</td>
+              <td style="padding:8px 10px;">${entry.max_distance || 0} M</td>
+            `;
+            huntTbody.appendChild(tr);
+          });
         }
 
-        data.leaderboard.forEach((entry, idx) => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td style="padding:8px 12px; font-weight:bold;">#${idx + 1}</td>
-            <td style="padding:8px 12px; font-weight:bold;">${entry.callsign || 'Hunter'}</td>
-            <td style="padding:8px 12px; color:#39ff14;">${(entry.score || 0).toLocaleString()}</td>
-            <td style="padding:8px 12px;">${entry.max_speed || 0} MPH</td>
-            <td style="padding:8px 12px;">${entry.max_distance || 0} M</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#ff0033;">Leaderboard connecting on live edge server.</td></tr>';
-      }
+        // 2. Slalom Race Leaderboard
+        const raceTbody = document.getElementById('race-leaderboard-rows');
+        if (raceTbody && data.raceLeaderboard) {
+          raceTbody.innerHTML = '';
+          data.raceLeaderboard.forEach((entry, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td style="padding:8px 10px; font-weight:bold;">#${idx + 1}</td>
+              <td style="padding:8px 10px; font-weight:bold;">${entry.callsign || 'Racer'}</td>
+              <td style="padding:8px 10px; color:#00f0ff;">${(entry.clear_time_sec || 0).toFixed(2)}s</td>
+              <td style="padding:8px 10px;">${entry.max_speed || 0} MPH</td>
+              <td style="padding:8px 10px; color:#39ff14;">${entry.gates_hit || 0} / 30</td>
+            `;
+            raceTbody.appendChild(tr);
+          });
+        }
+      } catch (e) {}
     }
 
     document.getElementById('btn-menu-open').addEventListener('click', () => toggleMenu(true));
     document.getElementById('btn-menu-close').addEventListener('click', () => toggleMenu(false));
     document.getElementById('btn-resume-game').addEventListener('click', () => toggleMenu(false));
+
+    // Menu Tab Switching
+    document.getElementById('tab-hunt-board-btn').addEventListener('click', () => {
+      document.getElementById('panel-hunt-board').classList.remove('hidden');
+      document.getElementById('panel-race-board').classList.add('hidden');
+      document.getElementById('panel-settings').classList.add('hidden');
+      document.getElementById('tab-hunt-board-btn').style.background = 'rgba(0,240,255,0.2)';
+      document.getElementById('tab-hunt-board-btn').style.borderColor = '#00f0ff';
+      document.getElementById('tab-hunt-board-btn').style.color = '#00f0ff';
+      document.getElementById('tab-race-board-btn').style.background = '#050a14';
+      document.getElementById('tab-race-board-btn').style.borderColor = '#556688';
+      document.getElementById('tab-race-board-btn').style.color = '#88a0c0';
+    });
+
+    document.getElementById('tab-race-board-btn').addEventListener('click', () => {
+      document.getElementById('panel-race-board').classList.remove('hidden');
+      document.getElementById('panel-hunt-board').classList.add('hidden');
+      document.getElementById('panel-settings').classList.add('hidden');
+      document.getElementById('tab-race-board-btn').style.background = 'rgba(57,255,20,0.2)';
+      document.getElementById('tab-race-board-btn').style.borderColor = '#39ff14';
+      document.getElementById('tab-race-board-btn').style.color = '#39ff14';
+      document.getElementById('tab-hunt-board-btn').style.background = '#050a14';
+      document.getElementById('tab-hunt-board-btn').style.borderColor = '#556688';
+      document.getElementById('tab-hunt-board-btn').style.color = '#88a0c0';
+    });
+
+    document.getElementById('tab-settings-btn').addEventListener('click', () => {
+      document.getElementById('panel-settings').classList.remove('hidden');
+      document.getElementById('panel-hunt-board').classList.add('hidden');
+      document.getElementById('panel-race-board').classList.add('hidden');
+    });
+
+    // Game Mode Selection in Staging
+    document.getElementById('btn-mode-hunt').addEventListener('click', () => {
+      activeGameMode = "hunt";
+      document.getElementById('btn-mode-hunt').classList.add('active');
+      document.getElementById('btn-mode-slalom').classList.remove('active');
+    });
+
+    document.getElementById('btn-mode-slalom').addEventListener('click', () => {
+      activeGameMode = "slalom";
+      document.getElementById('btn-mode-slalom').classList.add('active');
+      document.getElementById('btn-mode-hunt').classList.remove('active');
+    });
+
+    // Difficulty Setting
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedDifficulty = btn.dataset.diff;
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === selectedDifficulty));
+        const p = DIFFICULTY_PRESETS[selectedDifficulty];
+        document.getElementById('diff-badge').innerText = `DIFF: ${p.name}`;
+        document.getElementById('diff-badge').style.color = p.badgeColor;
+      });
+    });
 
     // Copy squad room link
     document.getElementById('btn-copy-room').addEventListener('click', () => {
@@ -2018,15 +2233,34 @@
       });
     });
 
-    // Intro video skip
+    // Intro video controller
+    const introOverlay = document.getElementById('intro-overlay');
+    const introVideo = document.getElementById('intro-video');
+    const introProgressBar = document.getElementById('intro-progress');
+    let isIntroSkipped = false;
+
     function skipIntroVideo() {
-      const intro = document.getElementById('intro-overlay');
-      if (intro) {
-        intro.style.opacity = '0';
-        setTimeout(() => intro.classList.add('hidden'), 400);
-      }
+      if (isIntroSkipped || !introOverlay) return;
+      isIntroSkipped = true;
+      if (introVideo) introVideo.pause();
+      introOverlay.style.opacity = '0';
+      setTimeout(() => {
+        introOverlay.classList.add('hidden');
+        document.getElementById('start-modal').classList.remove('hidden');
+      }, 400);
     }
     document.getElementById('btn-skip-intro').addEventListener('click', skipIntroVideo);
+
+    if (introVideo) {
+      introVideo.addEventListener('timeupdate', () => {
+        if (introVideo.duration && introProgressBar) {
+          const pct = (introVideo.currentTime / introVideo.duration) * 100;
+          introProgressBar.style.width = `${pct}%`;
+        }
+      });
+      introVideo.addEventListener('ended', skipIntroVideo);
+      introVideo.play().catch(() => {});
+    }
 
     // Ready-up button
     document.getElementById('btn-ready').addEventListener('click', () => {
@@ -2040,7 +2274,8 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: "READY",
-          ready: isReady
+          ready: isReady,
+          mode: activeGameMode
         }));
       }
     });
@@ -2049,7 +2284,7 @@
     document.getElementById('btn-start').addEventListener('click', () => {
       soundEngine.init();
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "FORCE_LAUNCH" }));
+        ws.send(JSON.stringify({ type: "FORCE_LAUNCH", mode: activeGameMode }));
       } else {
         startMatchClient();
       }
@@ -2061,6 +2296,12 @@
       startMatchClient();
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
       connectWebSocket(callsign);
+    });
+
+    // Race Again button
+    document.getElementById('btn-race-again').addEventListener('click', () => {
+      document.getElementById('race-complete-overlay').classList.add('hidden');
+      startMatchClient();
     });
 
     // Mobile touch controls setup

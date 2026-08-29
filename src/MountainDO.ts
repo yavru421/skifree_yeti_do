@@ -15,6 +15,7 @@ interface SkierState {
   isDead: boolean;
   isReady: boolean;
   loadout: string;
+  gameMode: "hunt" | "slalom";
   lastActive: number;
   lastShotTime?: number;
 }
@@ -33,6 +34,15 @@ interface LeaderboardEntry {
   max_distance: number;
   max_speed: number;
   survival_time: number;
+  score: number;
+  created_at: number;
+}
+
+interface RaceLeaderboardEntry {
+  callsign: string;
+  clear_time_sec: number;
+  max_speed: number;
+  gates_hit: number;
   score: number;
   created_at: number;
 }
@@ -95,6 +105,16 @@ export class MountainDO extends DurableObject {
         created_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS race_leaderboard (
+        id TEXT PRIMARY KEY,
+        callsign TEXT NOT NULL,
+        clear_time_sec REAL NOT NULL,
+        max_speed REAL NOT NULL,
+        gates_hit INTEGER NOT NULL,
+        score INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS yeti_kills (
         kill_id INTEGER PRIMARY KEY AUTOINCREMENT,
         killer_callsign TEXT NOT NULL,
@@ -121,9 +141,10 @@ export class MountainDO extends DurableObject {
       const playerId = crypto.randomUUID().slice(0, 8);
       const rawCallsign = url.searchParams.get("callsign");
       const callsign = sanitizeCallsign(rawCallsign);
+      const modeParam = (url.searchParams.get("mode") === "slalom") ? "slalom" : "hunt";
 
       this.ctx.acceptWebSocket(server, [playerId]);
-      server.serializeAttachment({ playerId, callsign });
+      server.serializeAttachment({ playerId, callsign, gameMode: modeParam });
 
       const initialX = (Math.random() - 0.5) * 25;
       this.players.set(playerId, {
@@ -141,11 +162,11 @@ export class MountainDO extends DurableObject {
         isDead: false,
         isReady: false,
         loadout: "rifle",
+        gameMode: modeParam,
         lastActive: Date.now(),
         lastShotTime: 0
       });
 
-      // If game is already actively running, player joins into current session
       if (this.matchState === "ACTIVE_HUNT") {
         const p = this.players.get(playerId)!;
         p.speed = 32;
@@ -153,7 +174,6 @@ export class MountainDO extends DurableObject {
         p.isReady = true;
       }
 
-      // Schedule 20Hz physics loop alarm if first player
       if (this.players.size === 1 && this.matchState === "LOBBY_WAITING") {
         this.ctx.storage.setAlarm(Date.now() + this.tickIntervalMs);
       }
@@ -162,6 +182,7 @@ export class MountainDO extends DurableObject {
         type: "WELCOME",
         playerId,
         callsign,
+        gameMode: modeParam,
         matchState: this.matchState,
         wave: this.currentWave,
         yetiMaxHp: this.yetiMaxHp,
@@ -176,10 +197,12 @@ export class MountainDO extends DurableObject {
       const limitParam = parseInt(url.searchParams.get("limit") || "20", 10);
       const limit = Math.min(50, Math.max(1, isNaN(limitParam) ? 20 : limitParam));
       const topScores = this.getLeaderboard(limit);
+      const topRaceScores = this.getRaceLeaderboard(limit);
       const recentKills = this.getRecentKills(10);
       return Response.json({
         success: true,
         leaderboard: topScores,
+        raceLeaderboard: topRaceScores,
         recentKills,
         currentWave: this.currentWave,
         matchState: this.matchState
@@ -196,7 +219,7 @@ export class MountainDO extends DurableObject {
 
   async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
     try {
-      const attachment = ws.deserializeAttachment() as { playerId: string; callsign: string };
+      const attachment = ws.deserializeAttachment() as { playerId: string; callsign: string; gameMode?: string };
       if (!attachment || !attachment.playerId) return;
 
       const player = this.players.get(attachment.playerId);
@@ -209,14 +232,26 @@ export class MountainDO extends DurableObject {
       if (data.type === "READY") {
         player.isReady = Boolean(data.ready);
         if (data.loadout) player.loadout = String(data.loadout);
+        if (data.mode === "slalom" || data.mode === "hunt") player.gameMode = data.mode;
         this.broadcastLobbyState();
         this.checkAllReadyToLaunch();
         return;
       }
 
-      // Handle Force Launch / Skip Countdown if Solo or Host
+      // Handle Force Launch
       if (data.type === "FORCE_LAUNCH") {
+        if (data.mode === "slalom" || data.mode === "hunt") player.gameMode = data.mode;
         this.startMatchCountdown();
+        return;
+      }
+
+      // Handle Slalom Race Finish
+      if (data.type === "RACE_FINISH") {
+        const clearTimeSec = Math.max(1, Number(data.clearTimeSec) || 0);
+        const maxSpeed = Math.max(1, Number(data.maxSpeed) || 0);
+        const gatesHit = Math.max(0, Number(data.gatesHit) || 0);
+        const raceScore = Math.max(0, Number(data.score) || 0);
+        this.commitRaceScore(player, clearTimeSec, maxSpeed, gatesHit, raceScore);
         return;
       }
 
@@ -267,14 +302,13 @@ export class MountainDO extends DurableObject {
         if (this.yetiActive && this.yetiState !== "DEAD" && Boolean(data.hit)) {
           const isCrit = Boolean(data.crit);
           
-          // Crossfire / Storm Convergence Combo Tracking
+          // Crossfire Combo Tracking
           this.recentHits.push({ timestamp: now, shooterId: player.id });
           this.recentHits = this.recentHits.filter(h => now - h.timestamp <= 1000);
           const distinctShooters = new Set(this.recentHits.map(h => h.shooterId)).size;
           const isCrossfire = distinctShooters >= 2;
           const crossfireMultiplier = isCrossfire ? 2.5 : 1.0;
 
-          // Server calculates and enforces authoritative damage
           const baseDamage = isCrit ? Math.floor(750 + Math.random() * 250) : Math.floor(400 + Math.random() * 150);
           const damage = Math.floor(baseDamage * crossfireMultiplier);
           
@@ -322,7 +356,6 @@ export class MountainDO extends DurableObject {
     this.restTimer = 5.0;
     this.boulders = [];
 
-    // Revive all dead players during Gondola Rest
     for (const p of this.players.values()) {
       p.isDead = false;
       p.score += 10000 * this.currentWave;
@@ -378,6 +411,7 @@ export class MountainDO extends DurableObject {
         callsign: p.callsign,
         isReady: p.isReady,
         loadout: p.loadout,
+        gameMode: p.gameMode,
         score: p.score
       }))
     });
@@ -395,7 +429,7 @@ export class MountainDO extends DurableObject {
     const now = Date.now();
     const dt = this.tickIntervalMs / 1000;
 
-    // 1. Handle Staging Drop Countdown
+    // 1. Handle Drop Countdown
     if (this.matchState === "COUNTDOWN_DROP") {
       this.countdownTimer -= dt;
       if (this.countdownTimer <= 0) {
@@ -403,7 +437,6 @@ export class MountainDO extends DurableObject {
         this.matchStartTime = Date.now();
         this.currentWave = 1;
         
-        // Dynamic squad-scaled boss HP
         const livingCount = Math.max(1, this.players.size);
         this.yetiMaxHp = Math.floor(8000 * Math.sqrt(livingCount));
         this.yetiHp = this.yetiMaxHp;
@@ -413,7 +446,6 @@ export class MountainDO extends DurableObject {
         this.yetiActive = true;
         this.boulders = [];
 
-        // Reset all players to gate starting line Z=0
         let idx = 0;
         for (const p of this.players.values()) {
           p.z = 0;
@@ -433,7 +465,7 @@ export class MountainDO extends DurableObject {
       }
     }
 
-    // 2. Handle Inter-Wave Gondola Rest Stop
+    // 2. Handle Gondola Rest
     if (this.matchState === "GONDOLA_REST") {
       this.restTimer -= dt;
       if (this.restTimer <= 0) {
@@ -458,7 +490,7 @@ export class MountainDO extends DurableObject {
 
     let furthestSkierZ = 0;
 
-    // 3. Skier Authoritative Physics Simulation
+    // 3. Skier Physics Loop
     if (this.matchState === "ACTIVE_HUNT" || this.matchState === "GONDOLA_REST") {
       for (const p of this.players.values()) {
         if (p.isDead) continue;
@@ -480,7 +512,7 @@ export class MountainDO extends DurableObject {
 
     furthestZ = furthestSkierZ;
 
-    // 4. Wave 2+ Avalanche Boulder Spawning & Rolling Physics
+    // 4. Wave 2+ Boulder Spawning & Physics
     if (this.matchState === "ACTIVE_HUNT" && this.currentWave >= 2 && this.yetiActive && this.yetiState !== "DEAD") {
       this.boulderSpawnTimer += dt;
       const spawnInterval = Math.max(1.8, 3.2 - (this.currentWave * 0.3));
@@ -491,18 +523,16 @@ export class MountainDO extends DurableObject {
           x: this.yetiX + (Math.random() - 0.5) * 12,
           z: this.yetiZ - 4,
           vx: (Math.random() - 0.5) * 10,
-          vz: -65 - (this.currentWave * 8), // Rolls fast down-slope towards skiers!
+          vz: -65 - (this.currentWave * 8),
           radius: 2.2 + Math.random() * 0.8
         });
       }
 
-      // Advance boulders & test collisions
       for (let i = this.boulders.length - 1; i >= 0; i--) {
         const b = this.boulders[i];
         b.z += b.vz * dt;
         b.x += b.vx * dt;
 
-        // Check collision against living skiers
         for (const p of this.players.values()) {
           if (p.isDead) continue;
           if (Math.abs(p.z - b.z) < 2.5 && Math.abs(p.x - b.x) < b.radius + 1.2) {
@@ -517,7 +547,6 @@ export class MountainDO extends DurableObject {
           }
         }
 
-        // Despawn far past slope
         if (b.z < -100 || (furthestSkierZ - b.z) > 120) {
           this.boulders.splice(i, 1);
         }
@@ -567,7 +596,6 @@ export class MountainDO extends DurableObject {
           this.yetiSpeed = targetPlayer.speed + (targetPlayer.z > this.yetiZ ? (12 + waveSpeedBonus) : -18);
           this.yetiZ += this.yetiSpeed * dt;
 
-          // Yeti Attack Bite
           if (minDistance < 3.2 && Math.abs(targetPlayer.x - this.yetiX) < 4.5) {
             this.broadcast({
               type: "YETI_BITE_ATTACK",
@@ -582,7 +610,7 @@ export class MountainDO extends DurableObject {
       }
     }
 
-    // 6. Broadcast 20Hz State Frame
+    // 6. Broadcast 20Hz Frame
     const framePayload = {
       type: "FRAME",
       timestamp: now,
@@ -617,7 +645,8 @@ export class MountainDO extends DurableObject {
         damageDealt: p.damageDealt,
         isDead: p.isDead,
         isReady: p.isReady,
-        loadout: p.loadout
+        loadout: p.loadout,
+        gameMode: p.gameMode
       }))
     };
 
@@ -648,12 +677,39 @@ export class MountainDO extends DurableObject {
     } catch (e) {}
   }
 
+  private commitRaceScore(p: SkierState, clearTimeSec: number, maxSpeed: number, gatesHit: number, score: number) {
+    try {
+      this.ctx.storage.sql.exec(`
+        INSERT INTO race_leaderboard (id, callsign, clear_time_sec, max_speed, gates_hit, score, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          clear_time_sec = MIN(clear_time_sec, excluded.clear_time_sec),
+          gates_hit = MAX(gates_hit, excluded.gates_hit),
+          score = MAX(score, excluded.score);
+      `, p.id, p.callsign, clearTimeSec, maxSpeed, gatesHit, score, Date.now());
+    } catch (e) {}
+  }
+
   private getLeaderboard(limit = 20): LeaderboardEntry[] {
     try {
       const cursor = this.ctx.storage.sql.exec<LeaderboardEntry>(`
         SELECT callsign, max_distance, max_speed, survival_time, score, created_at
         FROM global_leaderboard
         ORDER BY score DESC
+        LIMIT ?;
+      `, limit);
+      return cursor.toArray();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  private getRaceLeaderboard(limit = 20): RaceLeaderboardEntry[] {
+    try {
+      const cursor = this.ctx.storage.sql.exec<RaceLeaderboardEntry>(`
+        SELECT callsign, clear_time_sec, max_speed, gates_hit, score, created_at
+        FROM race_leaderboard
+        ORDER BY clear_time_sec ASC, score DESC
         LIMIT ?;
       `, limit);
       return cursor.toArray();
