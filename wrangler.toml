@@ -8,8 +8,7 @@ directory = "./public"
 binding = "ASSETS"
 
 [[routes]]
-pattern = "yeti.dondlingergc.com/*"
-zone_name = "dondlingergc.com"
+pattern = "yeti.dondlingergc.com"
 custom_domain = true
 
 [[durable_objects.bindings]]
