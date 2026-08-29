@@ -15,6 +15,10 @@ custom_domain = true
 name = "MOUNTAIN_DO"
 class_name = "MountainDO"
 
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "jdondlingermedia"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MountainDO"]

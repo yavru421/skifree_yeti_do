@@ -5,6 +5,7 @@ export { MountainDO };
 export interface Env {
   MOUNTAIN_DO: DurableObjectNamespace<MountainDO>;
   ASSETS: Fetcher;
+  MEDIA_BUCKET: R2Bucket;
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -33,7 +34,32 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // WebSocket upgrade routing to Durable Object Room
+    // 1. High-Performance R2 Video Streaming with native Range slicing
+    if (url.pathname.includes("teaser_trailer.mp4") || url.pathname.includes("intro.mp4")) {
+      if (env.MEDIA_BUCKET) {
+        const object = await env.MEDIA_BUCKET.get("teaser_trailer.mp4", {
+          range: request.headers,
+          onlyIf: request.headers,
+        });
+
+        if (object) {
+          const headers = new Headers();
+          object.writeHttpMetadata(headers);
+          headers.set("etag", object.httpEtag);
+          headers.set("Content-Type", "video/mp4");
+          headers.set("Accept-Ranges", "bytes");
+          headers.set("Cache-Control", "public, max-age=31536000, immutable");
+
+          const status = object.range ? 206 : 200;
+          return new Response(object.body, {
+            headers,
+            status
+          });
+        }
+      }
+    }
+
+    // 2. WebSocket upgrade routing to Durable Object Room
     if (url.pathname.startsWith("/ws")) {
       const upgradeHeader = request.headers.get("Upgrade");
       if (upgradeHeader && upgradeHeader.toLowerCase() === "websocket") {
@@ -44,7 +70,7 @@ export default {
       }
     }
 
-    // API Scores / Leaderboard endpoint
+    // 3. API Scores / Leaderboard endpoint
     if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
       const roomId = url.searchParams.get("room") || "main-alps";
       const doId = env.MOUNTAIN_DO.idFromName(roomId);
@@ -53,7 +79,7 @@ export default {
       return withSecurityHeaders(res);
     }
 
-    // Landing page & Game shortcuts
+    // 4. Landing page & Game shortcuts
     if (url.pathname === "/" || url.pathname === "/landing") {
       const landingReq = new Request(new URL("/landing.html", request.url), request);
       const res = await env.ASSETS.fetch(landingReq);
@@ -65,7 +91,7 @@ export default {
       return withSecurityHeaders(res);
     }
 
-    // Static Assets from public/ - Preserve native byte-range streaming for MP4/MP3 media
+    // 5. Static Assets from public/
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }

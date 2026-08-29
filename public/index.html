@@ -677,15 +677,15 @@
 
   <!-- Cinematic Skippable Intro Overlay with Guaranteed Autoplay -->
   <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.3s ease-out; pointer-events:auto;">
-    <video id="intro-video" autoplay muted loop playsinline webkit-playsinline preload="auto" style="width:100%; height:100%; object-fit:cover;">
-      <source src="assets/media/teaser_trailer.mp4" type="video/mp4">
+    <video id="intro-video" autoplay muted loop playsinline webkit-playsinline preload="auto" src="/assets/media/teaser_trailer.mp4" style="width:100%; height:100%; object-fit:cover;">
+      <source src="/assets/media/teaser_trailer.mp4" type="video/mp4">
     </video>
     <div style="position:absolute; bottom:20px; display:flex; flex-direction:column; align-items:center; gap:8px; z-index:510; pointer-events:auto;">
       <div style="width:220px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; overflow:hidden;">
         <div id="intro-progress" style="width:0%; height:100%; background:#00f0ff;"></div>
       </div>
       <button id="btn-skip-intro" type="button" style="background:linear-gradient(135deg, rgba(255,0,127,0.9), rgba(121,40,202,0.9)); border:2px solid #00f0ff; color:#fff; font-weight:900; font-size:14px; letter-spacing:1px; padding:10px 24px; border-radius:24px; cursor:pointer; touch-action:manipulation;">
-        TAP ANYWHERE TO START ⏭️
+        SKIP INTRO [SPACE / ESC] ⏭️
       </button>
     </div>
   </div>
