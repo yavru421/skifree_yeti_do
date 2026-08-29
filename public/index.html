@@ -362,18 +362,6 @@
       100% { opacity: 0; transform: translate(-50%, -40px) scale(1.0); }
     }
 
-    /* Clean Subtle CRT Vignette (No scanline stripes) */
-    #crt-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      background: radial-gradient(circle at center, rgba(0,0,0,0) 65%, rgba(0,0,0,0.35) 100%);
-      opacity: 0.6;
-    }
-
     /* Mobile Landscape Prompt */
     #rotate-prompt {
       display: none;
@@ -671,11 +659,10 @@
     <button id="btn-touch-shoot" class="touch-btn touch-btn-shoot" type="button">💥 SHOOT</button>
   </div>
 
-  <div id="crt-overlay"></div>
   <div id="damage-flash"></div>
   <div id="bite-alert">🩸 YETI BITE! (-1 HEART)</div>
 
-  <!-- Cinematic Skippable Intro Overlay with Guaranteed Autoplay -->
+  <!-- Cinematic Skippable Intro Overlay -->
   <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.3s ease-out; pointer-events:auto;">
     <video id="intro-video" autoplay muted loop playsinline webkit-playsinline preload="auto" src="/assets/media/teaser_trailer.mp4" style="width:100%; height:100%; object-fit:cover;">
       <source src="/assets/media/teaser_trailer.mp4" type="video/mp4">
@@ -757,7 +744,10 @@
         <div class="hud-sub" id="ammo-count">AMMO: 8/8 [R]</div>
       </div>
 
-      <button id="btn-menu-open" style="background:rgba(10,20,35,0.9); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; padding:5px 8px; border-radius:6px; cursor:pointer; pointer-events:auto; touch-action:manipulation;">⚙️</button>
+      <div style="display:flex; flex-direction:column; gap:4px; pointer-events:auto;">
+        <button id="btn-sound-toggle" style="background:rgba(10,20,35,0.9); border:2px solid #39ff14; color:#39ff14; font-weight:900; font-family:inherit; padding:5px 8px; border-radius:6px; cursor:pointer; font-size:11px; touch-action:manipulation;">🔊 AUDIO: ON</button>
+        <button id="btn-menu-open" style="background:rgba(10,20,35,0.9); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; padding:5px 8px; border-radius:6px; cursor:pointer; font-size:11px; touch-action:manipulation;">⚙️ MENU</button>
+      </div>
     </div>
 
     <div class="hud-bottom">
@@ -870,7 +860,7 @@
   </div>
 
   <audio id="bg-soundtrack" loop preload="auto">
-    <source src="assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
+    <source src="/assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
   </audio>
 
   <script>
@@ -893,14 +883,16 @@
       });
     }
 
+    // Realistic physics calibration
     const DIFFICULTY_PRESETS = {
-      easy: { name: "EASY", cruiseSpeed: 20, tuckSpeed: 45, brakeSpeed: 12, lateralFactor: 0.045, forwardFactor: 0.030, badgeColor: "#39ff14" },
-      medium: { name: "MED", cruiseSpeed: 28, tuckSpeed: 60, brakeSpeed: 16, lateralFactor: 0.055, forwardFactor: 0.038, badgeColor: "#ffff00" },
-      pro: { name: "PRO", cruiseSpeed: 38, tuckSpeed: 85, brakeSpeed: 20, lateralFactor: 0.068, forwardFactor: 0.046, badgeColor: "#ff007f" }
+      easy: { name: "EASY", cruiseSpeed: 18, tuckSpeed: 32, brakeSpeed: 10, lateralFactor: 0.024, forwardFactor: 0.012, badgeColor: "#39ff14" },
+      medium: { name: "MED", cruiseSpeed: 24, tuckSpeed: 45, brakeSpeed: 14, lateralFactor: 0.030, forwardFactor: 0.015, badgeColor: "#ffff00" },
+      pro: { name: "PRO", cruiseSpeed: 32, tuckSpeed: 60, brakeSpeed: 18, lateralFactor: 0.036, forwardFactor: 0.018, badgeColor: "#ff007f" }
     };
 
     let selectedDifficulty = "medium";
     let activeGameMode = "hunt";
+    let isSoundOn = true;
 
     // --- Spatial 3D WebAudio Engine ---
     class SpatialWebAudioEngine {
@@ -913,49 +905,54 @@
       }
 
       init() {
-        if (this.isInitialized) return;
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        this.ctx = new AudioContext();
-
-        const bufferSize = this.ctx.sampleRate * 2;
-        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          output[i] = (Math.random() * 2 - 1) * 0.5;
+        if (this.isInitialized) {
+          if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+          return;
         }
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
 
-        const whiteNoise = this.ctx.createBufferSource();
-        whiteNoise.buffer = noiseBuffer;
-        whiteNoise.loop = true;
-        this.windFilter = this.ctx.createBiquadFilter();
-        this.windFilter.type = 'bandpass';
-        this.windFilter.frequency.value = 400;
-        this.windFilter.Q.value = 3.0;
-        this.windGain = this.ctx.createGain();
-        this.windGain.gain.value = 0.05;
-        whiteNoise.connect(this.windFilter);
-        this.windFilter.connect(this.windGain);
-        this.windGain.connect(this.ctx.destination);
-        whiteNoise.start();
+          const bufferSize = this.ctx.sampleRate * 2;
+          const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = (Math.random() * 2 - 1) * 0.5;
+          }
 
-        const carveNoise = this.ctx.createBufferSource();
-        carveNoise.buffer = noiseBuffer;
-        carveNoise.loop = true;
-        const carveFilter = this.ctx.createBiquadFilter();
-        carveFilter.type = 'highpass';
-        carveFilter.frequency.value = 1200;
-        this.carveGain = this.ctx.createGain();
-        this.carveGain.gain.value = 0.0;
-        carveNoise.connect(carveFilter);
-        carveFilter.connect(this.carveGain);
-        this.carveGain.connect(this.ctx.destination);
-        carveNoise.start();
+          const whiteNoise = this.ctx.createBufferSource();
+          whiteNoise.buffer = noiseBuffer;
+          whiteNoise.loop = true;
+          this.windFilter = this.ctx.createBiquadFilter();
+          this.windFilter.type = 'bandpass';
+          this.windFilter.frequency.value = 400;
+          this.windFilter.Q.value = 3.0;
+          this.windGain = this.ctx.createGain();
+          this.windGain.gain.value = 0.05;
+          whiteNoise.connect(this.windFilter);
+          this.windFilter.connect(this.windGain);
+          this.windGain.connect(this.ctx.destination);
+          whiteNoise.start();
 
-        this.isInitialized = true;
+          const carveNoise = this.ctx.createBufferSource();
+          carveNoise.buffer = noiseBuffer;
+          carveNoise.loop = true;
+          const carveFilter = this.ctx.createBiquadFilter();
+          carveFilter.type = 'highpass';
+          carveFilter.frequency.value = 1200;
+          this.carveGain = this.ctx.createGain();
+          this.carveGain.gain.value = 0.0;
+          carveNoise.connect(carveFilter);
+          carveFilter.connect(this.carveGain);
+          this.carveGain.connect(this.ctx.destination);
+          carveNoise.start();
+
+          this.isInitialized = true;
+        } catch (e) {}
       }
 
       playGunshot() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
@@ -970,7 +967,7 @@
       }
 
       playReload() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
@@ -986,7 +983,7 @@
       }
 
       playBiteChomp() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
@@ -1001,7 +998,7 @@
       }
 
       playHitFlesh() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
@@ -1016,7 +1013,7 @@
       }
 
       playGateChime() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
@@ -1031,7 +1028,7 @@
       }
 
       playBigAirWhoosh() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
@@ -1046,7 +1043,7 @@
       }
 
       playRailGrind() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
@@ -1061,7 +1058,7 @@
       }
 
       playTreeThud() {
-        if (!this.isInitialized) return;
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
@@ -1076,12 +1073,12 @@
       }
 
       updateSpeed(speedMph, carveAngleRad) {
-        if (!this.isInitialized || !this.ctx) return;
-        const ratio = Math.min(1.0, speedMph / 80);
+        if (!this.isInitialized || !this.ctx || !isSoundOn) return;
+        const ratio = Math.min(1.0, speedMph / 60);
         this.windFilter.frequency.setTargetAtTime(300 + ratio * 1600, this.ctx.currentTime, 0.05);
         this.windGain.gain.setTargetAtTime(0.02 + ratio * 0.25, this.ctx.currentTime, 0.05);
         const sidewaysFactor = Math.abs(Math.sin(carveAngleRad));
-        const carveVolume = Math.min(0.40, (sidewaysFactor * 0.30) + (speedMph / 70 * 0.1));
+        const carveVolume = Math.min(0.40, (sidewaysFactor * 0.30) + (speedMph / 50 * 0.1));
         this.carveGain.gain.setTargetAtTime(carveVolume, this.ctx.currentTime, 0.05);
       }
     }
@@ -1112,7 +1109,7 @@
     let slalomGates = [];
     let finishLineMesh = null;
     const TOTAL_SLALOM_GATES = 30;
-    const RACE_FINISH_Z = 1500;
+    const RACE_FINISH_Z = 1200;
 
     let raceStartTime = 0;
     let raceElapsedTime = 0;
@@ -1144,7 +1141,7 @@
 
     let playerX = 0;
     let playerZ = 0;
-    let playerSpeed = 28;
+    let playerSpeed = 24;
     let playerHeadingAngle = 0;
     let turnSteerVelocity = 0;
 
@@ -1171,16 +1168,16 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xb0d5f0);
-      scene.fog = new THREE.FogExp2(0xb0d5f0, 0.0025);
+      scene.background = new THREE.Color(0xb8dcfa);
+      scene.fog = new THREE.FogExp2(0xb8dcfa, 0.0018);
 
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
       camera.position.set(0, 1.8, 0);
 
-      const sunLight = new THREE.DirectionalLight(0xfff8ee, 1.4);
-      sunLight.position.set(45, 90, -50);
+      const sunLight = new THREE.DirectionalLight(0xfff8ee, 1.5);
+      sunLight.position.set(50, 100, -60);
       scene.add(sunLight);
-      scene.add(new THREE.AmbientLight(0x99bbdd, 0.9));
+      scene.add(new THREE.AmbientLight(0xaad0f0, 0.95));
 
       createDistantMountainRange();
       createContinuousSnowTerrain();
@@ -1224,13 +1221,13 @@
     }
 
     function createDistantMountainRange() {
-      const rockMat = new THREE.MeshLambertMaterial({ color: 0x3a4b60 });
-      const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xfafcff });
+      const rockMat = new THREE.MeshLambertMaterial({ color: 0x3d5066 });
+      const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 24; i++) {
         const peakGroup = new THREE.Group();
-        const peakHeight = 90 + Math.random() * 90;
-        const peakRadius = 60 + Math.random() * 45;
+        const peakHeight = 110 + Math.random() * 110;
+        const peakRadius = 70 + Math.random() * 50;
 
         const rockGeo = new THREE.ConeGeometry(peakRadius, peakHeight, 6);
         const rockMesh = new THREE.Mesh(rockGeo, rockMat);
@@ -1241,32 +1238,37 @@
         capMesh.position.y = peakHeight * 0.28;
         peakGroup.add(capMesh);
 
-        const angle = (i / 20) * Math.PI * 1.6 - (Math.PI * 0.8);
-        const distance = 460 + Math.random() * 120;
-        peakGroup.position.set(Math.sin(angle) * distance, 30 + Math.random() * 30, -Math.cos(angle) * distance);
+        const angle = (i / 24) * Math.PI * 1.8 - (Math.PI * 0.9);
+        const distance = 520 + Math.random() * 140;
+        peakGroup.position.set(Math.sin(angle) * distance, 35 + Math.random() * 35, -Math.cos(angle) * distance);
         scene.add(peakGroup);
         mountainPeaks.push(peakGroup);
       }
     }
 
-    // Continuous Infinite Snow Ground Plane
+    // 100% Solid & Textured Continuous Snow Valley
     function createContinuousSnowTerrain() {
-      const terrainGeo = new THREE.PlaneGeometry(600, 1200, 32, 32);
+      const terrainGeo = new THREE.PlaneGeometry(1600, 2400, 32, 32);
+      
       const textureLoader = new THREE.TextureLoader();
-      snowTexture = textureLoader.load('assets/snow_texture.jpg');
-      snowTexture.wrapS = THREE.RepeatWrapping;
-      snowTexture.wrapT = THREE.RepeatWrapping;
-      snowTexture.repeat.set(24, 48);
+      snowTexture = textureLoader.load('/assets/snow_texture.jpg', () => {
+        snowTexture.wrapS = THREE.RepeatWrapping;
+        snowTexture.wrapT = THREE.RepeatWrapping;
+        snowTexture.repeat.set(32, 64);
+        terrainMat.map = snowTexture;
+        terrainMat.needsUpdate = true;
+      });
 
       const terrainMat = new THREE.MeshStandardMaterial({
-        map: snowTexture,
-        color: 0xf5f9ff,
-        roughness: 0.75,
-        metalness: 0.05
+        color: 0xffffff,
+        roughness: 0.85,
+        metalness: 0.02,
+        side: THREE.DoubleSide
       });
+
       terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
-      terrainMesh.rotation.x = -Math.PI / 2.2;
-      terrainMesh.position.set(0, 0, -250);
+      terrainMesh.rotation.x = -Math.PI / 2;
+      terrainMesh.position.set(0, 0, -600);
       scene.add(terrainMesh);
     }
 
@@ -1275,7 +1277,7 @@
       trees = [];
 
       const textureLoader = new THREE.TextureLoader();
-      const treeTexture = textureLoader.load('assets/pine_tree.png');
+      const treeTexture = textureLoader.load('/assets/pine_tree.png');
 
       const treeGeo = new THREE.PlaneGeometry(6.5, 9.0);
       const treeMat = new THREE.MeshStandardMaterial({
@@ -1297,9 +1299,9 @@
         treeGroup.add(p1);
         treeGroup.add(p2);
 
-        const tz = -45 - (i * 8.5);
+        const tz = -40 - (i * 12);
         const tx = (Math.random() - 0.5) * 180;
-        treeGroup.position.set(tx, -tz * 0.15, tz);
+        treeGroup.position.set(tx, 0, tz);
         treeGroup.userData = { radius: 2.2 };
         scene.add(treeGroup);
         trees.push(treeGroup);
@@ -1316,9 +1318,9 @@
       for (let i = 0; i < 14; i++) {
         const mesh = new THREE.Mesh(rampGeo, rampMat);
         mesh.rotation.x = -0.35;
-        const kz = -70 - (i * 55) - (Math.random() * 20);
+        const kz = -80 - (i * 75) - (Math.random() * 20);
         const kx = (Math.sin(i * 1.3) * 35);
-        mesh.position.set(kx, -kz * 0.15 + 0.6, kz);
+        mesh.position.set(kx, 0.7, kz);
         scene.add(mesh);
 
         kickers.push({
@@ -1338,9 +1340,9 @@
       for (let i = 0; i < 8; i++) {
         const mesh = new THREE.Mesh(railGeo, railMat);
         mesh.rotation.x = Math.PI / 2.2;
-        const rz = -90 - (i * 80);
+        const rz = -100 - (i * 110);
         const rx = (i % 2 === 0 ? 18 : -18) + (Math.random() - 0.5) * 6;
-        mesh.position.set(rx, -rz * 0.15 + 1.2, rz);
+        mesh.position.set(rx, 1.2, rz);
         scene.add(mesh);
 
         grindRails.push({
@@ -1356,7 +1358,7 @@
 
       const iceGeo = new THREE.PlaneGeometry(22, 38);
       const textureLoader = new THREE.TextureLoader();
-      const iceTexture = textureLoader.load('assets/ice_texture.jpg');
+      const iceTexture = textureLoader.load('/assets/ice_texture.jpg');
       iceTexture.wrapS = THREE.RepeatWrapping;
       iceTexture.wrapT = THREE.RepeatWrapping;
       iceTexture.repeat.set(2, 3);
@@ -1367,15 +1369,16 @@
         transparent: true,
         opacity: 0.85,
         roughness: 0.08,
-        metalness: 0.75
+        metalness: 0.75,
+        side: THREE.DoubleSide
       });
 
       for (let i = 0; i < 8; i++) {
         const mesh = new THREE.Mesh(iceGeo, iceMat);
-        mesh.rotation.x = -Math.PI / 2.2;
-        const iz = -110 - (i * 90);
+        mesh.rotation.x = -Math.PI / 2;
+        const iz = -120 - (i * 120);
         const ix = (Math.sin(i * 1.8) * 25);
-        mesh.position.set(ix, -iz * 0.15 + 0.05, iz);
+        mesh.position.set(ix, 0.05, iz);
         scene.add(mesh);
 
         icePatches.push({
@@ -1401,13 +1404,13 @@
         arm.position.set(-3, 23, 0);
         towerGroup.add(pylon);
         towerGroup.add(arm);
-        towerGroup.position.set(75, 0, -40 - (i * 120));
+        towerGroup.position.set(75, 0, -40 - (i * 140));
         scene.add(towerGroup);
 
         const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3.2, 4.5), cabinMat);
-        cabin.position.set(72, 18, -40 - (i * 120));
+        cabin.position.set(72, 18, -40 - (i * 140));
         scene.add(cabin);
-        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 120), offset: Math.random() * 100 });
+        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 140), offset: Math.random() * 100 });
       }
     }
 
@@ -1435,7 +1438,7 @@
       scene.add(yetiMesh);
 
       const textureLoader = new THREE.TextureLoader();
-      textureLoader.load('assets/yeti_v2.jpg', (texture) => {
+      textureLoader.load('/assets/yeti_v2.jpg', (texture) => {
         yetiTexture = texture;
         yetiTexture.magFilter = THREE.NearestFilter;
         yetiTexture.minFilter = THREE.NearestFilter;
@@ -1463,7 +1466,7 @@
         const mat = isBlue ? blueMat : redMat;
         const gateWidth = 10;
         const gateX = Math.sin(i * 0.65) * 35;
-        const gateZ = -50 - (i * 48);
+        const gateZ = -60 - (i * 38);
 
         const leftPole = new THREE.Mesh(poleGeo, mat);
         leftPole.position.set(-gateWidth / 2, 1.9, 0);
@@ -1478,7 +1481,7 @@
         group.add(rightPole);
         group.add(banner);
 
-        group.position.set(gateX, -gateZ * 0.15, gateZ);
+        group.position.set(gateX, 0, gateZ);
         scene.add(group);
 
         slalomGates.push({
@@ -1501,7 +1504,7 @@
       finishGroup.add(fLeft);
       finishGroup.add(fRight);
       finishGroup.add(fBanner);
-      finishGroup.position.set(0, RACE_FINISH_Z * 0.15, -RACE_FINISH_Z);
+      finishGroup.position.set(0, 0, -RACE_FINISH_Z);
       scene.add(finishGroup);
       finishLineMesh = finishGroup;
     }
@@ -1535,7 +1538,7 @@
       if (isReloading || ammoCount === maxAmmo || activeGameMode === "slalom") return;
       isReloading = true;
       soundEngine.playReload();
-      document.getElementById('ammo-count').innerText = "RELOADING...";
+      document.getElementById('ammo-count').innerText = "RELOAD...";
       document.getElementById('ammo-count').style.color = "#ffff00";
       setTimeout(() => {
         ammoCount = maxAmmo;
@@ -1686,6 +1689,15 @@
       document.getElementById('hud-overlay').classList.remove('hidden');
       document.getElementById('touch-steer-zone').classList.remove('hidden');
       document.getElementById('mobile-action-bar').classList.remove('hidden');
+
+      // Guaranteed audio unlock
+      soundEngine.init();
+      const bg = document.getElementById('bg-soundtrack');
+      if (bg) {
+        bg.muted = !isSoundOn;
+        bg.volume = 0.6;
+        bg.play().catch(() => {});
+      }
 
       isPlaying = true;
       isWasted = false;
@@ -1876,7 +1888,7 @@
       const df = document.getElementById('damage-flash');
       df.style.opacity = '0.95';
       setTimeout(() => df.style.opacity = '0', 250);
-      playerSpeed = Math.min(80, playerSpeed + 24);
+      playerSpeed = Math.min(65, playerSpeed + 18);
 
       if (playerHearts <= 0) {
         document.getElementById('h1').classList.add('heart-lost');
@@ -1893,7 +1905,7 @@
       setTimeout(() => { flash.style.opacity = '0'; }, 200);
 
       playerHearts--;
-      playerSpeed = Math.max(12, playerSpeed * 0.45);
+      playerSpeed = Math.max(10, playerSpeed * 0.5);
       if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
       if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
 
@@ -1941,7 +1953,7 @@
         let targetSpeed = preset.cruiseSpeed;
         if (keys.w) targetSpeed = preset.tuckSpeed;
         if (keys.s) targetSpeed = preset.brakeSpeed;
-        if (isDrafting) targetSpeed += 18;
+        if (isDrafting) targetSpeed += 14;
 
         const maxAngle = Math.PI / 2.1;
         if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07);
@@ -1961,19 +1973,18 @@
         playerX += lateralVel;
         playerX = Math.max(-120, Math.min(120, playerX));
 
-        // Infinite Snow Ground Texture Scroll
+        // Seamless Infinite Snow Ground Scroll
         if (snowTexture) {
-          snowTexture.offset.y -= forwardVel * 0.035;
-          snowTexture.offset.x += lateralVel * 0.035;
+          snowTexture.offset.y -= forwardVel * 0.02;
+          snowTexture.offset.x += lateralVel * 0.02;
         }
 
-        // --- Synchronized World Objects Scrolling (Trees, Kickers, Rails, Ice, Gates) ---
+        // --- Synchronized Delta Scroll for All World Entities ---
         
         // 1. Trees
         trees.forEach(tree => {
           tree.position.z += forwardVel;
           tree.position.x -= lateralVel;
-          tree.position.y = -tree.position.z * 0.15;
           if (spawnGraceTimer <= 0 && !isAirborne && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
             onTreeHit();
             tree.position.z = 25;
@@ -1988,11 +1999,10 @@
         kickers.forEach(k => {
           k.mesh.position.z += forwardVel;
           k.mesh.position.x -= lateralVel;
-          k.mesh.position.y = -k.mesh.position.z * 0.15 + 0.6;
 
-          if (!isAirborne && Math.abs(k.mesh.position.z) < 2.5 && Math.abs(k.mesh.position.x) < k.width / 2) {
+          if (!isAirborne && Math.abs(k.mesh.position.z) < 2.0 && Math.abs(k.mesh.position.x) < k.width / 2) {
             isAirborne = true;
-            airVy = 18.0;
+            airVy = 16.0;
             soundEngine.playBigAirWhoosh();
             const airEl = document.getElementById('air-trick-indicator');
             airEl.style.opacity = '1';
@@ -2009,11 +2019,10 @@
         grindRails.forEach(r => {
           r.mesh.position.z += forwardVel;
           r.mesh.position.x -= lateralVel;
-          r.mesh.position.y = -r.mesh.position.z * 0.15 + 1.2;
 
           if (Math.abs(r.mesh.position.z) < r.length / 2 && Math.abs(r.mesh.position.x) < 1.8) {
             isGrindingRail = true;
-            playerSpeed = Math.min(85, playerSpeed + 0.4);
+            playerSpeed = Math.min(75, playerSpeed + 0.3);
             soundEngine.playRailGrind();
             spawnPopup('⚡ RAIL GRIND +200 PTS', 'gate');
           }
@@ -2028,7 +2037,6 @@
         icePatches.forEach(p => {
           p.mesh.position.z += forwardVel;
           p.mesh.position.x -= lateralVel;
-          p.mesh.position.y = -p.mesh.position.z * 0.15 + 0.05;
 
           if (Math.abs(p.mesh.position.z) < p.length / 2 && Math.abs(p.mesh.position.x) < p.width / 2) {
             onIce = true;
@@ -2038,16 +2046,16 @@
             p.mesh.position.x = (Math.random() - 0.5) * 80;
           }
         });
-        if (onIce) targetSpeed += 15;
+        if (onIce) targetSpeed += 12;
 
-        const sidewaysBraking = onIce ? 0 : Math.abs(Math.sin(playerHeadingAngle)) * 18;
-        targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
+        const sidewaysBraking = onIce ? 0 : Math.abs(Math.sin(playerHeadingAngle)) * 14;
+        targetSpeed = Math.max(8, targetSpeed - sidewaysBraking);
         playerSpeed += (targetSpeed - playerSpeed) * 0.05;
 
-        // Airborne Physics Trajectory
+        // Airborne Physics
         if (isAirborne) {
           airY += airVy * 0.016;
-          airVy -= 32.0 * 0.016;
+          airVy -= 30.0 * 0.016;
           airRollAngle += 0.08;
 
           if (airY <= 0) {
@@ -2055,13 +2063,13 @@
             airVy = 0;
             isAirborne = false;
             airRollAngle = 0;
-            playerSpeed = Math.min(95, playerSpeed + 16);
+            playerSpeed = Math.min(80, playerSpeed + 14);
             document.getElementById('air-trick-indicator').style.opacity = '0';
-            spawnPopup('✨ SMOOTH LANDING (+16 MPH)', 'gate');
+            spawnPopup('✨ SMOOTH LANDING (+14 MPH)', 'gate');
           }
         }
 
-        // Animate Ski-Lift Gondola Cabins
+        // Ski-Lift Gondolas
         gondolaCabins.forEach(g => {
           const relZ = -(playerZ - (g.zBase + Math.sin(Date.now() * 0.001 + g.offset) * 35));
           g.mesh.position.set(72 - playerX, 18, relZ);
@@ -2101,14 +2109,13 @@
           slalomGates.forEach(g => {
             g.group.position.z += forwardVel;
             g.group.position.x -= lateralVel;
-            g.group.position.y = -g.group.position.z * 0.15;
 
             if (!g.cleared && !g.missed && Math.abs(g.group.position.z) < 2.2) {
               if (Math.abs(g.group.position.x) <= (g.width / 2 + 1.2)) {
                 g.cleared = true;
                 gatesHitCount++;
                 gateStreak++;
-                playerSpeed = Math.min(95, playerSpeed + 12);
+                playerSpeed = Math.min(80, playerSpeed + 10);
                 const points = 500 * gateStreak;
                 raceScore += points;
                 soundEngine.playGateChime();
@@ -2124,7 +2131,6 @@
           if (finishLineMesh) {
             finishLineMesh.position.z += forwardVel;
             finishLineMesh.position.x -= lateralVel;
-            finishLineMesh.position.y = -finishLineMesh.position.z * 0.15;
 
             if (!isRaceFinished && playerZ >= RACE_FINISH_Z) {
               isRaceFinished = true;
@@ -2175,6 +2181,7 @@
     // Controls
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
+      soundEngine.init();
       if (e.key === ' ' || e.key === 'Escape' || e.key === 'Enter') {
         skipIntroVideo();
       }
@@ -2204,10 +2211,27 @@
     });
 
     window.addEventListener('mousedown', (e) => {
+      soundEngine.init();
       if (e.button === 2) keys.shift = true;
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 2) keys.shift = false;
+    });
+
+    // Sound toggle
+    bindAction(document.getElementById('btn-sound-toggle'), () => {
+      soundEngine.init();
+      isSoundOn = !isSoundOn;
+      const btn = document.getElementById('btn-sound-toggle');
+      btn.innerText = isSoundOn ? "🔊 AUDIO: ON" : "🔇 AUDIO: OFF";
+      btn.style.borderColor = isSoundOn ? "#39ff14" : "#ff007f";
+      btn.style.color = isSoundOn ? "#39ff14" : "#ff007f";
+      const bg = document.getElementById('bg-soundtrack');
+      if (bg) {
+        bg.muted = !isSoundOn;
+        if (isSoundOn) bg.play().catch(() => {});
+        else bg.pause();
+      }
     });
 
     // In-Game Menu
@@ -2349,7 +2373,6 @@
     }
     
     bindAction(document.getElementById('btn-skip-intro'), skipIntroVideo);
-    bindAction(introOverlay, skipIntroVideo);
 
     if (introVideo) {
       introVideo.muted = true;
