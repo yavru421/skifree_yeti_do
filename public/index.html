@@ -804,6 +804,23 @@
       </div>
     </div>
 
+    <!-- Claim High Score Modal with PIN -->
+    <div id="claim-score-modal" class="hidden">
+      <div class="modal-title" style="color:#ffff00;">🏆 PUBLISH TO LEADERBOARD</div>
+      <div id="claim-stat-summary" style="font-size:13px; color:#00f0ff; text-align:center; margin:8px 0; font-weight:bold;"></div>
+      <p style="font-size:11px; color:#88a0c0; text-align:center; margin-bottom:8px;">Claim & lock your Callsign with a 4-digit PIN:</p>
+      
+      <input type="text" id="claim-callsign-input" class="input-field" placeholder="Enter Callsign (e.g. JohnD)" maxlength="12">
+      <input type="password" id="claim-pin-input" class="input-field" placeholder="Enter 4-Digit PIN (e.g. 1234)" maxlength="8" inputmode="numeric">
+      
+      <div id="claim-feedback-msg" style="font-size:11px; color:#ff0033; text-align:center; min-height:16px; margin:4px 0;"></div>
+      
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button class="modal-btn" id="btn-submit-claim" style="flex:2;" type="button">💾 PUBLISH & SAVE</button>
+        <button class="modal-btn" id="btn-skip-claim" style="flex:1; background:#223344;" type="button">SKIP</button>
+      </div>
+    </div>
+
     <!-- Death Modal -->
     <div id="death-modal" class="hidden">
       <div class="modal-title" style="color:#ff0033;" id="death-title">💀 RUN FAILED</div>
@@ -2013,10 +2030,18 @@
       isWasted = true;
       isPlaying = false;
       document.getElementById('death-stat').innerText = reason;
-      document.getElementById('modal-backdrop').classList.remove('hidden');
-      document.getElementById('start-modal').classList.add('hidden');
-      document.getElementById('menu-modal').classList.add('hidden');
-      document.getElementById('death-modal').classList.remove('hidden');
+      
+      const currentScore = (activeGameMode === "slalom") ? raceScore : Math.max(100, Math.floor(playerZ * 10));
+      setTimeout(() => {
+        promptScoreClaim({
+          mode: activeGameMode,
+          score: currentScore,
+          maxSpeed: Math.floor(playerSpeed),
+          maxDistance: Math.floor(playerZ),
+          survivalTime: 20
+        });
+      }, 1000);
+      
       document.getElementById('hud-overlay').classList.add('hidden');
       document.getElementById('mobile-action-bar').classList.add('hidden');
       document.getElementById('touch-steer-zone').classList.add('hidden');
@@ -2400,15 +2425,107 @@
       document.getElementById('tab-race-board-btn').style.color = '#88a0c0';
     });
 
-    bindAction(document.getElementById('tab-race-board-btn'), () => {
-      document.getElementById('panel-race-board').classList.remove('hidden');
-      document.getElementById('panel-hunt-board').classList.add('hidden');
-      document.getElementById('tab-race-board-btn').style.background = 'rgba(57,255,20,0.2)';
-      document.getElementById('tab-race-board-btn').style.borderColor = '#39ff14';
-      document.getElementById('tab-race-board-btn').style.color = '#39ff14';
-      document.getElementById('tab-hunt-board-btn').style.background = '#050a14';
-      document.getElementById('tab-hunt-board-btn').style.borderColor = '#556688';
-      document.getElementById('tab-hunt-board-btn').style.color = '#88a0c0';
+    // --- Score Claim & PIN Publishing Flow ---
+    let pendingRunScoreData = null;
+
+    function promptScoreClaim(scoreData) {
+      pendingRunScoreData = scoreData;
+      const modal = document.getElementById('claim-score-modal');
+      const statSummary = document.getElementById('claim-stat-summary');
+      const callsignInput = document.getElementById('claim-callsign-input');
+      const pinInput = document.getElementById('claim-pin-input');
+      const feedback = document.getElementById('claim-feedback-msg');
+
+      if (!modal || !scoreData) return;
+
+      const savedCallsign = localStorage.getItem('skifree_saved_callsign') || 'YetiSlayer';
+      const savedPin = localStorage.getItem('skifree_saved_pin') || '';
+
+      callsignInput.value = savedCallsign;
+      pinInput.value = savedPin;
+      feedback.innerText = '';
+      feedback.style.color = '#ff0033';
+
+      if (scoreData.mode === 'slalom') {
+        statSummary.innerText = `🏁 TIME: ${scoreData.clearTimeSec.toFixed(2)}s • GATES: ${scoreData.gatesHit}/30 • SCORE: ${scoreData.score.toLocaleString()} PTS`;
+      } else {
+        statSummary.innerText = `👹 SCORE: ${scoreData.score.toLocaleString()} PTS • MAX SPEED: ${scoreData.maxSpeed} MPH`;
+      }
+
+      document.getElementById('modal-backdrop').classList.remove('hidden');
+      document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('death-modal').classList.add('hidden');
+      document.getElementById('menu-modal').classList.add('hidden');
+      modal.classList.remove('hidden');
+    }
+
+    bindAction(document.getElementById('btn-submit-claim'), async () => {
+      const callsignInput = document.getElementById('claim-callsign-input');
+      const pinInput = document.getElementById('claim-pin-input');
+      const feedback = document.getElementById('claim-feedback-msg');
+      const callsign = (callsignInput.value || '').trim();
+      const pin = (pinInput.value || '').trim();
+
+      if (!callsign) {
+        feedback.innerText = "Please enter a Callsign.";
+        return;
+      }
+      if (!pin || pin.length < 4) {
+        feedback.innerText = "Please enter a 4-digit PIN to secure your name.";
+        return;
+      }
+
+      if (!pendingRunScoreData) return;
+
+      feedback.style.color = '#00f0ff';
+      feedback.innerText = "Verifying & Publishing...";
+
+      try {
+        const res = await fetch('/api/publish-score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callsign,
+            pin,
+            hunterId: MY_HUNTER_ID,
+            mode: pendingRunScoreData.mode,
+            score: pendingRunScoreData.score,
+            maxSpeed: pendingRunScoreData.maxSpeed,
+            clearTimeSec: pendingRunScoreData.clearTimeSec || 0,
+            gatesHit: pendingRunScoreData.gatesHit || 0,
+            maxDistance: pendingRunScoreData.maxDistance || 0,
+            survivalTime: pendingRunScoreData.survivalTime || 0
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('skifree_saved_callsign', callsign);
+          localStorage.setItem('skifree_saved_pin', pin);
+          feedback.style.color = '#39ff14';
+          feedback.innerText = data.message || "Score Published! ✅";
+          setTimeout(() => {
+            document.getElementById('claim-score-modal').classList.add('hidden');
+            toggleMenu(true);
+          }, 800);
+        } else {
+          feedback.style.color = '#ff0033';
+          feedback.innerText = data.error || "Failed to publish score.";
+        }
+      } catch (e) {
+        feedback.style.color = '#ff0033';
+        feedback.innerText = "Network error. Please try again.";
+      }
+    });
+
+    bindAction(document.getElementById('btn-skip-claim'), () => {
+      document.getElementById('claim-score-modal').classList.add('hidden');
+      if (isWasted) {
+        document.getElementById('death-modal').classList.remove('hidden');
+      } else {
+        document.getElementById('start-modal').classList.remove('hidden');
+      }
     });
 
     bindAction(document.getElementById('btn-mode-hunt'), () => {

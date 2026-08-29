@@ -30,37 +30,16 @@ interface Boulder {
   radius: number;
 }
 
-interface LeaderboardEntry {
-  hunter_id: string;
-  callsign: string;
-  max_distance: number;
-  max_speed: number;
-  survival_time: number;
-  score: number;
-  created_at: number;
-}
-
-interface RaceLeaderboardEntry {
-  hunter_id: string;
-  callsign: string;
-  clear_time_sec: number;
-  max_speed: number;
-  gates_hit: number;
-  score: number;
-  created_at: number;
-}
-
 function sanitizeCallsign(raw: string | null | undefined): string {
   if (!raw) return "Hunter";
   const cleaned = raw.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().slice(0, 12);
   return cleaned.length > 0 ? cleaned : "Hunter";
 }
 
-interface HitboxSnapshot {
-  timestamp: number;
-  x: number;
-  z: number;
-  state: string;
+async function hashPin(pin: string): Promise<string> {
+  const enc = new TextEncoder().encode("skifree_salt_" + (pin || "0000"));
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export class MountainDO extends DurableObject {
@@ -70,23 +49,17 @@ export class MountainDO extends DurableObject {
   private matchState: "LOBBY_WAITING" | "COUNTDOWN_DROP" | "ACTIVE_HUNT" | "GONDOLA_REST" | "WIPEOUT" = "LOBBY_WAITING";
   private countdownTimer = 0;
   private restTimer = 0;
-  private boulderSpawnTimer = 0;
   private boulders: Boulder[] = [];
-  private recentHits: Array<{ timestamp: number; shooterId: string }> = [];
 
   // Yeti Boss State
   private yetiZ = 65;
   private yetiX = 0;
-  private yetiSpeed = 38;
   private yetiActive = true;
   private yetiMaxHp = 8000;
   private yetiHp = 8000;
   private yetiState: "CHARGING" | "STAGGERED" | "RETREATING" | "DEAD" = "CHARGING";
-  private stateTimer = 0;
   private currentWave = 1;
   private yetiKillCount = 0;
-  private yetiTargetId: string | null = null;
-  private hitboxHistory: HitboxSnapshot[] = [];
   
   private matchStartTime = 0;
   private tickIntervalMs = 50; // 20Hz tick
@@ -99,9 +72,9 @@ export class MountainDO extends DurableObject {
   private initDatabase() {
     this.ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS hunter_profiles (
-        hunter_id TEXT PRIMARY KEY,
-        callsign TEXT UNIQUE NOT NULL,
-        secret_pin TEXT NOT NULL,
+        callsign TEXT PRIMARY KEY,
+        pin_hash TEXT NOT NULL,
+        hunter_id TEXT,
         created_at INTEGER NOT NULL
       );
 
@@ -129,7 +102,6 @@ export class MountainDO extends DurableObject {
 
       CREATE TABLE IF NOT EXISTS yeti_kills (
         kill_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        killer_hunter_id TEXT,
         killer_callsign TEXT NOT NULL,
         wave_number INTEGER NOT NULL,
         killer_score INTEGER NOT NULL,
@@ -139,40 +111,10 @@ export class MountainDO extends DurableObject {
     `);
   }
 
-  // Cryptographic Hunter Claim & Disambiguation
-  private claimCallsign(hunterId: string, requestedCallsign: string, secretPin: string): string {
-    const cleanName = sanitizeCallsign(requestedCallsign);
-    try {
-      const existing = [...this.ctx.storage.sql.exec(
-        "SELECT hunter_id, secret_pin FROM hunter_profiles WHERE callsign = ?",
-        cleanName
-      )];
-
-      if (existing.length > 0) {
-        const owner = existing[0] as { hunter_id: string; secret_pin: string };
-        if (owner.hunter_id === hunterId || owner.secret_pin === secretPin) {
-          return cleanName; // Authenticated owner
-        }
-        // Name claimed by someone else -> Append unique tag
-        const suffix = hunterId.slice(0, 4);
-        return `${cleanName.slice(0, 7)}#${suffix}`;
-      } else {
-        // Register new hunter
-        this.ctx.storage.sql.exec(
-          "INSERT OR REPLACE INTO hunter_profiles (hunter_id, callsign, secret_pin, created_at) VALUES (?, ?, ?, ?)",
-          hunterId, cleanName, secretPin || "0000", Date.now()
-        );
-        return cleanName;
-      }
-    } catch (e) {
-      return cleanName;
-    }
-  }
-
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    // Leaderboard API endpoint
+    // 1. Leaderboard Scores API endpoint
     if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
       const huntBoard = [...this.ctx.storage.sql.exec(
         "SELECT callsign, score, max_speed, created_at FROM global_leaderboard ORDER BY score DESC LIMIT 10"
@@ -189,7 +131,70 @@ export class MountainDO extends DurableObject {
       });
     }
 
-    // WebSocket upgrade
+    // 2. PIN-Protected Score Publishing Endpoint
+    if (url.pathname === "/api/publish-score" && request.method === "POST") {
+      try {
+        const body = await request.json() as any;
+        const callsign = sanitizeCallsign(body.callsign);
+        const pin = String(body.pin || "0000").trim();
+        const pinH = await hashPin(pin);
+        const hunterId = String(body.hunterId || crypto.randomUUID());
+        const mode = body.mode || "hunt";
+        const score = Number(body.score) || 0;
+        const maxSpeed = Number(body.maxSpeed) || 0;
+
+        // Check if callsign profile exists
+        const existing = [...this.ctx.storage.sql.exec(
+          "SELECT callsign, pin_hash FROM hunter_profiles WHERE callsign = ?",
+          callsign
+        )];
+
+        if (existing.length > 0) {
+          const profile = existing[0] as { callsign: string; pin_hash: string };
+          if (profile.pin_hash !== pinH) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: `❌ Callsign "${callsign}" is claimed! Enter the correct PIN or pick a new name.`
+            }), { status: 403, headers: { "Content-Type": "application/json" } });
+          }
+        } else {
+          // Register new hunter callsign with their chosen PIN
+          this.ctx.storage.sql.exec(
+            "INSERT INTO hunter_profiles (callsign, pin_hash, hunter_id, created_at) VALUES (?, ?, ?, ?)",
+            callsign, pinH, hunterId, Date.now()
+          );
+        }
+
+        // Record verified score
+        const recordId = crypto.randomUUID();
+        if (mode === "slalom") {
+          const clearTimeSec = Number(body.clearTimeSec) || 0;
+          const gatesHit = Number(body.gatesHit) || 0;
+          this.ctx.storage.sql.exec(
+            "INSERT INTO race_leaderboard (id, hunter_id, callsign, clear_time_sec, max_speed, gates_hit, score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            recordId, hunterId, callsign, clearTimeSec, maxSpeed, gatesHit, score, Date.now()
+          );
+        } else {
+          const maxDist = Number(body.maxDistance) || 0;
+          const survivalTime = Number(body.survivalTime) || 0;
+          this.ctx.storage.sql.exec(
+            "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            recordId, hunterId, callsign, maxDist, maxSpeed, survivalTime, score, Date.now()
+          );
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          callsign,
+          message: `🏆 Verified! Score published under "${callsign}".`
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+
+      } catch (e: any) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500 });
+      }
+    }
+
+    // 3. WebSocket Upgrade Routing
     if (request.headers.get("Upgrade") === "websocket") {
       const pair = new WebSocketPair();
       const clientWs = pair[0];
@@ -197,8 +202,7 @@ export class MountainDO extends DurableObject {
 
       const rawCallsign = url.searchParams.get("callsign");
       const hunterId = url.searchParams.get("hunterId") || crypto.randomUUID();
-      const secretPin = url.searchParams.get("pin") || "0000";
-      const validatedCallsign = this.claimCallsign(hunterId, rawCallsign, secretPin);
+      const validatedCallsign = sanitizeCallsign(rawCallsign);
       const mode = (url.searchParams.get("mode") || "hunt") as "hunt" | "slalom";
 
       const playerId = crypto.randomUUID();
@@ -287,14 +291,8 @@ export class MountainDO extends DurableObject {
             this.handleYetiDefeated(player);
           }
         }
-      } else if (data.type === "RACE_FINISH") {
-        if (player.gameMode === "slalom") {
-          player.score = data.score || 0;
-          this.recordRaceFinish(player, data.clearTimeSec, data.maxSpeed, data.gatesHit, data.score);
-        }
       } else if (data.type === "PLAYER_DIED") {
         player.isDead = true;
-        this.recordRunDeath(player);
       }
     } catch (e) {}
   }
@@ -375,8 +373,8 @@ export class MountainDO extends DurableObject {
     this.restTimer = 5;
 
     this.ctx.storage.sql.exec(
-      "INSERT INTO yeti_kills (killer_hunter_id, killer_callsign, wave_number, killer_score, squad_size, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-      killer.hunterId, killer.callsign, this.currentWave, killer.score, this.players.size, Date.now()
+      "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, timestamp) VALUES (?, ?, ?, ?, ?)",
+      killer.callsign, this.currentWave, killer.score, this.players.size, Date.now()
     );
 
     this.broadcast({
@@ -402,22 +400,6 @@ export class MountainDO extends DurableObject {
     }, 5000);
   }
 
-  private recordRaceFinish(player: SkierState, clearTimeSec: number, maxSpeed: number, gatesHit: number, score: number) {
-    const id = crypto.randomUUID();
-    this.ctx.storage.sql.exec(
-      "INSERT INTO race_leaderboard (id, hunter_id, callsign, clear_time_sec, max_speed, gates_hit, score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      id, player.hunterId, player.callsign, clearTimeSec, maxSpeed, gatesHit, score, Date.now()
-    );
-  }
-
-  private recordRunDeath(player: SkierState) {
-    const id = crypto.randomUUID();
-    this.ctx.storage.sql.exec(
-      "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      id, player.hunterId, player.callsign, Math.floor(player.z), player.speed, Math.floor((Date.now() - this.matchStartTime) / 1000), player.score, Date.now()
-    );
-  }
-
   private ensureGameLoop() {
     if ((this as any)._loopRunning) return;
     (this as any)._loopRunning = true;
@@ -431,7 +413,6 @@ export class MountainDO extends DurableObject {
       if (this.matchState === "ACTIVE_HUNT") {
         this.yetiZ = Math.max(-20, this.yetiZ - 0.08);
 
-        // Broadcast 20Hz frame
         const skiers = Array.from(this.players.values()).map(p => ({
           id: p.id,
           callsign: p.callsign,
