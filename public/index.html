@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SkiFree 2: The Hunt for the Yeti (35 Years Later)</title>
+  <title>SkiFree 2: The Hunt for the Yeti — Co-Op Alpine Raid</title>
   <style>
     * {
       box-sizing: border-box;
@@ -39,6 +39,7 @@
       flex-direction: column;
       justify-content: space-between;
       padding: 15px 20px;
+      z-index: 50;
     }
 
     /* Boss Health Bar */
@@ -47,13 +48,13 @@
       top: 15px;
       left: 50%;
       transform: translateX(-50%);
-      width: 480px;
+      width: 520px;
       max-width: 90%;
-      background: rgba(10, 20, 35, 0.9);
+      background: rgba(10, 20, 35, 0.92);
       border: 2px solid #ff0033;
       border-radius: 8px;
       padding: 10px 16px;
-      box-shadow: 0 0 20px rgba(255, 0, 50, 0.5);
+      box-shadow: 0 0 25px rgba(255, 0, 50, 0.55);
       text-align: center;
     }
     .boss-label {
@@ -84,17 +85,35 @@
 
     #lookback-hint {
       position: absolute;
-      top: 75px;
+      top: 80px;
       left: 50%;
       transform: translateX(-50%);
       font-size: 11px;
       color: #00f0ff;
-      background: rgba(0,0,0,0.6);
-      padding: 4px 12px;
+      background: rgba(0,0,0,0.65);
+      padding: 4px 14px;
       border-radius: 4px;
       letter-spacing: 1px;
       border: 1px solid #00f0ff;
-      opacity: 0.85;
+      opacity: 0.9;
+    }
+
+    #draft-indicator {
+      position: absolute;
+      top: 115px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      font-weight: 900;
+      color: #00ffff;
+      background: rgba(0, 40, 80, 0.85);
+      padding: 6px 18px;
+      border-radius: 20px;
+      border: 2px solid #00ffff;
+      box-shadow: 0 0 20px #00f0ff;
+      letter-spacing: 1.5px;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
     }
 
     .hud-top-sides {
@@ -104,7 +123,7 @@
       margin-top: 50px;
     }
     .hud-gauge {
-      background: rgba(10, 20, 35, 0.85);
+      background: rgba(10, 20, 35, 0.88);
       border: 2px solid #00f0ff;
       border-radius: 8px;
       padding: 10px 16px;
@@ -128,7 +147,6 @@
       font-weight: bold;
     }
 
-    /* Difficulty Badge in HUD */
     #diff-badge {
       font-size: 11px;
       color: #ffff00;
@@ -137,7 +155,6 @@
       margin-top: 2px;
     }
 
-    /* Player Health & Limb Status */
     #hearts-container {
       display: flex;
       gap: 6px;
@@ -189,14 +206,15 @@
       align-items: flex-end;
     }
     #skier-roster {
-      background: rgba(10, 20, 35, 0.85);
+      background: rgba(10, 20, 35, 0.88);
       border: 2px solid #39ff14;
       border-radius: 8px;
       padding: 8px 14px;
-      max-height: 120px;
+      max-height: 140px;
       overflow-y: auto;
-      box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.35);
       font-size: 11px;
+      min-width: 220px;
     }
     .roster-item {
       display: flex;
@@ -206,6 +224,7 @@
     }
     .roster-alive { color: #39ff14; }
     .roster-eaten { color: #ff0033; text-decoration: line-through; }
+    .roster-ready { color: #00f0ff; font-weight: bold; }
 
     /* Crosshair & Hitmarker */
     #crosshair {
@@ -283,67 +302,80 @@
       text-align: center;
     }
 
-    /* WASTED Screen */
-    #wasted-screen {
-      position: absolute;
+    /* Synchronized Drop Gate Countdown Overlay */
+    #countdown-overlay {
+      position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      background: rgba(5, 10, 20, 0.85);
+      z-index: 300;
       pointer-events: none;
       opacity: 0;
-      z-index: 90;
-      background: rgba(0, 0, 0, 0.45);
-      transition: opacity 0.4s ease-in;
+      transition: opacity 0.3s ease-out;
     }
-    #wasted-banner {
+    #countdown-number {
       font-family: 'Arial Black', Impact, sans-serif;
-      font-size: 80px;
+      font-size: 130px;
       font-weight: 900;
-      letter-spacing: 6px;
-      color: #b70000;
-      text-shadow: 0 0 15px rgba(255, 0, 0, 0.9), 3px 3px 0px #000;
-      transform: scale(1.3);
-      transition: transform 0.5s ease-out;
+      color: #00f0ff;
+      text-shadow: 0 0 40px #00f0ff, 0 0 80px #00f0ff;
+      animation: pulsePop 0.8s infinite ease-out;
     }
-    #wasted-subtitle {
-      font-size: 18px;
-      letter-spacing: 3px;
-      color: #fff;
-      margin-top: 15px;
-      text-shadow: 2px 2px 4px #000;
-    }
-
-    #victory-screen {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      pointer-events: none;
-      opacity: 0;
-      z-index: 95;
-      background: rgba(0, 30, 60, 0.7);
-      transition: opacity 0.5s ease-in;
-    }
-    #victory-banner {
-      font-family: 'Arial Black', Impact, sans-serif;
-      font-size: 52px;
+    #countdown-sub {
+      font-size: 24px;
       font-weight: 900;
       letter-spacing: 4px;
       color: #ffff00;
-      text-shadow: 0 0 25px #00f0ff, 0 0 40px #ffff00;
+      text-shadow: 0 0 15px #ffff00;
+      margin-top: 10px;
+    }
+
+    @keyframes pulsePop {
+      0% { transform: scale(0.85); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 1; }
+      100% { transform: scale(1.0); opacity: 0.9; }
+    }
+
+    /* Inter-Wave Gondola Rest Overlay */
+    #gondola-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 30, 60, 0.88);
+      z-index: 280;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease-in;
+    }
+    #gondola-title {
+      font-family: 'Arial Black', Impact, sans-serif;
+      font-size: 48px;
+      font-weight: 900;
+      color: #39ff14;
+      text-shadow: 0 0 30px #39ff14, 0 0 50px #00f0ff;
+      text-align: center;
+    }
+    #gondola-sub {
+      font-size: 18px;
+      color: #00f0ff;
+      margin-top: 14px;
+      letter-spacing: 2px;
       text-align: center;
     }
 
+    /* Floating Damage Popups */
     #floating-dmg-container {
       position: absolute;
       top: 0;
@@ -362,50 +394,78 @@
     }
     .dmg-normal { color: #ff3344; text-shadow: 0 0 8px #ff0000, 2px 2px 0 #000; }
     .dmg-crit { color: #ffff00; font-size: 30px; text-shadow: 0 0 12px #ff007f, 2px 2px 0 #000; }
+    .dmg-crossfire { color: #00ffff; font-size: 36px; text-shadow: 0 0 18px #00ffff, 0 0 30px #ff007f; }
 
     @keyframes floatUp {
       0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
-      30% { transform: translate(-50%, -20px) scale(1.2); }
-      100% { opacity: 0; transform: translate(-50%, -50px) scale(1.0); }
+      30% { transform: translate(-50%, -20px) scale(1.25); }
+      100% { opacity: 0; transform: translate(-50%, -55px) scale(1.0); }
     }
 
-    /* Start Screen with Difficulty Selector */
+    /* Chalet Staging & Ready Modal */
     #start-modal, #death-modal {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(10, 18, 30, 0.95);
+      background: rgba(10, 18, 32, 0.96);
       border: 3px solid #00f0ff;
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 25px 30px;
       text-align: center;
-      box-shadow: 0 0 40px rgba(0, 240, 255, 0.6);
+      box-shadow: 0 0 45px rgba(0, 240, 255, 0.65);
       z-index: 100;
-      max-width: 540px;
-      width: 90%;
+      max-width: 580px;
+      width: 92%;
     }
     .modal-title {
-      font-size: 28px;
+      font-size: 26px;
       color: #00f0ff;
       margin-bottom: 8px;
       text-shadow: 0 0 15px #00f0ff;
       font-weight: 900;
     }
+    .squad-room-box {
+      background: #050a14;
+      border: 1px solid #1e3a5f;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 12px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .squad-code {
+      color: #ffff00;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      font-size: 14px;
+    }
+    .btn-copy {
+      background: rgba(0, 240, 255, 0.2);
+      border: 1px solid #00f0ff;
+      color: #00f0ff;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
     .difficulty-group {
       display: flex;
       justify-content: center;
-      gap: 12px;
-      margin: 14px 0;
+      gap: 10px;
+      margin: 12px 0;
     }
     .diff-btn {
       flex: 1;
-      padding: 10px 14px;
+      padding: 10px 12px;
       border: 2px solid #556688;
       border-radius: 6px;
       background: #050a14;
       color: #88a0c0;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: bold;
       cursor: pointer;
       transition: 0.2s;
@@ -425,14 +485,18 @@
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
-      margin-top: 15px;
+      margin-top: 12px;
       box-shadow: 0 0 20px rgba(255, 0, 127, 0.5);
       transition: 0.2s;
       width: 100%;
     }
     .modal-btn:hover {
-      transform: scale(1.03);
+      transform: scale(1.02);
       box-shadow: 0 0 30px rgba(255, 0, 127, 0.8);
+    }
+    .modal-btn-ready {
+      background: linear-gradient(135deg, #00f0ff, #0088ff);
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
     }
     .input-field {
       width: 100%;
@@ -441,8 +505,8 @@
       border: 2px solid #88a0c0;
       border-radius: 6px;
       color: #fff;
-      font-size: 15px;
-      margin: 10px 0;
+      font-size: 14px;
+      margin: 8px 0;
       font-family: inherit;
       text-align: center;
     }
@@ -628,6 +692,18 @@
     <div class="rotate-desc">SkiFree 2 requires landscape orientation for high-speed alpine hunting. Turn your device horizontally.</div>
   </div>
 
+  <!-- Synchronized Drop Countdown Overlay -->
+  <div id="countdown-overlay">
+    <div id="countdown-number">3</div>
+    <div id="countdown-sub">🎿 GATES OPENING — DROP IN!</div>
+  </div>
+
+  <!-- Inter-Wave Gondola Rest Overlay -->
+  <div id="gondola-overlay">
+    <div id="gondola-title">🚡 GONDOLA BASECAMP REST</div>
+    <div id="gondola-sub">SQUAD REVIVED • AMMO RESTOCKED • PREPARE FOR NEXT YETI WAVE</div>
+  </div>
+
   <!-- Mobile Touch Controls Layer -->
   <div id="touch-steer-zone" class="hidden"></div>
   <div id="touch-stick-base"></div>
@@ -667,19 +743,6 @@
   <div id="muzzle-flash"></div>
   <div id="floating-dmg-container"></div>
 
-  <!-- WASTED Screen -->
-  <div id="wasted-screen">
-    <div id="wasted-banner">WASTED</div>
-    <div id="wasted-subtitle">SKELETONIZED BY THE YETI</div>
-  </div>
-
-  <!-- Victory Screen -->
-  <div id="victory-screen">
-    <div id="victory-banner">🏆 YETI DEFEATED!<br><span style="font-size:26px; color:#00f0ff;" id="wave-advance-text">WAVE 1 CLEARED — SURVIVAL MODE ENGAGED!</span></div>
-  </div>
-
-  <canvas id="game-canvas"></canvas>
-
   <!-- In-Game HUD -->
   <div id="hud-overlay" class="hidden">
     <div id="boss-hud">
@@ -693,6 +756,7 @@
     </div>
 
     <div id="lookback-hint"><span id="hud-view" style="color:#00f0ff; font-weight:900;">DOWNHILL</span> • HOLD [SHIFT] OR RIGHT-CLICK TO AIM & SHOOT BEHIND YOU • [1/2/3] SPEED DIFFICULTY</div>
+    <div id="draft-indicator">💨 SLINGSHOT DRAFTING (+18 MPH)</div>
 
     <div class="hud-top-sides">
       <div class="hud-gauge">
@@ -727,7 +791,7 @@
 
     <div class="hud-bottom">
       <div id="skier-roster">
-        <div style="font-weight:bold; color:#00f0ff; margin-bottom:4px;">YETI HUNTER MILITIA</div>
+        <div style="font-weight:bold; color:#00f0ff; margin-bottom:4px;">YETI HUNTER SQUAD</div>
         <div id="roster-list"></div>
       </div>
       <div class="hud-gauge" style="text-align:right;">
@@ -735,6 +799,45 @@
         <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:18px;">CHARGING</div>
       </div>
     </div>
+  </div>
+
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Chalet Match Staging Modal -->
+  <div id="start-modal">
+    <div class="modal-title">🎿 SKI CHALET: SQUAD STAGING</div>
+    
+    <div class="squad-room-box">
+      <div>
+        <span style="font-size:11px; color:#88a0c0;">SQUAD ROOM:</span>
+        <span class="squad-code" id="squad-room-code">MAIN-ALPS</span>
+      </div>
+      <button class="btn-copy" id="btn-copy-room">📋 COPY LINK</button>
+    </div>
+
+    <div style="color:#ff007f; font-weight:bold; font-size:12px; margin-top:8px;">HUNTER CALLSIGN & SPEED</div>
+    <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
+    
+    <div class="difficulty-group">
+      <button class="diff-btn" data-diff="easy">🟢 EASY<br><span style="font-size:10px; color:#aaa;">20-45 MPH</span></button>
+      <button class="diff-btn active" data-diff="medium">🟡 MEDIUM<br><span style="font-size:10px; color:#aaa;">28-60 MPH</span></button>
+      <button class="diff-btn" data-diff="pro">🔴 PRO SPEED<br><span style="font-size:10px; color:#aaa;">38-85 MPH</span></button>
+    </div>
+
+    <div style="margin-top:12px; display:flex; gap:10px;">
+      <button class="modal-btn modal-btn-ready" id="btn-ready" style="flex:1;">READY UP 🎿</button>
+      <button class="modal-btn" id="btn-start" style="flex:1;">DROP NOW 🚀</button>
+    </div>
+    <p style="margin-top:10px; font-size:11px; color:#556688;">
+      [A / D] 90° Carve • [W / S] Throttle • [Hold Shift / Right-Click] Look Back • [Left Click] Shoot • [Draft behind teammates for +18 MPH]
+    </p>
+  </div>
+
+  <!-- Death Modal -->
+  <div id="death-modal" class="hidden">
+    <div class="modal-title" style="color:#ff0033;" id="death-title">💀 HUNT FAILED</div>
+    <p id="death-stat" style="color:#fff; font-size:15px; margin: 15px 0;"></p>
+    <button class="modal-btn" id="btn-respawn">RESPAWN & HUNT AGAIN</button>
   </div>
 
   <!-- In-Game Pause, Settings & Leaderboard Modal -->
@@ -779,20 +882,6 @@
             <input type="range" id="soundtrack-vol" min="0" max="1" step="0.05" value="0.5" style="flex:1; cursor:pointer;">
           </div>
         </div>
-
-        <div>
-          <label style="font-size:12px; color:#88a0c0; font-weight:bold;">DIFFICULTY & SPEED PRESET:</label>
-          <div class="difficulty-group" style="margin-top:6px;">
-            <button class="diff-btn" data-diff="easy">🟢 EASY (20-45 MPH)</button>
-            <button class="diff-btn" data-diff="medium">🟡 MEDIUM (28-60 MPH)</button>
-            <button class="diff-btn" data-diff="pro">🔴 PRO (38-85 MPH)</button>
-          </div>
-        </div>
-
-        <div>
-          <label style="font-size:12px; color:#88a0c0; font-weight:bold;">HUNTER CALLSIGN:</label>
-          <input type="text" id="menu-callsign-input" class="input-field" maxlength="12" style="margin-top:6px;">
-        </div>
       </div>
     </div>
 
@@ -803,31 +892,6 @@
   <audio id="bg-soundtrack" loop preload="auto">
     <source src="assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
   </audio>
-
-  <!-- Start Modal with Difficulty Setting -->
-  <div id="start-modal">
-    <div class="modal-title">🎿 SKIFREE 2: HUNT FOR THE YETI</div>
-    <div style="color:#ff007f; font-weight:bold; font-size:13px; margin-bottom:6px;">SELECT DIFFICULTY / SPEED</div>
-    
-    <div class="difficulty-group">
-      <button class="diff-btn" data-diff="easy">🟢 EASY<br><span style="font-size:10px; color:#aaa;">20-45 MPH</span></button>
-      <button class="diff-btn active" data-diff="medium">🟡 MEDIUM<br><span style="font-size:10px; color:#aaa;">28-60 MPH</span></button>
-      <button class="diff-btn" data-diff="pro">🔴 PRO SPEED<br><span style="font-size:10px; color:#aaa;">38-85 MPH</span></button>
-    </div>
-
-    <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
-    <button class="modal-btn" id="btn-start">LOCK & LOAD 🚀</button>
-    <p style="margin-top:12px; font-size:11px; color:#556688;">
-      [A / D] 90° Carve • [W / S] Throttle • [Hold Shift / Right-Click] Look Back • [Left Click] Shoot • [ESC/M] Menu • [1/2/3] Change Speed
-    </p>
-  </div>
-
-  <!-- Death Modal -->
-  <div id="death-modal" class="hidden">
-    <div class="modal-title" style="color:#ff0033;" id="death-title">💀 HUNT FAILED</div>
-    <p id="death-stat" style="color:#fff; font-size:15px; margin: 15px 0;"></p>
-    <button class="modal-btn" id="btn-respawn">RESPAWN & HUNT AGAIN</button>
-  </div>
 
   <script>
     // --- Speed Difficulty Settings ---
@@ -880,19 +944,6 @@
         this.ctx = new AudioContext();
         this.listener = this.ctx.listener;
 
-        // Set listener position & orientation
-        if (this.listener.positionX) {
-          this.listener.positionX.setValueAtTime(0, this.ctx.currentTime);
-          this.listener.positionY.setValueAtTime(1.8, this.ctx.currentTime);
-          this.listener.positionZ.setValueAtTime(0, this.ctx.currentTime);
-          this.listener.forwardX.setValueAtTime(0, this.ctx.currentTime);
-          this.listener.forwardY.setValueAtTime(0, this.ctx.currentTime);
-          this.listener.forwardZ.setValueAtTime(-1, this.ctx.currentTime);
-          this.listener.upX.setValueAtTime(0, this.ctx.currentTime);
-          this.listener.upY.setValueAtTime(1, this.ctx.currentTime);
-          this.listener.upZ.setValueAtTime(0, this.ctx.currentTime);
-        }
-
         const bufferSize = this.ctx.sampleRate * 2;
         const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const output = noiseBuffer.getChannelData(0);
@@ -925,7 +976,7 @@
 
         const carveFilter = this.ctx.createBiquadFilter();
         carveFilter.type = 'highpass';
-        carveFilter.frequency.value = 1000;
+        carveFilter.frequency.value = 1200;
 
         this.carveGain = this.ctx.createGain();
         this.carveGain.gain.value = 0.0;
@@ -939,14 +990,13 @@
       }
 
       create3DPanner(x, y, z) {
-        if (!this.isInitialized) return null;
+        if (!this.isInitialized || !this.ctx) return null;
         const panner = this.ctx.createPanner();
         panner.panningModel = 'HRTF';
         panner.distanceModel = 'exponential';
-        panner.refDistance = 5;
-        panner.maxDistance = 180;
+        panner.refDistance = 3;
+        panner.maxDistance = 120;
         panner.rolloffFactor = 1.4;
-        panner.coneInnerAngle = 360;
 
         if (panner.positionX) {
           panner.positionX.setValueAtTime(x, this.ctx.currentTime);
@@ -974,21 +1024,6 @@
         gain.connect(this.ctx.destination);
         osc.start();
         osc.stop(this.ctx.currentTime + 0.18);
-
-        // Sub-bass recoil shockwave
-        const oscBoom = this.ctx.createOscillator();
-        const gainBoom = this.ctx.createGain();
-        oscBoom.type = 'sine';
-        oscBoom.frequency.setValueAtTime(160, this.ctx.currentTime);
-        oscBoom.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.38);
-
-        gainBoom.gain.setValueAtTime(1.0, this.ctx.currentTime);
-        gainBoom.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
-
-        oscBoom.connect(gainBoom);
-        gainBoom.connect(this.ctx.destination);
-        oscBoom.start();
-        oscBoom.stop(this.ctx.currentTime + 0.4);
       }
 
       playReload() {
@@ -1028,42 +1063,6 @@
         osc.stop(this.ctx.currentTime + 0.32);
       }
 
-      playNpcScream(x = 0, y = 1.8, z = -30) {
-        if (!this.isInitialized) return;
-        const panner = this.create3DPanner(x, y, z);
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(620, this.ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(420, this.ctx.currentTime + 0.45);
-
-        gain.gain.setValueAtTime(0.45, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.48);
-
-        osc.connect(gain);
-        if (panner) gain.connect(panner);
-        else gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.48);
-      }
-
-      playTreeThud() {
-        if (!this.isInitialized) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(130, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.32);
-
-        gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.38);
-
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.38);
-      }
-
       playHitFlesh() {
         if (!this.isInitialized) return;
         const osc = this.ctx.createOscillator();
@@ -1100,21 +1099,38 @@
         osc.stop(this.ctx.currentTime + 0.9);
       }
 
-      playWastedSound() {
+      playCrossfireBoom() {
         if (!this.isInitialized) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(120, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(24, this.ctx.currentTime + 1.2);
+        osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.6);
 
-        gain.gain.setValueAtTime(0.9, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.4);
+        gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.65);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 1.4);
+        osc.stop(this.ctx.currentTime + 0.65);
+      }
+
+      playTreeThud() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(130, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.32);
+
+        gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.38);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.38);
       }
 
       updateSpeed(speedMph, carveAngleRad) {
@@ -1136,14 +1152,18 @@
     let mirrorScene, mirrorCamera, mirrorRenderer;
     let leftSki, rightSki, skiGroup, rifleMesh;
     let trees = [];
-    let npcSkiers = [];
     let snowParticles;
     let yetiMesh, yetiSprite, yetiTexture;
-    let wastedSkierSprite, skierTexture, npcTexture;
+    let wastedSkierSprite, skierTexture;
+
+    // Multiplayer Entities Pool
+    const remoteSkierMeshes = new Map();
+    const boulderMeshes = new Map();
 
     let ws = null;
     let myPlayerId = null;
     let isPlaying = false;
+    let isReady = false;
     let isWasted = false;
     let wastedTime = 0;
     let spawnGraceTimer = 0;
@@ -1153,6 +1173,7 @@
     let ammoCount = 8;
     const maxAmmo = 8;
     let isReloading = false;
+    let isDrafting = false;
 
     const keys = { w: false, a: false, s: false, d: false, shift: false };
     let isLookingBack = false;
@@ -1164,14 +1185,10 @@
     let turnSteerVelocity = 0;
     let damageDealtTotal = 0;
 
-    let yetiSpriteFrame = 0;
-    let yetiAnimTimer = 0;
-    let wastedAnimTimer = 0;
-    let wastedFrame = 0;
-
+    let currentRoom = "main-alps";
     let currentWaveNum = 1;
     let yetiWorldX = 0;
-    let yetiWorldZ = 120;
+    let yetiWorldZ = 65;
     let yetiCurrentHp = 8000;
     let yetiMaxHp = 8000;
     let yetiStateStr = "CHARGING";
@@ -1179,17 +1196,9 @@
     const mousePos = { x: 0, y: 0 };
     const raycaster = new THREE.Raycaster();
 
-    function setDifficulty(diff) {
-      if (!DIFFICULTY_PRESETS[diff]) return;
-      selectedDifficulty = diff;
-      const p = DIFFICULTY_PRESETS[diff];
-      const badge = document.getElementById('diff-badge');
-      badge.innerText = `DIFF: ${p.name}`;
-      badge.style.color = p.badgeColor;
-
-      document.querySelectorAll('.diff-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.diff === diff);
-      });
+    function getRoomParam() {
+      const url = new URL(window.location.href);
+      return (url.searchParams.get("room") || "main-alps").toLowerCase().replace(/[^a-z0-9_\-]/g, '');
     }
 
     function init3D() {
@@ -1242,9 +1251,7 @@
       camera.add(skiGroup);
       scene.add(camera);
 
-      createWastedSkierSprite();
       createCleanSpacedTrees();
-      createNpcSkiers();
       createSnowParticles();
       createRealisticYetiV2();
       initRearviewMirror();
@@ -1253,49 +1260,6 @@
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mousedown', onShoot);
       window.addEventListener('contextmenu', (e) => e.preventDefault());
-    }
-
-    function createWastedSkierSprite() {
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.load('assets/npc_skiers.jpg', (texture) => {
-        skierTexture = texture;
-        skierTexture.magFilter = THREE.NearestFilter;
-        skierTexture.minFilter = THREE.NearestFilter;
-        skierTexture.repeat.set(1 / 8, 1 / 8);
-        skierTexture.offset.set(0, 0);
-
-        const mat = new THREE.SpriteMaterial({ map: skierTexture, transparent: true });
-        wastedSkierSprite = new THREE.Sprite(mat);
-        wastedSkierSprite.scale.set(4.5, 4.5, 1);
-        wastedSkierSprite.visible = false;
-        scene.add(wastedSkierSprite);
-      });
-    }
-
-    function createNpcSkiers() {
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.load('assets/npc_skiers.jpg', (texture) => {
-        npcTexture = texture;
-        npcTexture.magFilter = THREE.NearestFilter;
-        npcTexture.minFilter = THREE.NearestFilter;
-
-        for (let i = 0; i < 14; i++) {
-          const mat = new THREE.SpriteMaterial({ map: npcTexture.clone(), transparent: true });
-          mat.map.repeat.set(1 / 8, 1 / 8);
-          mat.map.offset.set((i % 8) * (1 / 8), Math.floor(i / 8) * (1 / 8) + 0.4);
-
-          const npc = new THREE.Sprite(mat);
-          npc.scale.set(3.8, 3.8, 1);
-          npc.position.set((Math.random() - 0.5) * 140, 1.8, -30 - (i * 35));
-          npc.userData = {
-            speed: 20 + Math.random() * 12,
-            steer: (Math.random() - 0.5) * 0.6,
-            isEaten: false
-          };
-          scene.add(npc);
-          npcSkiers.push(npc);
-        }
-      });
     }
 
     function createCleanSpacedTrees() {
@@ -1342,7 +1306,7 @@
       const targetGeo = new THREE.BoxGeometry(6.5, 7.5, 3.5);
       const targetMat = new THREE.MeshBasicMaterial({ visible: false });
       yetiMesh = new THREE.Mesh(targetGeo, targetMat);
-      yetiMesh.position.set(0, 3.5, 120);
+      yetiMesh.position.set(0, 3.5, 65);
       yetiMesh.userData = { isYeti: true };
       scene.add(yetiMesh);
 
@@ -1351,36 +1315,15 @@
         yetiTexture = texture;
         yetiTexture.magFilter = THREE.NearestFilter;
         yetiTexture.minFilter = THREE.NearestFilter;
-        
         yetiTexture.repeat.set(1 / 6, 1 / 3.4);
         yetiTexture.offset.set(0, 0.68);
 
         const mat = new THREE.SpriteMaterial({ map: yetiTexture, transparent: true });
         yetiSprite = new THREE.Sprite(mat);
         yetiSprite.scale.set(8.0, 8.0, 1);
-        yetiSprite.position.set(0, 4.0, 120);
+        yetiSprite.position.set(0, 4.0, 65);
         scene.add(yetiSprite);
       });
-    }
-
-    function updateYetiSpriteAnimation(delta) {
-      if (!yetiTexture || !yetiSprite) return;
-      yetiAnimTimer += delta;
-      if (yetiAnimTimer >= 0.10) {
-        yetiAnimTimer = 0;
-        yetiSpriteFrame = (yetiSpriteFrame + 1) % 6;
-        yetiTexture.offset.x = yetiSpriteFrame * (1 / 6);
-      }
-    }
-
-    function updateWastedSkierAnimation(delta) {
-      if (!skierTexture || !wastedSkierSprite || !wastedSkierSprite.visible) return;
-      wastedAnimTimer += delta;
-      if (wastedAnimTimer >= 0.12) {
-        wastedAnimTimer = 0;
-        wastedFrame = (wastedFrame + 1) % 8;
-        skierTexture.offset.x = wastedFrame * (1 / 8);
-      }
     }
 
     function initRearviewMirror() {
@@ -1402,8 +1345,10 @@
       mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
       const ch = document.getElementById('crosshair');
-      ch.style.left = `${e.clientX}px`;
-      ch.style.top = `${e.clientY}px`;
+      if (ch) {
+        ch.style.left = `${e.clientX}px`;
+        ch.style.top = `${e.clientY}px`;
+      }
     }
 
     function reloadGun() {
@@ -1495,97 +1440,50 @@
       setTimeout(() => hm.style.opacity = '0', 90);
     }
 
-    function spawnDamagePopup(dmg, isCrit) {
+    function spawnDamagePopup(dmg, isCrit, isCrossfire) {
       const container = document.getElementById('floating-dmg-container');
       const el = document.createElement('div');
-      el.className = `dmg-popup ${isCrit ? 'dmg-crit' : 'dmg-normal'}`;
-      el.innerText = isCrit ? `-${dmg} CRIT!` : `-${dmg}`;
+      
+      let text = `-${dmg}`;
+      if (isCrossfire) {
+        el.className = 'dmg-popup dmg-crossfire';
+        text = `⚡ -${dmg} CROSSFIRE x2.5!`;
+      } else if (isCrit) {
+        el.className = 'dmg-popup dmg-crit';
+        text = `-${dmg} CRIT!`;
+      } else {
+        el.className = 'dmg-popup dmg-normal';
+      }
+      el.innerText = text;
       
       const ch = document.getElementById('crosshair').getBoundingClientRect();
       el.style.left = `${ch.left + 16}px`;
       el.style.top = `${ch.top - 20}px`;
 
       container.appendChild(el);
-      setTimeout(() => el.remove(), 800);
+      setTimeout(() => el.remove(), 850);
     }
 
-    function onYetiBiteAttack() {
-      if (biteInvulnerabilityTimer > 0 || isWasted) return;
-      biteInvulnerabilityTimer = 2.5;
-      playerHearts--;
-      soundEngine.playBiteChomp();
-
-      const df = document.getElementById('damage-flash');
-      df.style.opacity = '0.95';
-      setTimeout(() => df.style.opacity = '0', 250);
-
-      playerSpeed = Math.min(80, playerSpeed + 24);
-
-      const biteToast = document.getElementById('bite-alert');
-      let limbMsg = "🩸 YETI BITE! ARM LOST (-1 HEART)";
-      if (playerHearts === 2) {
-        document.getElementById('h3').classList.add('heart-lost');
-        document.getElementById('limb-status').innerText = "LEFT ARM LOST 🩸";
-        document.getElementById('limb-status').style.color = "#ffff00";
-        limbMsg = "🩸 YETI CHOMPED YOUR LEFT ARM! (-1 HEART)";
-      } else if (playerHearts === 1) {
-        document.getElementById('h2').classList.add('heart-lost');
-        document.getElementById('limb-status').innerText = "BOTH ARMS LOST 🩸🩸";
-        document.getElementById('limb-status').style.color = "#ff8800";
-        limbMsg = "🩸 YETI CHOMPED YOUR RIGHT ARM! (-1 HEART)";
-      }
-
-      biteToast.innerText = limbMsg;
-      biteToast.style.opacity = '1';
-      biteToast.style.transform = 'translate(-50%, -50%) scale(1.15)';
-      setTimeout(() => {
-        biteToast.style.opacity = '0';
-        biteToast.style.transform = 'translate(-50%, -50%) scale(1.0)';
-      }, 1500);
-
-      if (playerHearts <= 0) {
-        document.getElementById('h1').classList.add('heart-lost');
-        document.getElementById('limb-status').innerText = "SKELETONIZED 💀";
-        document.getElementById('limb-status').style.color = "#ff0033";
-        triggerWastedSequence("SKELETONIZED BY THE YETI");
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
-        }
-      }
-    }
-
-    function onTreeHit() {
-      playerHearts--;
-      soundEngine.playTreeThud();
-
-      const df = document.getElementById('damage-flash');
-      df.style.opacity = '0.85';
-      setTimeout(() => df.style.opacity = '0', 200);
-
-      playerSpeed = 15;
-
-      if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
-      if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
-
-      if (playerHearts <= 0) {
-        document.getElementById('h1').classList.add('heart-lost');
-        triggerWastedSequence("SMACKED INTO TOO MANY PINE TREES");
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
-        }
-      }
-    }
-
-    // --- Networking ---
+    // --- Networking & WebSocket Handlers ---
     function connectWebSocket(callsign) {
+      currentRoom = getRoomParam();
+      document.getElementById('squad-room-code').innerText = currentRoom.toUpperCase();
+
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${location.host}/ws?callsign=${encodeURIComponent(callsign)}`;
+      const wsUrl = `${protocol}//${location.host}/ws?room=${encodeURIComponent(currentRoom)}&callsign=${encodeURIComponent(callsign)}`;
       ws = new WebSocket(wsUrl);
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         if (msg.type === "WELCOME") {
           myPlayerId = msg.playerId;
+        } else if (msg.type === "LOBBY_STATE") {
+          handleLobbyState(msg);
+        } else if (msg.type === "COUNTDOWN_START") {
+          showCountdownOverlay(msg.countdownSeconds || 3);
+        } else if (msg.type === "MATCH_LAUNCH") {
+          hideCountdownOverlay();
+          startMatchClient();
         } else if (msg.type === "FRAME") {
           handleFrame(msg);
         } else if (msg.type === "YETI_HIT") {
@@ -1594,6 +1492,10 @@
           handleYetiDefeat(msg);
         } else if (msg.type === "NEXT_WAVE") {
           handleNextWave(msg);
+        } else if (msg.type === "BOULDER_HIT") {
+          if (msg.victimId === myPlayerId && !isWasted) {
+            onTreeHit();
+          }
         } else if (msg.type === "YETI_BITE_ATTACK") {
           if (msg.victimId === myPlayerId && !isWasted) {
             onYetiBiteAttack();
@@ -1602,9 +1504,64 @@
       };
     }
 
+    function handleLobbyState(msg) {
+      const rosterList = document.getElementById('roster-list');
+      if (rosterList && msg.players) {
+        let html = '';
+        msg.players.forEach(p => {
+          const isMe = p.id === myPlayerId;
+          const status = p.isReady ? '✅ READY' : '⏳ STAGING';
+          const name = isMe ? `${p.callsign} (YOU)` : p.callsign;
+          html += `<div class="roster-item"><span class="${p.isReady ? 'roster-ready' : 'roster-alive'}">${name}</span><span>${status}</span></div>`;
+        });
+        rosterList.innerHTML = html;
+      }
+    }
+
+    function showCountdownOverlay(sec) {
+      const overlay = document.getElementById('countdown-overlay');
+      const num = document.getElementById('countdown-number');
+      overlay.style.opacity = '1';
+      num.innerText = sec;
+      let remaining = sec;
+      const interval = setInterval(() => {
+        remaining--;
+        if (remaining > 0) {
+          num.innerText = remaining;
+        } else {
+          num.innerText = "GO!";
+          clearInterval(interval);
+        }
+      }, 1000);
+    }
+
+    function hideCountdownOverlay() {
+      const overlay = document.getElementById('countdown-overlay');
+      overlay.style.opacity = '0';
+    }
+
+    function startMatchClient() {
+      document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('hud-overlay').classList.remove('hidden');
+      document.getElementById('touch-steer-zone').classList.remove('hidden');
+      document.getElementById('mobile-action-bar').classList.remove('hidden');
+      isPlaying = true;
+      isWasted = false;
+      playerHearts = 3;
+      ammoCount = maxAmmo;
+      spawnGraceTimer = 3.0;
+      playerX = 0;
+      playerZ = 0;
+      playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
+    }
+
     function handleFrame(msg) {
+      // 1. Roster Update
       const rosterList = document.getElementById('roster-list');
       let rosterHTML = '';
+
+      let closestTeammateAhead = null;
+      let minDraftDist = 999;
 
       msg.skiers.forEach(skier => {
         const isMe = skier.id === myPlayerId;
@@ -1615,10 +1572,39 @@
         if (isMe) {
           damageDealtTotal = skier.damageDealt;
           document.getElementById('hud-dmg').innerHTML = `${damageDealtTotal} <span style="font-size:14px;">DMG</span>`;
+        } else if (!skier.isDead) {
+          // Check for Slingshot Drafting
+          const dz = skier.z - playerZ;
+          const dx = Math.abs(skier.x - playerX);
+          if (dz > 0 && dz < 10 && dx < 2.5 && dz < minDraftDist) {
+            minDraftDist = dz;
+            closestTeammateAhead = skier;
+          }
+
+          // 2. Render Remote 3D Skier Mesh
+          updateRemoteSkierMesh(skier);
         }
       });
       rosterList.innerHTML = rosterHTML;
 
+      // Drafting Status Update
+      const draftEl = document.getElementById('draft-indicator');
+      if (closestTeammateAhead) {
+        isDrafting = true;
+        draftEl.style.opacity = '1';
+        draftEl.style.transform = 'translateX(-50%) scale(1.08)';
+      } else {
+        isDrafting = false;
+        draftEl.style.opacity = '0';
+        draftEl.style.transform = 'translateX(-50%) scale(1.0)';
+      }
+
+      // 3. Render Wave 2+ Avalanche Boulders
+      if (msg.boulders) {
+        updateBoulders(msg.boulders);
+      }
+
+      // 4. Update Yeti Boss
       currentWaveNum = msg.wave || 1;
       document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
 
@@ -1654,82 +1640,184 @@
       }
     }
 
+    function updateRemoteSkierMesh(skier) {
+      let group = remoteSkierMeshes.get(skier.id);
+      if (!group) {
+        group = new THREE.Group();
+        
+        // Skier body sprite
+        const mat = new THREE.SpriteMaterial({ map: skierTexture ? skierTexture.clone() : null, transparent: true });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(3.8, 3.8, 1);
+        sprite.position.y = 1.8;
+        group.add(sprite);
+
+        // Skis
+        const skiMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff });
+        const skiGeo = new THREE.BoxGeometry(0.12, 0.04, 1.8);
+        const lSki = new THREE.Mesh(skiGeo, skiMat);
+        lSki.position.set(-0.35, 0.05, 0);
+        const rSki = new THREE.Mesh(skiGeo, skiMat);
+        rSki.position.set(0.35, 0.05, 0);
+        group.add(lSki);
+        group.add(rSki);
+
+        scene.add(group);
+        remoteSkierMeshes.set(skier.id, group);
+      }
+
+      const relX = skier.x - playerX;
+      const relZ = -(playerZ - skier.z);
+      group.position.set(relX, 0, relZ);
+      group.rotation.y = -skier.steer;
+      group.visible = !skier.isDead;
+    }
+
+    function updateBoulders(bouldersList) {
+      const activeIds = new Set(bouldersList.map(b => b.id));
+
+      // Remove despawned
+      for (const [id, mesh] of boulderMeshes.entries()) {
+        if (!activeIds.has(id)) {
+          scene.remove(mesh);
+          boulderMeshes.delete(id);
+        }
+      }
+
+      // Add/Update
+      bouldersList.forEach(b => {
+        let mesh = boulderMeshes.get(b.id);
+        if (!mesh) {
+          const geo = new THREE.DodecahedronGeometry(b.radius || 2.2, 1);
+          const mat = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.9, flatShading: true });
+          mesh = new THREE.Mesh(geo, mat);
+          scene.add(mesh);
+          boulderMeshes.set(b.id, mesh);
+        }
+
+        const relX = b.x - playerX;
+        const relZ = -(playerZ - b.z);
+        mesh.position.set(relX, (b.radius || 2.2), relZ);
+        mesh.rotation.x += 0.08;
+      });
+    }
+
     function handleYetiHit(msg) {
       if (msg.shooterId === myPlayerId) {
-        spawnDamagePopup(msg.damage, msg.isCrit);
+        spawnDamagePopup(msg.damage, msg.isCrit, msg.isCrossfire);
       }
-      if (msg.isCrit) {
+      if (msg.isCrossfire) {
+        soundEngine.playCrossfireBoom();
+      } else if (msg.isCrit) {
         soundEngine.playYetiStaggerRoar();
       }
     }
 
     function handleYetiDefeat(msg) {
-      const vScreen = document.getElementById('victory-screen');
-      document.getElementById('wave-advance-text').innerText = `WAVE ${msg.wave} CLEARED — SURVIVAL MODE ENGAGED!`;
-      vScreen.style.opacity = '1';
-      if (yetiSprite) yetiSprite.scale.set(10, 3, 1);
+      const gondola = document.getElementById('gondola-overlay');
+      document.getElementById('gondola-sub').innerText = `WAVE ${msg.wave} CLEARED! SQUAD REVIVED • PREPARING FOR WAVE ${msg.wave + 1}`;
+      gondola.style.opacity = '1';
+      
+      // Auto-replenish ammo and hearts
+      playerHearts = 3;
+      ammoCount = maxAmmo;
+      document.getElementById('h1').classList.remove('heart-lost');
+      document.getElementById('h2').classList.remove('heart-lost');
+      document.getElementById('h3').classList.remove('heart-lost');
+      document.getElementById('ammo-count').innerText = `AMMO: ${ammoCount} / ${maxAmmo} [R]`;
+      document.getElementById('limb-status').innerText = "INTACT ⛷️";
+      document.getElementById('limb-status').style.color = "#39ff14";
 
       setTimeout(() => {
-        vScreen.style.opacity = '0';
-      }, 3500);
+        gondola.style.opacity = '0';
+      }, (msg.restDurationSec || 5) * 1000);
     }
 
-    // Camera Trauma & Screen Shake
-    let cameraTrauma = 0;
-    let skiSprayParticles = null;
-
-    function addCameraTrauma(amount) {
-      cameraTrauma = Math.min(1.0, cameraTrauma + amount);
+    function handleNextWave(msg) {
+      currentWaveNum = msg.wave;
+      document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
     }
 
-    function createSkiSprayParticles() {
-      const sprayCount = 180;
-      const sprayGeo = new THREE.BufferGeometry();
-      const sprayPos = new Float32Array(sprayCount * 3);
-      for (let i = 0; i < sprayCount * 3; i += 3) {
-        sprayPos[i] = (Math.random() - 0.5) * 1.5;
-        sprayPos[i + 1] = -0.8 + Math.random() * 0.4;
-        sprayPos[i + 2] = -0.5 - Math.random() * 3.5;
+    function onYetiBiteAttack() {
+      if (biteInvulnerabilityTimer > 0 || isWasted) return;
+      biteInvulnerabilityTimer = 2.5;
+      playerHearts--;
+      soundEngine.playBiteChomp();
+
+      const df = document.getElementById('damage-flash');
+      df.style.opacity = '0.95';
+      setTimeout(() => df.style.opacity = '0', 250);
+
+      playerSpeed = Math.min(80, playerSpeed + 24);
+
+      const biteToast = document.getElementById('bite-alert');
+      let limbMsg = "🩸 YETI BITE! ARM LOST (-1 HEART)";
+      if (playerHearts === 2) {
+        document.getElementById('h3').classList.add('heart-lost');
+        document.getElementById('limb-status').innerText = "LEFT ARM LOST 🩸";
+        document.getElementById('limb-status').style.color = "#ffff00";
+        limbMsg = "🩸 YETI CHOMPED YOUR LEFT ARM! (-1 HEART)";
+      } else if (playerHearts === 1) {
+        document.getElementById('h2').classList.add('heart-lost');
+        document.getElementById('limb-status').innerText = "BOTH ARMS LOST 🩸🩸";
+        document.getElementById('limb-status').style.color = "#ff8800";
+        limbMsg = "🩸 YETI CHOMPED YOUR RIGHT ARM! (-1 HEART)";
       }
-      sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPos, 3));
-      const sprayMat = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.16,
-        transparent: true,
-        opacity: 0.75
-      });
-      skiSprayParticles = new THREE.Points(sprayGeo, sprayMat);
-      skiGroup.add(skiSprayParticles);
+
+      biteToast.innerText = limbMsg;
+      biteToast.style.opacity = '1';
+      setTimeout(() => { biteToast.style.opacity = '0'; }, 1500);
+
+      if (playerHearts <= 0) {
+        document.getElementById('h1').classList.add('heart-lost');
+        document.getElementById('limb-status').innerText = "SKELETONIZED 💀";
+        document.getElementById('limb-status').style.color = "#ff0033";
+        triggerWastedSequence("SKELETONIZED BY THE YETI");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
+        }
+      }
     }
 
     function onTreeHit() {
       if (spawnGraceTimer > 0) return;
       soundEngine.playTreeThud();
-      addCameraTrauma(0.55);
       const flash = document.getElementById('damage-flash');
-      flash.style.opacity = '0.9';
-      setTimeout(() => { flash.style.opacity = '0'; }, 180);
+      flash.style.opacity = '0.85';
+      setTimeout(() => { flash.style.opacity = '0'; }, 200);
 
       playerHearts--;
+      playerSpeed = Math.max(12, playerSpeed * 0.45);
+
       if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
-      else if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
-      else if (playerHearts <= 0) {
+      if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
+
+      if (playerHearts <= 0) {
         document.getElementById('h1').classList.add('heart-lost');
-        triggerWastedSequence("Smashed into Alpine Pine");
-        return;
+        triggerWastedSequence("SMACKED INTO A ROCK / PINE TREE");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
+        }
       }
-      spawnGraceTimer = 1.8;
-      playerSpeed = Math.max(10, playerSpeed * 0.4);
     }
 
-    // --- Main Game Loop with Difficulty Presets ---
+    function triggerWastedSequence(reason) {
+      isWasted = true;
+      isPlaying = false;
+      document.getElementById('death-stat').innerText = reason;
+      document.getElementById('death-modal').classList.remove('hidden');
+      document.getElementById('hud-overlay').classList.add('hidden');
+      document.getElementById('mobile-action-bar').classList.add('hidden');
+      document.getElementById('touch-steer-zone').classList.add('hidden');
+    }
+
+    // --- Main Game Animation Loop ---
     function animate() {
       requestAnimationFrame(animate);
 
       if (!scene || !renderer || !camera) return;
 
       if (!isPlaying && !isWasted) {
-        // Idle camera sweep across mountain slope behind start modal
         camera.position.x = Math.sin(Date.now() * 0.0006) * 14;
         camera.position.z = -8 + Math.cos(Date.now() * 0.0006) * 8;
         camera.position.y = 3.5;
@@ -1749,11 +1837,16 @@
         if (keys.w) targetSpeed = preset.tuckSpeed;
         if (keys.s) targetSpeed = preset.brakeSpeed;
 
+        // Slingshot Draft Boost (+18 MPH)
+        if (isDrafting) {
+          targetSpeed += 18;
+        }
+
         const sidewaysBraking = Math.abs(Math.sin(playerHeadingAngle)) * 18;
         targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
         playerSpeed += (targetSpeed - playerSpeed) * 0.05;
 
-        // 90° Carving
+        // 90° Carving Steering
         const maxAngle = Math.PI / 2.1;
         if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07);
         else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + 0.07);
@@ -1787,21 +1880,6 @@
         camera.rotation.y = targetYaw;
         camera.rotation.z = isLookingBack ? 0 : -playerHeadingAngle * 0.35;
 
-        // Camera screen shake decay
-        if (cameraTrauma > 0) {
-          camera.position.x += (Math.random() - 0.5) * cameraTrauma * 0.35;
-          camera.position.y += (Math.random() - 0.5) * cameraTrauma * 0.25;
-          camera.rotation.z += (Math.random() - 0.5) * cameraTrauma * 0.08;
-          cameraTrauma = Math.max(0, cameraTrauma - 0.035);
-        }
-
-        // Dynamic Ski Spray Particles
-        if (skiSprayParticles) {
-          const sidewaysFactor = Math.abs(Math.sin(playerHeadingAngle));
-          skiSprayParticles.material.opacity = (sidewaysFactor * 0.6) + (playerSpeed / 90 * 0.3);
-          skiSprayParticles.rotation.y = -playerHeadingAngle * 0.5;
-        }
-
         skiGroup.rotation.y = -playerHeadingAngle;
         skiGroup.rotation.z = -playerHeadingAngle * 0.4;
 
@@ -1812,34 +1890,6 @@
           rifleMesh.rotation.y = 0;
           rifleMesh.position.set(0.45, -0.4, -0.8);
         }
-
-        updateYetiSpriteAnimation(0.016);
-
-        // Update & Scroll NPC Skiers
-        npcSkiers.forEach(npc => {
-          npc.position.z += forwardVel - (npc.userData.speed * preset.forwardFactor * 0.8);
-          npc.position.x += npc.userData.steer;
-          npc.position.y = -npc.position.z * 0.15;
-
-          if (!npc.userData.isEaten && yetiSprite && yetiSprite.visible) {
-            const distToYeti = Math.hypot(npc.position.x - yetiMesh.position.x, npc.position.z - yetiMesh.position.z);
-            if (distToYeti < 4.0) {
-              npc.userData.isEaten = true;
-              soundEngine.playNpcScream(npc.position.x, 1.8, npc.position.z);
-              soundEngine.playBiteChomp(npc.position.x, 1.8, npc.position.z);
-              addCameraTrauma(0.3);
-              npc.scale.set(4.5, 1.5, 1);
-              npc.position.y += 1.5;
-            }
-          }
-
-          if (npc.position.z > 20) {
-            npc.position.z = -380;
-            npc.position.x = (Math.random() - 0.5) * 140;
-            npc.userData.isEaten = false;
-            npc.scale.set(3.8, 3.8, 1);
-          }
-        });
 
         // Tree scroll & Collision
         trees.forEach(tree => {
@@ -1875,17 +1925,6 @@
         }
       }
 
-      if (isWasted) {
-        wastedTime += 0.016;
-        updateWastedSkierAnimation(0.016);
-
-        const orbitAngle = wastedTime * 0.75;
-        camera.position.x = playerX + Math.sin(orbitAngle) * 5.5;
-        camera.position.z = Math.cos(orbitAngle) * 5.5;
-        camera.position.y = 2.8;
-        camera.lookAt(playerX, 1.2, 0);
-      }
-
       renderer.render(scene, camera);
     }
 
@@ -1902,16 +1941,7 @@
       if (k === 'r') reloadGun();
       if (e.key === 'Shift') keys.shift = true;
       if (k === 'm' || e.key === 'Escape') {
-        if (!document.getElementById('intro-overlay') || document.getElementById('intro-overlay').classList.contains('hidden')) {
-          toggleMenu();
-        }
-      }
-      if (k === '1') setDifficulty('easy');
-      if (k === '2') setDifficulty('medium');
-      if (k === '3') setDifficulty('pro');
-      if (k === 'c') {
-        const crt = document.getElementById('crt-overlay');
-        if (crt) crt.classList.toggle('hidden');
+        toggleMenu();
       }
     });
 
@@ -1932,20 +1962,15 @@
       if (e.button === 2) keys.shift = false;
     });
 
-    // In-Game Menu & Pause Handling
+    // In-Game Menu
     let isMenuOpen = false;
-    let bgSoundtrackAudio = null;
-
     function toggleMenu(forceState) {
       isMenuOpen = typeof forceState === 'boolean' ? forceState : !isMenuOpen;
       const modal = document.getElementById('menu-modal');
       if (!modal) return;
-
       if (isMenuOpen) {
         modal.classList.remove('hidden');
         fetchInGameLeaderboard();
-        const callsignInput = document.getElementById('menu-callsign-input');
-        if (callsignInput) callsignInput.value = document.getElementById('player-callsign').value || 'YetiSlayer';
       } else {
         modal.classList.add('hidden');
       }
@@ -1956,7 +1981,7 @@
       if (!tbody) return;
       try {
         const res = await fetch('/api/scores');
-        if (!res.ok) throw new Error("Leaderboard sync failed");
+        if (!res.ok) throw new Error();
         const data = await res.json();
         tbody.innerHTML = '';
         if (!data.leaderboard || data.leaderboard.length === 0) {
@@ -1966,37 +1991,13 @@
 
         data.leaderboard.forEach((entry, idx) => {
           const tr = document.createElement('tr');
-          const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : ''));
-          
-          const tdRank = document.createElement('td');
-          tdRank.style.padding = '8px 12px';
-          tdRank.style.fontWeight = 'bold';
-          tdRank.className = rankClass;
-          tdRank.textContent = `#${idx + 1}`;
-
-          const tdName = document.createElement('td');
-          tdName.style.padding = '8px 12px';
-          tdName.style.fontWeight = 'bold';
-          tdName.textContent = entry.callsign || 'Hunter';
-
-          const tdScore = document.createElement('td');
-          tdScore.style.padding = '8px 12px';
-          tdScore.style.color = '#39ff14';
-          tdScore.textContent = (entry.score || 0).toLocaleString();
-
-          const tdSpeed = document.createElement('td');
-          tdSpeed.style.padding = '8px 12px';
-          tdSpeed.textContent = `${entry.max_speed || 0} MPH`;
-
-          const tdDist = document.createElement('td');
-          tdDist.style.padding = '8px 12px';
-          tdDist.textContent = `${entry.max_distance || 0} M`;
-
-          tr.appendChild(tdRank);
-          tr.appendChild(tdName);
-          tr.appendChild(tdScore);
-          tr.appendChild(tdSpeed);
-          tr.appendChild(tdDist);
+          tr.innerHTML = `
+            <td style="padding:8px 12px; font-weight:bold;">#${idx + 1}</td>
+            <td style="padding:8px 12px; font-weight:bold;">${entry.callsign || 'Hunter'}</td>
+            <td style="padding:8px 12px; color:#39ff14;">${(entry.score || 0).toLocaleString()}</td>
+            <td style="padding:8px 12px;">${entry.max_speed || 0} MPH</td>
+            <td style="padding:8px 12px;">${entry.max_distance || 0} M</td>
+          `;
           tbody.appendChild(tr);
         });
       } catch (e) {
@@ -2008,189 +2009,68 @@
     document.getElementById('btn-menu-close').addEventListener('click', () => toggleMenu(false));
     document.getElementById('btn-resume-game').addEventListener('click', () => toggleMenu(false));
 
-    // Menu Tab Switching
-    document.getElementById('tab-leaderboard-btn').addEventListener('click', () => {
-      document.getElementById('tab-leaderboard-btn').style.background = 'rgba(0,240,255,0.2)';
-      document.getElementById('tab-leaderboard-btn').style.borderColor = '#00f0ff';
-      document.getElementById('tab-leaderboard-btn').style.color = '#00f0ff';
-      document.getElementById('tab-settings-btn').style.background = '#050a14';
-      document.getElementById('tab-settings-btn').style.borderColor = '#556688';
-      document.getElementById('tab-settings-btn').style.color = '#88a0c0';
-      document.getElementById('panel-leaderboard').classList.remove('hidden');
-      document.getElementById('panel-settings').classList.add('hidden');
-      fetchInGameLeaderboard();
-    });
-
-    document.getElementById('tab-settings-btn').addEventListener('click', () => {
-      document.getElementById('tab-settings-btn').style.background = 'rgba(0,240,255,0.2)';
-      document.getElementById('tab-settings-btn').style.borderColor = '#00f0ff';
-      document.getElementById('tab-settings-btn').style.color = '#00f0ff';
-      document.getElementById('tab-leaderboard-btn').style.background = '#050a14';
-      document.getElementById('tab-leaderboard-btn').style.borderColor = '#556688';
-      document.getElementById('tab-leaderboard-btn').style.color = '#88a0c0';
-      document.getElementById('panel-settings').classList.remove('hidden');
-      document.getElementById('panel-leaderboard').classList.add('hidden');
-    });
-
-    // Soundtrack Toggle & Volume
-    const soundtrackAudio = document.getElementById('bg-soundtrack');
-    let isSoundtrackPlaying = true;
-    if (soundtrackAudio) {
-      soundtrackAudio.volume = 0.4;
-    }
-
-    document.getElementById('btn-soundtrack-toggle').addEventListener('click', () => {
-      if (!soundtrackAudio) return;
-      isSoundtrackPlaying = !isSoundtrackPlaying;
-      if (isSoundtrackPlaying) {
-        soundtrackAudio.play().catch(() => {});
-        document.getElementById('btn-soundtrack-toggle').innerText = "🔊 SOUNDTRACK: ON";
-        document.getElementById('btn-soundtrack-toggle').style.borderColor = "#39ff14";
-        document.getElementById('btn-soundtrack-toggle').style.color = "#39ff14";
-      } else {
-        soundtrackAudio.pause();
-        document.getElementById('btn-soundtrack-toggle').innerText = "🔇 SOUNDTRACK: OFF";
-        document.getElementById('btn-soundtrack-toggle').style.borderColor = "#ff007f";
-        document.getElementById('btn-soundtrack-toggle').style.color = "#ff007f";
-      }
-    });
-
-    document.getElementById('soundtrack-vol').addEventListener('input', (e) => {
-      if (soundtrackAudio) soundtrackAudio.volume = parseFloat(e.target.value);
-    });
-
-    document.getElementById('menu-callsign-input').addEventListener('input', (e) => {
-      const cleaned = e.target.value.replace(/[^a-zA-Z0-9_\- ]/g, '').slice(0, 12);
-      document.getElementById('player-callsign').value = cleaned;
-    });
-
-    // Difficulty Button clicks
-    document.querySelectorAll('.diff-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        setDifficulty(btn.dataset.diff);
+    // Copy squad room link
+    document.getElementById('btn-copy-room').addEventListener('click', () => {
+      const url = `${window.location.origin}${window.location.pathname}?room=${currentRoom}`;
+      navigator.clipboard.writeText(url).then(() => {
+        document.getElementById('btn-copy-room').innerText = "COPIED! ✅";
+        setTimeout(() => { document.getElementById('btn-copy-room').innerText = "📋 COPY LINK"; }, 2000);
       });
     });
 
-    // --- Cinematic Skippable Intro Video Controller ---
-    const introOverlay = document.getElementById('intro-overlay');
-    const introVideo = document.getElementById('intro-video');
-    const introProgressBar = document.getElementById('intro-progress');
-    const btnSkipIntro = document.getElementById('btn-skip-intro');
-    let isIntroSkipped = false;
-
+    // Intro video skip
     function skipIntroVideo() {
-      if (isIntroSkipped || !introOverlay) return;
-      isIntroSkipped = true;
-      if (introVideo) {
-        introVideo.pause();
-      }
-      introOverlay.style.opacity = '0';
-      setTimeout(() => {
-        introOverlay.classList.add('hidden');
-        document.getElementById('start-modal').classList.remove('hidden');
-        if (!scene) init3D();
-        setDifficulty(selectedDifficulty);
-      }, 500);
-    }
-
-    if (btnSkipIntro) {
-      btnSkipIntro.addEventListener('click', skipIntroVideo);
-    }
-
-    if (introVideo) {
-      introVideo.addEventListener('timeupdate', () => {
-        if (introVideo.duration && introProgressBar) {
-          const pct = (introVideo.currentTime / introVideo.duration) * 100;
-          introProgressBar.style.width = `${pct}%`;
-        }
-      });
-      introVideo.addEventListener('ended', skipIntroVideo);
-      
-      // Auto-attempt playback with sound
-      const playPromise = introVideo.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Autoplay policy prevented playback, video remains queued with skip button
-        });
+      const intro = document.getElementById('intro-overlay');
+      if (intro) {
+        intro.style.opacity = '0';
+        setTimeout(() => intro.classList.add('hidden'), 400);
       }
     }
+    document.getElementById('btn-skip-intro').addEventListener('click', skipIntroVideo);
 
-    // Start Button
-    document.getElementById('btn-start').addEventListener('click', () => {
-      const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
+    // Ready-up button
+    document.getElementById('btn-ready').addEventListener('click', () => {
       soundEngine.init();
-      if (!scene) init3D();
-      createSkiSprayParticles();
-      setDifficulty(selectedDifficulty);
-      playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
-      connectWebSocket(callsign);
+      isReady = !isReady;
+      const btn = document.getElementById('btn-ready');
+      btn.innerText = isReady ? "READY! (WAITING SQUAD) ⏳" : "READY UP 🎿";
+      btn.style.background = isReady ? "#39ff14" : "linear-gradient(135deg, #00f0ff, #0088ff)";
+      btn.style.color = isReady ? "#000" : "#fff";
 
-      if (soundtrackAudio && isSoundtrackPlaying) {
-        soundtrackAudio.play().catch(() => {});
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "READY",
+          ready: isReady
+        }));
       }
-
-      document.getElementById('start-modal').classList.add('hidden');
-      document.getElementById('hud-overlay').classList.remove('hidden');
-      document.getElementById('touch-steer-zone').classList.remove('hidden');
-      document.getElementById('mobile-action-bar').classList.remove('hidden');
-      isPlaying = true;
-      isWasted = false;
-      playerHearts = 3;
-      ammoCount = maxAmmo;
-      spawnGraceTimer = 3.0;
     });
 
-    // Respawn Button
+    // Start / Force drop button
+    document.getElementById('btn-start').addEventListener('click', () => {
+      soundEngine.init();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "FORCE_LAUNCH" }));
+      } else {
+        startMatchClient();
+      }
+    });
+
+    // Respawn button
     document.getElementById('btn-respawn').addEventListener('click', () => {
       document.getElementById('death-modal').classList.add('hidden');
-      document.getElementById('hud-overlay').classList.remove('hidden');
-      document.getElementById('touch-steer-zone').classList.remove('hidden');
-      document.getElementById('mobile-action-bar').classList.remove('hidden');
-      document.getElementById('wasted-screen').style.opacity = '0';
-
-      document.getElementById('h1').classList.remove('heart-lost');
-      document.getElementById('h2').classList.remove('heart-lost');
-      document.getElementById('h3').classList.remove('heart-lost');
-      document.getElementById('limb-status').innerText = "INTACT ⛷️";
-      document.getElementById('limb-status').style.color = "#39ff14";
-
-      skiGroup.visible = true;
-      rifleMesh.visible = true;
-      if (wastedSkierSprite) wastedSkierSprite.visible = false;
-      camera.position.set(0, 1.8, 0);
-      camera.rotation.set(0, 0, 0);
-
-      createCleanSpacedTrees();
-      playerHearts = 3;
-      ammoCount = maxAmmo;
-      spawnGraceTimer = 3.0;
-      biteInvulnerabilityTimer = 0;
-
-      playerX = 0;
-      playerZ = 0;
-      playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
-      playerHeadingAngle = 0;
-      turnSteerVelocity = 0;
-      isWasted = false;
-      isPlaying = true;
-
+      startMatchClient();
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
       connectWebSocket(callsign);
     });
 
-    // --- Mobile Touch Carving & Action Controls ---
+    // Mobile touch controls setup
     const touchSteerZone = document.getElementById('touch-steer-zone');
     const touchStickBase = document.getElementById('touch-stick-base');
     const touchStickThumb = document.getElementById('touch-stick-thumb');
-    const btnTouchShoot = document.getElementById('btn-touch-shoot');
-    const btnTouchRearview = document.getElementById('btn-touch-rearview');
-    const btnTouchReload = document.getElementById('btn-touch-reload');
-
     let steerTouchId = null;
     let touchStartX = 0;
     let touchStartY = 0;
 
-    // Global WebAudio unlock on first touch
     window.addEventListener('touchstart', () => {
       soundEngine.init();
       if (soundEngine.ctx && soundEngine.ctx.state === 'suspended') {
@@ -2198,7 +2078,6 @@
       }
     }, { passive: true });
 
-    // Left-screen touch drag for 90° ski carving & tuck throttle
     if (touchSteerZone) {
       touchSteerZone.addEventListener('touchstart', (e) => {
         if (!isPlaying || isWasted) return;
@@ -2238,13 +2117,11 @@
             touchStickThumb.style.left = `${thumbX}px`;
             touchStickThumb.style.top = `${thumbY}px`;
 
-            // 90° Carving Steering
             const normX = Math.max(-1, Math.min(1, dx / 40));
             turnSteerVelocity = normX * 1.8;
             keys.a = normX < -0.25;
             keys.d = normX > 0.25;
 
-            // Vertical Drag: Tuck Throttle / Snowplow Brake
             const normY = Math.max(-1, Math.min(1, dy / 40));
             keys.w = normY < -0.30;
             keys.s = normY > 0.30;
@@ -2273,75 +2150,26 @@
       touchSteerZone.addEventListener('touchcancel', onSteerTouchEnd, { passive: true });
     }
 
-    // Right-Screen Action Buttons
-    if (btnTouchShoot) {
-      btnTouchShoot.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        soundEngine.init();
-        onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
-      }, { passive: false });
+    // Touch action buttons
+    document.getElementById('btn-touch-shoot').addEventListener('click', (e) => {
+      e.preventDefault();
+      onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+    });
+    document.getElementById('btn-touch-rearview').addEventListener('click', (e) => {
+      e.preventDefault();
+      keys.shift = !keys.shift;
+      document.getElementById('btn-touch-rearview').classList.toggle('active', keys.shift);
+    });
+    document.getElementById('btn-touch-reload').addEventListener('click', (e) => {
+      e.preventDefault();
+      reloadGun();
+    });
 
-      btnTouchShoot.addEventListener('click', (e) => {
-        e.preventDefault();
-        onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
-      });
-    }
-
-    if (btnTouchRearview) {
-      btnTouchRearview.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        keys.shift = !keys.shift;
-        btnTouchRearview.classList.toggle('active', keys.shift);
-      }, { passive: false });
-
-      btnTouchRearview.addEventListener('click', (e) => {
-        e.preventDefault();
-        keys.shift = !keys.shift;
-        btnTouchRearview.classList.toggle('active', keys.shift);
-      });
-    }
-
-    if (btnTouchReload) {
-      btnTouchReload.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        soundEngine.init();
-        reloadGun();
-      }, { passive: false });
-
-      btnTouchReload.addEventListener('click', (e) => {
-        e.preventDefault();
-        reloadGun();
-      });
-    }
-
-    // Right-side screen touch drag to aim crosshair
-    window.addEventListener('touchmove', (e) => {
-      if (!isPlaying || isWasted) return;
-      for (let i = 0; i < e.touches.length; i++) {
-        const touch = e.touches[i];
-        if (touch.identifier !== steerTouchId && touch.clientX > window.innerWidth * 0.45) {
-          const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-          if (targetEl && (targetEl.classList.contains('touch-btn') || targetEl.closest('#mobile-action-bar'))) {
-            continue;
-          }
-          mousePos.x = (touch.clientX / window.innerWidth) * 2 - 1;
-          mousePos.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-          const ch = document.getElementById('crosshair');
-          if (ch) {
-            ch.style.left = `${touch.clientX}px`;
-            ch.style.top = `${touch.clientY}px`;
-          }
-        }
-      }
-    }, { passive: true });
-
-    // Instant Page Load 3D Boot
+    // Boot
     window.addEventListener('DOMContentLoaded', () => {
       init3D();
-      setDifficulty(selectedDifficulty);
+      const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
+      connectWebSocket(callsign);
       animate();
     });
   </script>

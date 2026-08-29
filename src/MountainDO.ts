@@ -13,7 +13,19 @@ interface SkierState {
   damageDealt: number;
   shotsFired: number;
   isDead: boolean;
+  isReady: boolean;
+  loadout: string;
   lastActive: number;
+  lastShotTime?: number;
+}
+
+interface Boulder {
+  id: string;
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+  radius: number;
 }
 
 interface LeaderboardEntry {
@@ -39,10 +51,18 @@ interface HitboxSnapshot {
 }
 
 export class MountainDO extends DurableObject {
-  private players = new Map<string, SkierState & { lastShotTime?: number }>();
+  private players = new Map<string, SkierState>();
   
+  // Match Lifecycle States
+  private matchState: "LOBBY_WAITING" | "COUNTDOWN_DROP" | "ACTIVE_HUNT" | "GONDOLA_REST" | "WIPEOUT" = "LOBBY_WAITING";
+  private countdownTimer = 0;
+  private restTimer = 0;
+  private boulderSpawnTimer = 0;
+  private boulders: Boulder[] = [];
+  private recentHits: Array<{ timestamp: number; shooterId: string }> = [];
+
   // Yeti Boss State
-  private yetiZ = 120;
+  private yetiZ = 65;
   private yetiX = 0;
   private yetiSpeed = 38;
   private yetiActive = true;
@@ -55,7 +75,6 @@ export class MountainDO extends DurableObject {
   private yetiTargetId: string | null = null;
   private hitboxHistory: HitboxSnapshot[] = [];
   
-  private matchStatus: "active" | "ended" = "active";
   private matchStartTime = 0;
   private tickIntervalMs = 50; // 20Hz tick
 
@@ -106,12 +125,13 @@ export class MountainDO extends DurableObject {
       this.ctx.acceptWebSocket(server, [playerId]);
       server.serializeAttachment({ playerId, callsign });
 
+      const initialX = (Math.random() - 0.5) * 25;
       this.players.set(playerId, {
         id: playerId,
         callsign,
-        x: (Math.random() - 0.5) * 30,
+        x: initialX,
         z: 0,
-        speed: 35,
+        speed: 0,
         steer: 0,
         state: 0,
         pitch: 0,
@@ -119,17 +139,22 @@ export class MountainDO extends DurableObject {
         damageDealt: 0,
         shotsFired: 0,
         isDead: false,
+        isReady: false,
+        loadout: "rifle",
         lastActive: Date.now(),
         lastShotTime: 0
       });
 
-      if (this.players.size === 1) {
-        this.matchStartTime = Date.now();
-        this.yetiZ = 120;
-        this.yetiHp = this.yetiMaxHp;
-        this.yetiState = "CHARGING";
-        this.yetiActive = true;
-        this.currentWave = 1;
+      // If game is already actively running, player joins into current session
+      if (this.matchState === "ACTIVE_HUNT") {
+        const p = this.players.get(playerId)!;
+        p.speed = 32;
+        p.z = furthestZ;
+        p.isReady = true;
+      }
+
+      // Schedule 20Hz physics loop alarm if first player
+      if (this.players.size === 1 && this.matchState === "LOBBY_WAITING") {
         this.ctx.storage.setAlarm(Date.now() + this.tickIntervalMs);
       }
 
@@ -137,11 +162,13 @@ export class MountainDO extends DurableObject {
         type: "WELCOME",
         playerId,
         callsign,
+        matchState: this.matchState,
         wave: this.currentWave,
         yetiMaxHp: this.yetiMaxHp,
         yetiHp: this.yetiHp
       }));
 
+      this.broadcastLobbyState();
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -154,7 +181,8 @@ export class MountainDO extends DurableObject {
         success: true,
         leaderboard: topScores,
         recentKills,
-        currentWave: this.currentWave
+        currentWave: this.currentWave,
+        matchState: this.matchState
       }, {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -172,10 +200,27 @@ export class MountainDO extends DurableObject {
       if (!attachment || !attachment.playerId) return;
 
       const player = this.players.get(attachment.playerId);
-      if (!player || player.isDead) return;
+      if (!player) return;
 
       const data = typeof message === "string" ? JSON.parse(message) : null;
       if (!data || typeof data !== "object") return;
+
+      // Handle Ready-Up in Chalet Staging Lobby
+      if (data.type === "READY") {
+        player.isReady = Boolean(data.ready);
+        if (data.loadout) player.loadout = String(data.loadout);
+        this.broadcastLobbyState();
+        this.checkAllReadyToLaunch();
+        return;
+      }
+
+      // Handle Force Launch / Skip Countdown if Solo or Host
+      if (data.type === "FORCE_LAUNCH") {
+        this.startMatchCountdown();
+        return;
+      }
+
+      if (player.isDead) return;
 
       if (data.type === "INPUT") {
         const rawSteer = Number(data.steer);
@@ -194,11 +239,26 @@ export class MountainDO extends DurableObject {
         if (!player.isDead) {
           player.isDead = true;
           this.commitScore(player);
+          this.checkTeamWipeout();
+        }
+      } else if (data.type === "REVIVE_TEAMMATE") {
+        const targetId = String(data.targetId);
+        const targetSkier = this.players.get(targetId);
+        if (targetSkier && targetSkier.isDead) {
+          targetSkier.isDead = false;
+          targetSkier.z = player.z;
+          targetSkier.x = player.x + (Math.random() - 0.5) * 4;
+          targetSkier.speed = 25;
+          player.score += 3000;
+          this.broadcast({
+            type: "TEAMMATE_REVIVED",
+            reviverCallsign: player.callsign,
+            revivedCallsign: targetSkier.callsign
+          });
         }
       } else if (data.type === "SHOOT") {
         const now = Date.now();
-        // Strict anti-cheat: rate limit shooting to minimum 120ms interval
-        if (player.lastShotTime && now - player.lastShotTime < 120) {
+        if (player.lastShotTime && now - player.lastShotTime < 110) {
           return;
         }
         player.lastShotTime = now;
@@ -206,16 +266,25 @@ export class MountainDO extends DurableObject {
         
         if (this.yetiActive && this.yetiState !== "DEAD" && Boolean(data.hit)) {
           const isCrit = Boolean(data.crit);
+          
+          // Crossfire / Storm Convergence Combo Tracking
+          this.recentHits.push({ timestamp: now, shooterId: player.id });
+          this.recentHits = this.recentHits.filter(h => now - h.timestamp <= 1000);
+          const distinctShooters = new Set(this.recentHits.map(h => h.shooterId)).size;
+          const isCrossfire = distinctShooters >= 2;
+          const crossfireMultiplier = isCrossfire ? 2.5 : 1.0;
+
           // Server calculates and enforces authoritative damage
-          const damage = isCrit ? Math.floor(750 + Math.random() * 250) : Math.floor(400 + Math.random() * 150);
+          const baseDamage = isCrit ? Math.floor(750 + Math.random() * 250) : Math.floor(400 + Math.random() * 150);
+          const damage = Math.floor(baseDamage * crossfireMultiplier);
           
           player.damageDealt += damage;
           player.score += damage * 2;
           this.yetiHp = Math.max(0, this.yetiHp - damage);
 
-          if (isCrit || Math.random() < 0.3) {
+          if (isCrit || isCrossfire || Math.random() < 0.35) {
             this.yetiState = "STAGGERED";
-            this.stateTimer = 1.0;
+            this.stateTimer = isCrossfire ? 1.5 : 0.9;
           }
 
           this.broadcast({
@@ -224,40 +293,13 @@ export class MountainDO extends DurableObject {
             shooterCallsign: player.callsign,
             damage,
             isCrit,
+            isCrossfire,
             yetiHp: this.yetiHp,
             yetiMaxHp: this.yetiMaxHp
           });
 
           if (this.yetiHp <= 0) {
-            this.yetiState = "DEAD";
-            this.yetiKillCount++;
-            const clearTime = Math.max(1, (Date.now() - this.matchStartTime) / 1000);
-            
-            this.ctx.storage.sql.exec(`
-              INSERT INTO yeti_kills (killer_callsign, wave, total_lobby_damage, clear_time_sec, created_at)
-              VALUES (?, ?, ?, ?, ?);
-            `, player.callsign, this.currentWave, player.damageDealt, clearTime, Date.now());
-
-            this.broadcast({
-              type: "YETI_DEFEATED",
-              killerCallsign: player.callsign,
-              wave: this.currentWave,
-              clearTimeSec: clearTime,
-              bonusScore: 10000 * this.currentWave
-            });
-
-            setTimeout(() => {
-              this.currentWave++;
-              this.yetiMaxHp = Math.floor(8000 * Math.pow(1.35, this.currentWave - 1));
-              this.yetiHp = this.yetiMaxHp;
-              this.yetiZ = (furthestZ || 0) + 65;
-              this.yetiState = "CHARGING";
-              this.broadcast({
-                type: "NEXT_WAVE",
-                wave: this.currentWave,
-                yetiMaxHp: this.yetiMaxHp
-              });
-            }, 4000);
+            this.handleYetiDefeated(player);
           }
         }
       }
@@ -266,51 +308,224 @@ export class MountainDO extends DurableObject {
     }
   }
 
+  private handleYetiDefeated(killer: SkierState) {
+    this.yetiState = "DEAD";
+    this.yetiKillCount++;
+    const clearTime = Math.max(1, (Date.now() - this.matchStartTime) / 1000);
+    
+    this.ctx.storage.sql.exec(`
+      INSERT INTO yeti_kills (killer_callsign, wave, total_lobby_damage, clear_time_sec, created_at)
+      VALUES (?, ?, ?, ?, ?);
+    `, killer.callsign, this.currentWave, killer.damageDealt, clearTime, Date.now());
+
+    this.matchState = "GONDOLA_REST";
+    this.restTimer = 5.0;
+    this.boulders = [];
+
+    // Revive all dead players during Gondola Rest
+    for (const p of this.players.values()) {
+      p.isDead = false;
+      p.score += 10000 * this.currentWave;
+    }
+
+    this.broadcast({
+      type: "YETI_DEFEATED",
+      killerCallsign: killer.callsign,
+      wave: this.currentWave,
+      clearTimeSec: clearTime,
+      bonusScore: 10000 * this.currentWave,
+      restDurationSec: 5.0
+    });
+  }
+
+  private startMatchCountdown() {
+    if (this.matchState === "COUNTDOWN_DROP" || this.matchState === "ACTIVE_HUNT") return;
+    this.matchState = "COUNTDOWN_DROP";
+    this.countdownTimer = 3.5;
+    this.broadcast({
+      type: "COUNTDOWN_START",
+      countdownSeconds: 3
+    });
+  }
+
+  private checkAllReadyToLaunch() {
+    if (this.matchState !== "LOBBY_WAITING") return;
+    const allPlayers = Array.from(this.players.values());
+    if (allPlayers.length > 0 && allPlayers.every(p => p.isReady)) {
+      this.startMatchCountdown();
+    }
+  }
+
+  private checkTeamWipeout() {
+    const allDead = Array.from(this.players.values()).every(p => p.isDead);
+    if (allDead && this.players.size > 0 && this.matchState === "ACTIVE_HUNT") {
+      this.matchState = "WIPEOUT";
+      this.broadcast({
+        type: "TEAM_WIPEOUT",
+        waveReached: this.currentWave
+      });
+    }
+  }
+
+  private broadcastLobbyState() {
+    this.broadcast({
+      type: "LOBBY_STATE",
+      matchState: this.matchState,
+      countdownTimer: Math.ceil(this.countdownTimer),
+      wave: this.currentWave,
+      players: Array.from(this.players.values()).map(p => ({
+        id: p.id,
+        callsign: p.callsign,
+        isReady: p.isReady,
+        loadout: p.loadout,
+        score: p.score
+      }))
+    });
+  }
+
   async webSocketClose(ws: WebSocket) {
     const attachment = ws.deserializeAttachment() as { playerId: string } | null;
     if (attachment && attachment.playerId) {
       this.players.delete(attachment.playerId);
+      this.broadcastLobbyState();
     }
   }
 
   async alarm() {
     const now = Date.now();
-    let anyAlive = false;
+    const dt = this.tickIntervalMs / 1000;
+
+    // 1. Handle Staging Drop Countdown
+    if (this.matchState === "COUNTDOWN_DROP") {
+      this.countdownTimer -= dt;
+      if (this.countdownTimer <= 0) {
+        this.matchState = "ACTIVE_HUNT";
+        this.matchStartTime = Date.now();
+        this.currentWave = 1;
+        
+        // Dynamic squad-scaled boss HP
+        const livingCount = Math.max(1, this.players.size);
+        this.yetiMaxHp = Math.floor(8000 * Math.sqrt(livingCount));
+        this.yetiHp = this.yetiMaxHp;
+        this.yetiZ = 65;
+        this.yetiX = 0;
+        this.yetiState = "CHARGING";
+        this.yetiActive = true;
+        this.boulders = [];
+
+        // Reset all players to gate starting line Z=0
+        let idx = 0;
+        for (const p of this.players.values()) {
+          p.z = 0;
+          p.x = (idx - (this.players.size - 1) / 2) * 6;
+          p.speed = 35;
+          p.isDead = false;
+          p.damageDealt = 0;
+          p.shotsFired = 0;
+          idx++;
+        }
+
+        this.broadcast({
+          type: "MATCH_LAUNCH",
+          wave: this.currentWave,
+          yetiMaxHp: this.yetiMaxHp
+        });
+      }
+    }
+
+    // 2. Handle Inter-Wave Gondola Rest Stop
+    if (this.matchState === "GONDOLA_REST") {
+      this.restTimer -= dt;
+      if (this.restTimer <= 0) {
+        this.currentWave++;
+        this.matchState = "ACTIVE_HUNT";
+
+        const livingCount = Math.max(1, Array.from(this.players.values()).filter(p => !p.isDead).length);
+        this.yetiMaxHp = Math.floor(8000 * Math.pow(1.35, this.currentWave - 1) * Math.sqrt(livingCount));
+        this.yetiHp = this.yetiMaxHp;
+        this.yetiZ = (furthestZ || 0) + 65;
+        this.yetiX = 0;
+        this.yetiState = "CHARGING";
+        this.boulders = [];
+
+        this.broadcast({
+          type: "NEXT_WAVE",
+          wave: this.currentWave,
+          yetiMaxHp: this.yetiMaxHp
+        });
+      }
+    }
+
     let furthestSkierZ = 0;
 
-    for (const [id, p] of this.players.entries()) {
-      if (p.isDead) continue;
-      anyAlive = true;
+    // 3. Skier Authoritative Physics Simulation
+    if (this.matchState === "ACTIVE_HUNT" || this.matchState === "GONDOLA_REST") {
+      for (const p of this.players.values()) {
+        if (p.isDead) continue;
 
-      let targetSpeed = 36;
-      if (p.state === 1) targetSpeed = 75;
+        let targetSpeed = 36;
+        if (p.state === 1) targetSpeed = 75;
 
-      p.speed += (targetSpeed - p.speed) * 0.06;
-      p.z += p.speed * (this.tickIntervalMs / 1000);
-      
-      const lateralSpeed = p.steer * 48;
-      p.x += lateralSpeed * (this.tickIntervalMs / 1000);
-      p.x = Math.max(-120, Math.min(120, p.x));
+        p.speed += (targetSpeed - p.speed) * 0.06;
+        p.z += p.speed * dt;
+        
+        const lateralSpeed = p.steer * 48;
+        p.x += lateralSpeed * dt;
+        p.x = Math.max(-120, Math.min(120, p.x));
 
-      p.score += Math.floor(p.speed * 0.2);
-      if (p.z > furthestSkierZ) furthestSkierZ = p.z;
+        p.score += Math.floor(p.speed * 0.2);
+        if (p.z > furthestSkierZ) furthestSkierZ = p.z;
+      }
     }
 
     furthestZ = furthestSkierZ;
 
-    // Snapshot Yeti Hitbox for Lag-Compensated Rewind Raycasting
-    this.hitboxHistory.push({
-      timestamp: now,
-      x: this.yetiX,
-      z: this.yetiZ,
-      state: this.yetiState
-    });
-    if (this.hitboxHistory.length > 24) {
-      this.hitboxHistory.shift();
+    // 4. Wave 2+ Avalanche Boulder Spawning & Rolling Physics
+    if (this.matchState === "ACTIVE_HUNT" && this.currentWave >= 2 && this.yetiActive && this.yetiState !== "DEAD") {
+      this.boulderSpawnTimer += dt;
+      const spawnInterval = Math.max(1.8, 3.2 - (this.currentWave * 0.3));
+      if (this.boulderSpawnTimer >= spawnInterval) {
+        this.boulderSpawnTimer = 0;
+        this.boulders.push({
+          id: `bld_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          x: this.yetiX + (Math.random() - 0.5) * 12,
+          z: this.yetiZ - 4,
+          vx: (Math.random() - 0.5) * 10,
+          vz: -65 - (this.currentWave * 8), // Rolls fast down-slope towards skiers!
+          radius: 2.2 + Math.random() * 0.8
+        });
+      }
+
+      // Advance boulders & test collisions
+      for (let i = this.boulders.length - 1; i >= 0; i--) {
+        const b = this.boulders[i];
+        b.z += b.vz * dt;
+        b.x += b.vx * dt;
+
+        // Check collision against living skiers
+        for (const p of this.players.values()) {
+          if (p.isDead) continue;
+          if (Math.abs(p.z - b.z) < 2.5 && Math.abs(p.x - b.x) < b.radius + 1.2) {
+            this.broadcast({
+              type: "BOULDER_HIT",
+              victimId: p.id,
+              victimCallsign: p.callsign,
+              boulderId: b.id
+            });
+            this.boulders.splice(i, 1);
+            break;
+          }
+        }
+
+        // Despawn far past slope
+        if (b.z < -100 || (furthestSkierZ - b.z) > 120) {
+          this.boulders.splice(i, 1);
+        }
+      }
     }
 
-    // Yeti Charging & Biting AI
-    if (this.yetiActive && this.yetiState !== "DEAD") {
+    // 5. Yeti Boss AI
+    if (this.matchState === "ACTIVE_HUNT" && this.yetiActive && this.yetiState !== "DEAD") {
       let targetPlayer: SkierState | null = null;
       let minDistance = Infinity;
 
@@ -325,12 +540,11 @@ export class MountainDO extends DurableObject {
 
       if (targetPlayer) {
         this.yetiTargetId = targetPlayer.id;
-        this.yetiX += (targetPlayer.x - this.yetiX) * 0.14;
+        this.yetiX += (targetPlayer.x - this.yetiX) * (0.12 + Math.min(0.08, this.currentWave * 0.02));
 
         if (this.yetiState === "STAGGERED") {
-          this.stateTimer -= this.tickIntervalMs / 1000;
+          this.stateTimer -= dt;
           this.yetiSpeed = 10;
-          // Clamp distance to 65m max so Yeti does not disappear past fog distance
           if (Math.abs(this.yetiZ - targetPlayer.z) > 65) {
             this.yetiZ = targetPlayer.z + (this.yetiZ > targetPlayer.z ? 65 : -65);
           }
@@ -339,9 +553,9 @@ export class MountainDO extends DurableObject {
             this.stateTimer = 2.0;
           }
         } else if (this.yetiState === "RETREATING") {
-          this.stateTimer -= this.tickIntervalMs / 1000;
+          this.stateTimer -= dt;
           this.yetiSpeed = 55;
-          this.yetiZ += this.yetiSpeed * (this.tickIntervalMs / 1000);
+          this.yetiZ += this.yetiSpeed * dt;
           const dist = this.yetiZ - targetPlayer.z;
           if (this.stateTimer <= 0 || Math.abs(dist) >= 65) {
             this.yetiState = "CHARGING";
@@ -349,18 +563,17 @@ export class MountainDO extends DurableObject {
             if (dist < -65) this.yetiZ = targetPlayer.z - 65;
           }
         } else if (this.yetiState === "CHARGING") {
-          const relativeSpeed = targetPlayer.z > this.yetiZ ? 58 : -25;
-          this.yetiSpeed = targetPlayer.speed + (targetPlayer.z > this.yetiZ ? 12 : -18);
-          this.yetiZ += this.yetiSpeed * (this.tickIntervalMs / 1000);
+          const waveSpeedBonus = (this.currentWave - 1) * 6;
+          this.yetiSpeed = targetPlayer.speed + (targetPlayer.z > this.yetiZ ? (12 + waveSpeedBonus) : -18);
+          this.yetiZ += this.yetiSpeed * dt;
 
-          // Yeti Attack Bite: Dispatches bite attack, takes limb/heart, pushes Yeti back so player keeps skiing!
+          // Yeti Attack Bite
           if (minDistance < 3.2 && Math.abs(targetPlayer.x - this.yetiX) < 4.5) {
             this.broadcast({
               type: "YETI_BITE_ATTACK",
               victimId: targetPlayer.id,
               victimCallsign: targetPlayer.callsign
             });
-            // Yeti bites and bounds away, clamped safely within 65m fog boundary
             this.yetiState = "RETREATING";
             this.stateTimer = 3.0;
             this.yetiZ = targetPlayer.z - 30;
@@ -369,10 +582,20 @@ export class MountainDO extends DurableObject {
       }
     }
 
+    // 6. Broadcast 20Hz State Frame
     const framePayload = {
       type: "FRAME",
       timestamp: now,
+      matchState: this.matchState,
+      countdownTimer: Math.max(0, Math.ceil(this.countdownTimer)),
+      restTimer: Math.max(0, Math.ceil(this.restTimer)),
       wave: this.currentWave,
+      boulders: this.boulders.map(b => ({
+        id: b.id,
+        x: Math.round(b.x * 10) / 10,
+        z: Math.round(b.z * 10) / 10,
+        radius: b.radius
+      })),
       yeti: {
         active: this.yetiActive,
         state: this.yetiState,
@@ -392,7 +615,9 @@ export class MountainDO extends DurableObject {
         state: p.state,
         score: p.score,
         damageDealt: p.damageDealt,
-        isDead: p.isDead
+        isDead: p.isDead,
+        isReady: p.isReady,
+        loadout: p.loadout
       }))
     };
 
