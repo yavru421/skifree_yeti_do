@@ -16,7 +16,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #0a0e1a;
+      background: #080c16;
       font-family: 'Courier New', Courier, monospace;
       color: #fff;
       cursor: crosshair;
@@ -150,6 +150,24 @@
       letter-spacing: 1.5px;
       opacity: 0;
       transition: opacity 0.2s, transform 0.2s;
+    }
+
+    #air-trick-indicator {
+      position: absolute;
+      top: 155px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      font-weight: 900;
+      color: #ffff00;
+      background: rgba(40, 20, 0, 0.9);
+      padding: 8px 24px;
+      border-radius: 24px;
+      border: 2px solid #ffff00;
+      box-shadow: 0 0 25px #ffff00;
+      letter-spacing: 2px;
+      opacity: 0;
+      transition: opacity 0.15s, transform 0.15s;
     }
 
     .hud-top-sides {
@@ -411,7 +429,7 @@
       text-align: center;
     }
 
-    /* Race Complete Overlay */
+    /* Slalom Race Complete Overlay */
     #race-complete-overlay {
       position: fixed;
       top: 0;
@@ -467,6 +485,7 @@
     .dmg-crossfire { color: #00ffff; font-size: 36px; text-shadow: 0 0 18px #00ffff, 0 0 30px #ff007f; }
     .dmg-gate { color: #39ff14; font-size: 28px; text-shadow: 0 0 14px #39ff14, 0 0 24px #00f0ff; }
     .dmg-miss { color: #ff0033; font-size: 26px; text-shadow: 0 0 14px #ff0033; }
+    .dmg-trick { color: #ffff00; font-size: 32px; text-shadow: 0 0 20px #ff007f, 0 0 30px #ffff00; }
 
     @keyframes floatUp {
       0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
@@ -619,7 +638,7 @@
       opacity: 0.45;
     }
 
-    /* Mobile Landscape Enforcement Prompt */
+    /* Mobile Landscape Prompt */
     #rotate-prompt {
       display: none;
       position: fixed;
@@ -670,7 +689,7 @@
       }
     }
 
-    /* Mobile Touch Carving & Action Controls */
+    /* Mobile Touch Controls Layer */
     #touch-steer-zone {
       position: absolute;
       top: 0;
@@ -881,6 +900,7 @@
 
     <div id="lookback-hint"><span id="hud-view" style="color:#00f0ff; font-weight:900;">DOWNHILL</span> • HOLD [SHIFT] OR RIGHT-CLICK TO AIM & SHOOT BEHIND YOU • [1/2/3] SPEED DIFFICULTY</div>
     <div id="draft-indicator">💨 SLINGSHOT DRAFTING (+18 MPH)</div>
+    <div id="air-trick-indicator">🚀 BIG AIR COMBO (+1,500 PTS)</div>
 
     <div class="hud-top-sides">
       <div class="hud-gauge">
@@ -958,7 +978,7 @@
       <button class="modal-btn" id="btn-start" style="flex:1;">DROP NOW 🚀</button>
     </div>
     <p style="margin-top:8px; font-size:11px; color:#556688;">
-      [A / D] 90° Carve • [W / S] Throttle • [Shift / Right-Click] Look Back • [Slingshot Draft +18 MPH]
+      [A / D] 90° Carve • [W / S] Throttle • [Space] Big Air Jumps • [Rails & Kickers Active]
     </p>
   </div>
 
@@ -1206,6 +1226,36 @@
         osc.stop(this.ctx.currentTime + 0.3);
       }
 
+      playBigAirWhoosh() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(550, this.ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.4);
+      }
+
+      playRailGrind() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(650, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(780, this.ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.28);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.28);
+      }
+
       playTreeThud() {
         if (!this.isInitialized) return;
         const osc = this.ctx.createOscillator();
@@ -1243,11 +1293,25 @@
     let yetiMesh, yetiSprite, yetiTexture;
     let skierTexture;
 
+    // 2026 Interactive Physical World Elements
+    let kickers = [];       // Big air jump ramps
+    let grindRails = [];    // Glacier metal rails & logs
+    let icePatches = [];    // Black ice zero-friction drift sheets
+    let gondolaCabins = []; // Overhead moving ski-lift cabins
+    let mountainPeaks = []; // Distant 3D mountain range horizon
+
+    // 3D Airborne Physics & Big Air Tricks
+    let isAirborne = false;
+    let airY = 0;
+    let airVy = 0;
+    let airRollAngle = 0;
+    let isGrindingRail = false;
+
     // Slalom Gates & Finish Line
-    let slalomGates = []; // Array of { id, z, x, width, cleared, missed, group }
+    let slalomGates = [];
     let finishLineMesh = null;
     const TOTAL_SLALOM_GATES = 30;
-    const RACE_FINISH_Z = 1500; // Finish line at 1500m
+    const RACE_FINISH_Z = 1500;
 
     // Slalom Race State
     let raceStartTime = 0;
@@ -1276,7 +1340,7 @@
     let isReloading = false;
     let isDrafting = false;
 
-    const keys = { w: false, a: false, s: false, d: false, shift: false };
+    const keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
     let isLookingBack = false;
 
     let playerX = 0;
@@ -1308,26 +1372,31 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xddeeff);
-      scene.fog = new THREE.FogExp2(0xddeeff, 0.005);
+      scene.background = new THREE.Color(0x99bbdd);
+      scene.fog = new THREE.FogExp2(0x99bbdd, 0.0035); // Deep alpine horizon haze
 
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1500);
       camera.position.set(0, 1.8, 0);
 
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
-      dirLight.position.set(30, 60, -30);
-      scene.add(dirLight);
-      scene.add(new THREE.AmbientLight(0x88aacc, 0.8));
+      // Alpine Lighting
+      const sunLight = new THREE.DirectionalLight(0xfff8ee, 1.4);
+      sunLight.position.set(45, 90, -50);
+      scene.add(sunLight);
+      scene.add(new THREE.AmbientLight(0x7799bb, 0.85));
 
-      // Snow Terrain
-      const terrainGeo = new THREE.PlaneGeometry(350, 600, 32, 32);
-      const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-      const terrain = new THREE.Mesh(terrainGeo, terrainMat);
-      terrain.rotation.x = -Math.PI / 2.2;
-      terrain.position.z = -220;
-      scene.add(terrain);
+      // 1. Distant Panoramic 3D Alpine Mountain Range
+      createDistantMountainRange();
 
-      // FPV Ski Tips
+      // 2. Undulating Snow Mountain Slope with Moguls
+      createUndulatingSnowTerrain();
+
+      // 3. 2026 Interactive Physical Systems (Kickers, Rails, Ice Patches, Ski Lift)
+      createSnowKickers();
+      createGrindableRails();
+      createIcePatches();
+      createSkiLiftSystem();
+
+      // 4. FPV Ski Tips
       skiGroup = new THREE.Group();
       const skiGeo = new THREE.BoxGeometry(0.14, 0.05, 2.2);
       const skiMatLeft = new THREE.MeshStandardMaterial({ color: 0xff007f, roughness: 0.2 });
@@ -1362,13 +1431,181 @@
       window.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
+    // 1. Distant 3D Alpine Mountain Range
+    function createDistantMountainRange() {
+      const rockMat = new THREE.MeshLambertMaterial({ color: 0x2a394a });
+      const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xf5f8ff });
+
+      for (let i = 0; i < 20; i++) {
+        const peakGroup = new THREE.Group();
+        const peakHeight = 80 + Math.random() * 90;
+        const peakRadius = 55 + Math.random() * 45;
+
+        // Rock base
+        const rockGeo = new THREE.ConeGeometry(peakRadius, peakHeight, 6);
+        const rockMesh = new THREE.Mesh(rockGeo, rockMat);
+        peakGroup.add(rockMesh);
+
+        // Snowy Cap
+        const capGeo = new THREE.ConeGeometry(peakRadius * 0.45, peakHeight * 0.45, 6);
+        const capMesh = new THREE.Mesh(capGeo, snowCapMat);
+        capMesh.position.y = peakHeight * 0.28;
+        peakGroup.add(capMesh);
+
+        const angle = (i / 20) * Math.PI * 1.6 - (Math.PI * 0.8);
+        const distance = 420 + Math.random() * 120;
+        peakGroup.position.set(Math.sin(angle) * distance, 30 + Math.random() * 30, -Math.cos(angle) * distance);
+        scene.add(peakGroup);
+        mountainPeaks.push(peakGroup);
+      }
+    }
+
+    // 2. Undulating Snow Terrain
+    function createUndulatingSnowTerrain() {
+      const terrainGeo = new THREE.PlaneGeometry(380, 800, 48, 48);
+      const pos = terrainGeo.attributes.position;
+
+      // Displace vertices to create natural rolling slope berms and moguls
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vy = pos.getY(i);
+        const bump = Math.sin(vx * 0.08) * Math.cos(vy * 0.05) * 2.8 + Math.sin(vx * 0.2) * 0.8;
+        pos.setZ(i, bump);
+      }
+      terrainGeo.computeVertexNormals();
+
+      const terrainMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.6,
+        metalness: 0.1
+      });
+      const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+      terrain.rotation.x = -Math.PI / 2.2;
+      terrain.position.z = -260;
+      scene.add(terrain);
+    }
+
+    // 3. Physical 3D Kickers (Big Air Launchers)
+    function createSnowKickers() {
+      kickers.forEach(k => scene.remove(k.mesh));
+      kickers = [];
+
+      const rampGeo = new THREE.BoxGeometry(6, 1.8, 4);
+      const rampMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x0066aa, emissiveIntensity: 0.3 });
+
+      for (let i = 0; i < 16; i++) {
+        const mesh = new THREE.Mesh(rampGeo, rampMat);
+        mesh.rotation.x = -0.35; // Sloped launch lip
+        const kz = 60 + (i * 90) + (Math.random() * 20);
+        const kx = (Math.sin(i * 1.3) * 35);
+        mesh.position.set(kx, 0.7, -kz);
+        scene.add(mesh);
+
+        kickers.push({
+          id: i,
+          x: kx,
+          z: kz,
+          width: 6.0,
+          triggered: false,
+          mesh
+        });
+      }
+    }
+
+    // 4. Grindable Glacier Metal Rails & Fallen Logs
+    function createGrindableRails() {
+      grindRails.forEach(r => scene.remove(r.mesh));
+      grindRails = [];
+
+      const railGeo = new THREE.CylinderGeometry(0.18, 0.18, 28, 8);
+      const railMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.1 });
+
+      for (let i = 0; i < 10; i++) {
+        const mesh = new THREE.Mesh(railGeo, railMat);
+        mesh.rotation.x = Math.PI / 2.2; // Aligned down-slope
+        const rz = 90 + (i * 140);
+        const rx = (i % 2 === 0 ? 18 : -18) + (Math.random() - 0.5) * 6;
+        mesh.position.set(rx, 1.2, -rz);
+        scene.add(mesh);
+
+        grindRails.push({
+          id: i,
+          x: rx,
+          z: rz,
+          length: 28,
+          mesh
+        });
+      }
+    }
+
+    // 5. Translucent Blue Black-Ice Drift Patches
+    function createIcePatches() {
+      icePatches.forEach(p => scene.remove(p.mesh));
+      icePatches = [];
+
+      const iceGeo = new THREE.PlaneGeometry(22, 38);
+      const iceMat = new THREE.MeshStandardMaterial({
+        color: 0x00f0ff,
+        transparent: true,
+        opacity: 0.65,
+        roughness: 0.05,
+        metalness: 0.8
+      });
+
+      for (let i = 0; i < 8; i++) {
+        const mesh = new THREE.Mesh(iceGeo, iceMat);
+        mesh.rotation.x = -Math.PI / 2.2;
+        const iz = 110 + (i * 180);
+        const ix = (Math.sin(i * 1.8) * 25);
+        mesh.position.set(ix, 0.05, -iz);
+        scene.add(mesh);
+
+        icePatches.push({
+          id: i,
+          x: ix,
+          z: iz,
+          width: 22,
+          length: 38,
+          mesh
+        });
+      }
+    }
+
+    // 6. Overhead Moving Ski-Lift System
+    function createSkiLiftSystem() {
+      gondolaCabins.forEach(g => scene.remove(g.mesh));
+      gondolaCabins = [];
+
+      const towerMat = new THREE.MeshStandardMaterial({ color: 0x556677, metalness: 0.7 });
+      const cabinMat = new THREE.MeshStandardMaterial({ color: 0xff0055, roughness: 0.3 });
+
+      // 8 Tower Pylons along right boundary (x = 75)
+      for (let i = 0; i < 8; i++) {
+        const towerGroup = new THREE.Group();
+        const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.9, 24, 8), towerMat);
+        pylon.position.y = 12;
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(10, 0.8, 0.8), towerMat);
+        arm.position.set(-3, 23, 0);
+        towerGroup.add(pylon);
+        towerGroup.add(arm);
+        towerGroup.position.set(75, 0, -40 - (i * 180));
+        scene.add(towerGroup);
+
+        // Moving Gondola Cabin
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3.2, 4.5), cabinMat);
+        cabin.position.set(72, 18, -40 - (i * 180));
+        scene.add(cabin);
+        gondolaCabins.push({ mesh: cabin, zBase: -40 - (i * 180), offset: Math.random() * 100 });
+      }
+    }
+
     function createCleanSpacedTrees() {
       trees.forEach(t => scene.remove(t));
       trees = [];
       const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a3d28 });
       const leavesMat = new THREE.MeshLambertMaterial({ color: 0x1d4d2d });
 
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 65; i++) {
         const tree = new THREE.Group();
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.8, 6), trunkMat);
         const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.2, 5.5, 6), leavesMat);
@@ -1385,16 +1622,16 @@
     }
 
     function createSnowParticles() {
-      const count = 400;
+      const count = 450;
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count * 3; i += 3) {
-        pos[i] = (Math.random() - 0.5) * 15;
-        pos[i + 1] = Math.random() * 4 - 1;
-        pos[i + 2] = -Math.random() * 15;
+        pos[i] = (Math.random() - 0.5) * 18;
+        pos[i + 1] = Math.random() * 5 - 1;
+        pos[i + 2] = -Math.random() * 18;
       }
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.85 });
+      const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.14, transparent: true, opacity: 0.85 });
       snowParticles = new THREE.Points(geo, mat);
       camera.add(snowParticles);
     }
@@ -1436,14 +1673,13 @@
         const mat = isBlue ? blueMat : redMat;
         const gateWidth = 10;
         const gateX = Math.sin(i * 0.65) * 35;
-        const gateZ = 50 + (i * 48); // Gates every 48m
+        const gateZ = 50 + (i * 48);
 
         const leftPole = new THREE.Mesh(poleGeo, mat);
         leftPole.position.set(-gateWidth / 2, 1.9, 0);
         const rightPole = new THREE.Mesh(poleGeo, mat);
         rightPole.position.set(gateWidth / 2, 1.9, 0);
 
-        // Banner line connecting poles
         const bannerGeo = new THREE.BoxGeometry(gateWidth, 0.35, 0.05);
         const banner = new THREE.Mesh(bannerGeo, mat);
         banner.position.set(0, 3.2, 0);
@@ -1466,7 +1702,6 @@
         });
       }
 
-      // Finish Line Gate at 1500m
       if (finishLineMesh) scene.remove(finishLineMesh);
       const finishGroup = new THREE.Group();
       const finishPoleMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 0.6 });
@@ -1668,6 +1903,10 @@
       isPlaying = true;
       isWasted = false;
       isRaceFinished = false;
+      isAirborne = false;
+      airY = 0;
+      airVy = 0;
+      airRollAngle = 0;
       playerHearts = 3;
       ammoCount = maxAmmo;
       spawnGraceTimer = 3.0;
@@ -1675,7 +1914,6 @@
       playerZ = 0;
       playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
 
-      // Mode-specific HUD setup
       if (activeGameMode === "slalom") {
         document.getElementById('boss-hud').classList.add('hidden');
         document.getElementById('rearview-mirror').classList.add('hidden');
@@ -1700,7 +1938,6 @@
     }
 
     function handleFrame(msg) {
-      // 1. Roster Update
       const rosterList = document.getElementById('roster-list');
       let rosterHTML = '';
       let closestTeammateAhead = null;
@@ -1728,7 +1965,6 @@
       });
       rosterList.innerHTML = rosterHTML;
 
-      // Drafting
       const draftEl = document.getElementById('draft-indicator');
       if (closestTeammateAhead) {
         isDrafting = true;
@@ -1740,10 +1976,8 @@
         draftEl.style.transform = 'translateX(-50%) scale(1.0)';
       }
 
-      // Boulders
       if (msg.boulders) updateBoulders(msg.boulders);
 
-      // Yeti Updates (Only in Hunt Mode)
       if (activeGameMode === "hunt") {
         currentWaveNum = msg.wave || 1;
         document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
@@ -1874,7 +2108,7 @@
     }
 
     function onTreeHit() {
-      if (spawnGraceTimer > 0) return;
+      if (spawnGraceTimer > 0 || isAirborne) return;
       soundEngine.playTreeThud();
       const flash = document.getElementById('damage-flash');
       flash.style.opacity = '0.85';
@@ -1928,17 +2162,43 @@
         if (keys.s) targetSpeed = preset.brakeSpeed;
         if (isDrafting) targetSpeed += 18;
 
-        const sidewaysBraking = Math.abs(Math.sin(playerHeadingAngle)) * 18;
+        // Check if on Black Ice Sheet (Zero lateral friction, +15 MPH boost)
+        let onIce = false;
+        icePatches.forEach(p => {
+          const relZ = -(playerZ - p.z);
+          const relX = Math.abs(p.x - playerX);
+          p.mesh.position.set(p.x - playerX, 0.05, relZ);
+          if (Math.abs(relZ) < p.length / 2 && relX < p.width / 2) {
+            onIce = true;
+          }
+        });
+        if (onIce) targetSpeed += 15;
+
+        // Check if Rail Grinding
+        isGrindingRail = false;
+        grindRails.forEach(r => {
+          const relZ = -(playerZ - r.z);
+          const relX = Math.abs(r.x - playerX);
+          r.mesh.position.set(r.x - playerX, 1.2, relZ);
+          if (Math.abs(relZ) < r.length / 2 && relX < 1.8) {
+            isGrindingRail = true;
+            playerSpeed = Math.min(85, playerSpeed + 0.5);
+            soundEngine.playRailGrind();
+            spawnPopup('⚡ RAIL GRIND +200 PTS', 'gate');
+          }
+        });
+
+        const sidewaysBraking = onIce ? 0 : Math.abs(Math.sin(playerHeadingAngle)) * 18;
         targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
         playerSpeed += (targetSpeed - playerSpeed) * 0.05;
 
         // 90° Carving Steering
         const maxAngle = Math.PI / 2.1;
-        if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07);
-        else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + 0.07);
+        if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - (onIce ? 0.02 : 0.07));
+        else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + (onIce ? 0.02 : 0.07));
         else {
-          turnSteerVelocity *= 0.85;
-          playerHeadingAngle *= 0.92;
+          turnSteerVelocity *= onIce ? 0.98 : 0.85;
+          playerHeadingAngle *= onIce ? 0.98 : 0.92;
         }
 
         playerHeadingAngle += turnSteerVelocity * 0.04;
@@ -1951,21 +2211,64 @@
         playerX += lateralVel;
         playerX = Math.max(-120, Math.min(120, playerX));
 
+        // --- Big Air Kicker Jumps & Aerial Flight ---
+        kickers.forEach(k => {
+          const relZ = -(playerZ - k.z);
+          const relX = Math.abs(k.x - playerX);
+          k.mesh.position.set(k.x - playerX, 0.7, relZ);
+
+          if (!isAirborne && Math.abs(relZ) < 2.5 && relX < k.width / 2) {
+            // Launch Big Air!
+            isAirborne = true;
+            airVy = 18.0;
+            soundEngine.playBigAirWhoosh();
+            const airEl = document.getElementById('air-trick-indicator');
+            airEl.style.opacity = '1';
+            airEl.style.transform = 'translateX(-50%) scale(1.15)';
+            spawnPopup('🚀 BIG AIR LAUNCH!', 'trick');
+          }
+        });
+
+        // Airborne Physics Trajectory
+        if (isAirborne) {
+          airY += airVy * 0.016;
+          airVy -= 32.0 * 0.016; // Gravity
+          airRollAngle += 0.08; // Aerial 360 Spin
+
+          if (airY <= 0) {
+            // Landed
+            airY = 0;
+            airVy = 0;
+            isAirborne = false;
+            airRollAngle = 0;
+            playerSpeed = Math.min(95, playerSpeed + 16);
+            document.getElementById('air-trick-indicator').style.opacity = '0';
+            spawnPopup('✨ SMOOTH LANDING (+16 MPH)', 'gate');
+          }
+        }
+
+        // Animate Ski-Lift Gondola Cabins
+        gondolaCabins.forEach(g => {
+          const relZ = -(playerZ - (g.zBase + Math.sin(Date.now() * 0.001 + g.offset) * 35));
+          g.mesh.position.set(72 - playerX, 18, relZ);
+        });
+
         const hudSpeed = document.getElementById('hud-speed');
         if (hudSpeed) hudSpeed.innerHTML = `${Math.floor(playerSpeed)} <span style="font-size:14px;">MPH</span>`;
 
         isLookingBack = keys.shift;
         const hudView = document.getElementById('hud-view');
         if (hudView) {
-          hudView.innerText = isLookingBack ? "👀 LOOKING BACK" : "DOWNHILL";
-          hudView.style.color = isLookingBack ? "#ff007f" : "#00f0ff";
+          hudView.innerText = isLookingBack ? "👀 LOOKING BACK" : (isAirborne ? "🚀 BIG AIR" : "DOWNHILL");
+          hudView.style.color = isLookingBack ? "#ff007f" : (isAirborne ? "#ffff00" : "#00f0ff");
         }
 
         const targetYaw = isLookingBack ? Math.PI : -playerHeadingAngle * 0.9;
-        camera.position.y = 1.8 + Math.sin(Date.now() * 0.015) * 0.03;
+        camera.position.y = 1.8 + airY + Math.sin(Date.now() * 0.015) * 0.03;
         camera.rotation.y = targetYaw;
-        camera.rotation.z = isLookingBack ? 0 : -playerHeadingAngle * 0.35;
+        camera.rotation.z = isLookingBack ? 0 : (-playerHeadingAngle * 0.35 + airRollAngle * 0.15);
 
+        skiGroup.position.y = isAirborne ? -airY * 0.3 : 0;
         skiGroup.rotation.y = -playerHeadingAngle;
         skiGroup.rotation.z = -playerHeadingAngle * 0.4;
 
@@ -1982,7 +2285,7 @@
           tree.position.z += forwardVel;
           tree.position.x -= lateralVel;
           tree.position.y = -tree.position.z * 0.15;
-          if (spawnGraceTimer <= 0 && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
+          if (spawnGraceTimer <= 0 && !isAirborne && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
             onTreeHit();
             tree.position.z = 25;
           }
@@ -2006,10 +2309,8 @@
             const relX = g.x - playerX;
             g.group.position.set(relX, 0, relZ);
 
-            // Crossing plane check
             if (!g.cleared && !g.missed && Math.abs(relZ) < 2.0) {
               if (Math.abs(relX) <= (g.width / 2 + 1.2)) {
-                // Gate hit!
                 g.cleared = true;
                 gatesHitCount++;
                 gateStreak++;
@@ -2019,7 +2320,6 @@
                 soundEngine.playGateChime();
                 spawnPopup(`⚡ GATE HIT! +${points} PTS (${gateStreak}x)`, 'gate');
               } else {
-                // Gate missed
                 g.missed = true;
                 gateStreak = 1;
                 spawnPopup(`❌ MISS!`, 'miss');
@@ -2027,7 +2327,6 @@
             }
           });
 
-          // Finish Line Check
           if (finishLineMesh) {
             const relZ = -(playerZ - RACE_FINISH_Z);
             finishLineMesh.position.set(-playerX, 0, relZ);
@@ -2088,6 +2387,13 @@
       if (k === 'd' || e.key === 'ArrowRight') keys.d = true;
       if (k === 'w' || e.key === 'ArrowUp') keys.w = true;
       if (k === 's' || e.key === 'ArrowDown') keys.s = true;
+      if (e.key === ' ') {
+        if (isPlaying && !isAirborne) {
+          isAirborne = true;
+          airVy = 14.0;
+          soundEngine.playBigAirWhoosh();
+        }
+      }
       if (k === 'r') reloadGun();
       if (e.key === 'Shift') keys.shift = true;
       if (k === 'm' || e.key === 'Escape') toggleMenu();
@@ -2129,7 +2435,6 @@
         if (!res.ok) throw new Error();
         const data = await res.json();
 
-        // 1. Yeti Hunt Leaderboard
         const huntTbody = document.getElementById('hunt-leaderboard-rows');
         if (huntTbody && data.leaderboard) {
           huntTbody.innerHTML = '';
@@ -2146,7 +2451,6 @@
           });
         }
 
-        // 2. Slalom Race Leaderboard
         const raceTbody = document.getElementById('race-leaderboard-rows');
         if (raceTbody && data.raceLeaderboard) {
           raceTbody.innerHTML = '';
@@ -2169,7 +2473,6 @@
     document.getElementById('btn-menu-close').addEventListener('click', () => toggleMenu(false));
     document.getElementById('btn-resume-game').addEventListener('click', () => toggleMenu(false));
 
-    // Menu Tab Switching
     document.getElementById('tab-hunt-board-btn').addEventListener('click', () => {
       document.getElementById('panel-hunt-board').classList.remove('hidden');
       document.getElementById('panel-race-board').classList.add('hidden');
@@ -2200,7 +2503,6 @@
       document.getElementById('panel-race-board').classList.add('hidden');
     });
 
-    // Game Mode Selection in Staging
     document.getElementById('btn-mode-hunt').addEventListener('click', () => {
       activeGameMode = "hunt";
       document.getElementById('btn-mode-hunt').classList.add('active');
@@ -2213,7 +2515,6 @@
       document.getElementById('btn-mode-hunt').classList.remove('active');
     });
 
-    // Difficulty Setting
     document.querySelectorAll('.diff-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedDifficulty = btn.dataset.diff;
@@ -2224,7 +2525,6 @@
       });
     });
 
-    // Copy squad room link
     document.getElementById('btn-copy-room').addEventListener('click', () => {
       const url = `${window.location.origin}${window.location.pathname}?room=${currentRoom}`;
       navigator.clipboard.writeText(url).then(() => {
@@ -2233,7 +2533,6 @@
       });
     });
 
-    // Intro video controller
     const introOverlay = document.getElementById('intro-overlay');
     const introVideo = document.getElementById('intro-video');
     const introProgressBar = document.getElementById('intro-progress');
@@ -2262,7 +2561,6 @@
       introVideo.play().catch(() => {});
     }
 
-    // Ready-up button
     document.getElementById('btn-ready').addEventListener('click', () => {
       soundEngine.init();
       isReady = !isReady;
@@ -2280,7 +2578,6 @@
       }
     });
 
-    // Start / Force drop button
     document.getElementById('btn-start').addEventListener('click', () => {
       soundEngine.init();
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -2290,7 +2587,6 @@
       }
     });
 
-    // Respawn button
     document.getElementById('btn-respawn').addEventListener('click', () => {
       document.getElementById('death-modal').classList.add('hidden');
       startMatchClient();
@@ -2298,7 +2594,6 @@
       connectWebSocket(callsign);
     });
 
-    // Race Again button
     document.getElementById('btn-race-again').addEventListener('click', () => {
       document.getElementById('race-complete-overlay').classList.add('hidden');
       startMatchClient();
@@ -2391,7 +2686,6 @@
       touchSteerZone.addEventListener('touchcancel', onSteerTouchEnd, { passive: true });
     }
 
-    // Touch action buttons
     document.getElementById('btn-touch-shoot').addEventListener('click', (e) => {
       e.preventDefault();
       onShoot({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
@@ -2406,7 +2700,6 @@
       reloadGun();
     });
 
-    // Boot
     window.addEventListener('DOMContentLoaded', () => {
       init3D();
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
