@@ -1359,29 +1359,28 @@
     }
 
     function createDistantMountainRange() {
-      const rockMat = new THREE.MeshLambertMaterial({ color: 0x3d5066 });
-      const snowCapMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      mountainPeaks.forEach(p => scene.remove(p));
+      mountainPeaks = [];
 
-      for (let i = 0; i < 24; i++) {
-        const peakGroup = new THREE.Group();
-        const peakHeight = 110 + Math.random() * 110;
-        const peakRadius = 70 + Math.random() * 50;
+      const textureLoader = new THREE.TextureLoader();
+      const horizonTexture = textureLoader.load('/assets/mountain_horizon.jpg');
+      horizonTexture.wrapS = THREE.ClampToEdgeWrapping;
+      horizonTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-        const rockGeo = new THREE.ConeGeometry(peakRadius, peakHeight, 6);
-        const rockMesh = new THREE.Mesh(rockGeo, rockMat);
-        peakGroup.add(rockMesh);
+      // 180-degree panoramic background cylinder arc along the downhill horizon
+      const horizonGeo = new THREE.CylinderGeometry(950, 950, 520, 64, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
+      const horizonMat = new THREE.MeshBasicMaterial({
+        map: horizonTexture,
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false
+      });
 
-        const capGeo = new THREE.ConeGeometry(peakRadius * 0.45, peakHeight * 0.45, 6);
-        const capMesh = new THREE.Mesh(capGeo, snowCapMat);
-        capMesh.position.y = peakHeight * 0.28;
-        peakGroup.add(capMesh);
-
-        const angle = (i / 24) * Math.PI * 1.8 - (Math.PI * 0.9);
-        const distance = 520 + Math.random() * 140;
-        peakGroup.position.set(Math.sin(angle) * distance, 35 + Math.random() * 35, -Math.cos(angle) * distance);
-        scene.add(peakGroup);
-        mountainPeaks.push(peakGroup);
-      }
+      const horizonMesh = new THREE.Mesh(horizonGeo, horizonMat);
+      horizonMesh.position.set(0, 180, -300);
+      horizonMesh.rotation.y = Math.PI;
+      scene.add(horizonMesh);
+      mountainPeaks.push(horizonMesh);
     }
 
     // 100% Solid & Textured Continuous Snow Ground
