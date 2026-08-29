@@ -25,8 +25,14 @@ interface LeaderboardEntry {
   created_at: number;
 }
 
+function sanitizeCallsign(raw: string | null | undefined): string {
+  if (!raw) return "Hunter";
+  const cleaned = raw.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().slice(0, 12);
+  return cleaned.length > 0 ? cleaned : "Hunter";
+}
+
 export class MountainDO extends DurableObject {
-  private players = new Map<string, SkierState>();
+  private players = new Map<string, SkierState & { lastShotTime?: number }>();
   
   // Yeti Boss State
   private yetiZ = 120;
@@ -86,7 +92,8 @@ export class MountainDO extends DurableObject {
       const [client, server] = Object.values(webSocketPair);
 
       const playerId = crypto.randomUUID().slice(0, 8);
-      const callsign = url.searchParams.get("callsign") || `Hunter-${playerId.slice(0, 4)}`;
+      const rawCallsign = url.searchParams.get("callsign");
+      const callsign = sanitizeCallsign(rawCallsign);
 
       this.ctx.acceptWebSocket(server, [playerId]);
       server.serializeAttachment({ playerId, callsign });
@@ -104,7 +111,8 @@ export class MountainDO extends DurableObject {
         damageDealt: 0,
         shotsFired: 0,
         isDead: false,
-        lastActive: Date.now()
+        lastActive: Date.now(),
+        lastShotTime: 0
       });
 
       if (this.players.size === 1) {
@@ -129,9 +137,22 @@ export class MountainDO extends DurableObject {
       return new Response(null, { status: 101, webSocket: client });
     }
 
-    if (url.pathname === "/scores") {
-      const topScores = this.getLeaderboard(20);
-      return Response.json({ success: true, leaderboard: topScores });
+    if (url.pathname === "/scores" || url.pathname === "/api/scores") {
+      const limitParam = parseInt(url.searchParams.get("limit") || "20", 10);
+      const limit = Math.min(50, Math.max(1, isNaN(limitParam) ? 20 : limitParam));
+      const topScores = this.getLeaderboard(limit);
+      const recentKills = this.getRecentKills(10);
+      return Response.json({
+        success: true,
+        leaderboard: topScores,
+        recentKills,
+        currentWave: this.currentWave
+      }, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "public, max-age=5"
+        }
+      });
     }
 
     return new Response("MountainDO Active", { status: 200 });
@@ -146,13 +167,15 @@ export class MountainDO extends DurableObject {
       if (!player || player.isDead) return;
 
       const data = typeof message === "string" ? JSON.parse(message) : null;
-      if (!data) return;
+      if (!data || typeof data !== "object") return;
 
       if (data.type === "INPUT") {
-        player.steer = Math.max(-2.0, Math.min(2.0, data.steer || 0));
+        const rawSteer = Number(data.steer);
+        player.steer = Math.max(-2.0, Math.min(2.0, isNaN(rawSteer) ? 0 : rawSteer));
         const isTuck = Boolean(data.tuck);
         const isJump = Boolean(data.jump);
-        player.pitch = Number(data.pitch || 0);
+        const rawPitch = Number(data.pitch);
+        player.pitch = Math.max(-1.5, Math.min(1.5, isNaN(rawPitch) ? 0 : rawPitch));
 
         if (isJump) player.state = 2;
         else if (isTuck) player.state = 1;
@@ -160,13 +183,22 @@ export class MountainDO extends DurableObject {
 
         player.lastActive = Date.now();
       } else if (data.type === "PLAYER_DIED") {
-        player.isDead = true;
-        this.commitScore(player);
+        if (!player.isDead) {
+          player.isDead = true;
+          this.commitScore(player);
+        }
       } else if (data.type === "SHOOT") {
+        const now = Date.now();
+        // Strict anti-cheat: rate limit shooting to minimum 120ms interval
+        if (player.lastShotTime && now - player.lastShotTime < 120) {
+          return;
+        }
+        player.lastShotTime = now;
         player.shotsFired++;
         
-        if (this.yetiActive && this.yetiState !== "DEAD") {
+        if (this.yetiActive && this.yetiState !== "DEAD" && Boolean(data.hit)) {
           const isCrit = Boolean(data.crit);
+          // Server calculates and enforces authoritative damage
           const damage = isCrit ? Math.floor(750 + Math.random() * 250) : Math.floor(400 + Math.random() * 150);
           
           player.damageDealt += damage;
@@ -191,7 +223,7 @@ export class MountainDO extends DurableObject {
           if (this.yetiHp <= 0) {
             this.yetiState = "DEAD";
             this.yetiKillCount++;
-            const clearTime = (Date.now() - this.matchStartTime) / 1000;
+            const clearTime = Math.max(1, (Date.now() - this.matchStartTime) / 1000);
             
             this.ctx.storage.sql.exec(`
               INSERT INTO yeti_kills (killer_callsign, wave, total_lobby_damage, clear_time_sec, created_at)
@@ -365,12 +397,26 @@ export class MountainDO extends DurableObject {
     } catch (e) {}
   }
 
-  private getLeaderboard(limit = 10): LeaderboardEntry[] {
+  private getLeaderboard(limit = 20): LeaderboardEntry[] {
     try {
       const cursor = this.ctx.storage.sql.exec<LeaderboardEntry>(`
         SELECT callsign, max_distance, max_speed, survival_time, score, created_at
         FROM global_leaderboard
         ORDER BY score DESC
+        LIMIT ?;
+      `, limit);
+      return cursor.toArray();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  private getRecentKills(limit = 10): any[] {
+    try {
+      const cursor = this.ctx.storage.sql.exec(`
+        SELECT killer_callsign, wave, total_lobby_damage, clear_time_sec, created_at
+        FROM yeti_kills
+        ORDER BY created_at DESC
         LIMIT ?;
       `, limit);
       return cursor.toArray();

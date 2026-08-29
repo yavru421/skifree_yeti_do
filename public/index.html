@@ -527,6 +527,8 @@
         <div class="hud-value" id="hud-dmg">0 <span style="font-size:14px;">DMG</span></div>
         <div class="hud-sub" id="ammo-count">AMMO: 8 / 8 [R]</div>
       </div>
+
+      <button id="btn-menu-open" style="background:rgba(10,20,35,0.9); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; padding:10px 14px; border-radius:8px; cursor:pointer; pointer-events:auto; box-shadow:0 0 15px rgba(0,240,255,0.4);">⚙️ MENU [ESC]</button>
     </div>
 
     <div class="hud-bottom">
@@ -540,6 +542,73 @@
       </div>
     </div>
   </div>
+
+  <!-- In-Game Pause, Settings & Leaderboard Modal -->
+  <div id="menu-modal" class="hidden" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,18,32,0.96); border:3px solid #00f0ff; border-radius:12px; padding:25px 30px; box-shadow:0 0 45px rgba(0,240,255,0.6); z-index:200; max-width:650px; width:92%; max-height:88vh; overflow-y:auto;">
+    <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>⚙️ MOUNTAIN HQ & LEADERBOARD</span>
+      <button id="btn-menu-close" style="background:none; border:none; color:#ff007f; font-size:24px; cursor:pointer; font-weight:bold;">✕</button>
+    </div>
+
+    <div style="display:flex; gap:10px; margin:15px 0 20px 0;">
+      <button class="modal-tab-btn active" id="tab-leaderboard-btn" style="flex:1; padding:10px; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#00f0ff; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">🏆 LIVE LEADERBOARD</button>
+      <button class="modal-tab-btn" id="tab-settings-btn" style="flex:1; padding:10px; background:#050a14; border:2px solid #556688; color:#88a0c0; font-weight:bold; font-family:inherit; border-radius:6px; cursor:pointer;">🎛️ SETTINGS & AUDIO</button>
+    </div>
+
+    <!-- Leaderboard Panel -->
+    <div id="panel-leaderboard">
+      <div style="background:#050a14; border:1px solid #1a2a48; border-radius:8px; overflow:hidden;">
+        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+          <thead>
+            <tr style="background:rgba(0,240,255,0.15); color:#00f0ff;">
+              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">RANK</th>
+              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">HUNTER</th>
+              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">SCORE</th>
+              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">SPEED</th>
+              <th style="padding:10px 12px; border-bottom:2px solid #00f0ff;">DISTANCE</th>
+            </tr>
+          </thead>
+          <tbody id="in-game-leaderboard-rows">
+            <tr><td colspan="5" style="text-align:center; padding:16px; color:#88a0c0;">Syncing Edge Records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="panel-settings" class="hidden">
+      <div style="display:flex; flex-direction:column; gap:14px; text-align:left;">
+        <div>
+          <label style="font-size:12px; color:#88a0c0; font-weight:bold;">SOUNDTRACK AUDIO ("WALTZ ON THE SLOPE"):</label>
+          <div style="display:flex; gap:10px; margin-top:6px;">
+            <button id="btn-soundtrack-toggle" style="flex:1; padding:8px 12px; background:#050a14; border:2px solid #39ff14; color:#39ff14; font-family:inherit; border-radius:6px; cursor:pointer; font-weight:bold;">🔊 SOUNDTRACK: ON</button>
+            <input type="range" id="soundtrack-vol" min="0" max="1" step="0.05" value="0.5" style="flex:1; cursor:pointer;">
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:12px; color:#88a0c0; font-weight:bold;">DIFFICULTY & SPEED PRESET:</label>
+          <div class="difficulty-group" style="margin-top:6px;">
+            <button class="diff-btn" data-diff="easy">🟢 EASY (20-45 MPH)</button>
+            <button class="diff-btn" data-diff="medium">🟡 MEDIUM (28-60 MPH)</button>
+            <button class="diff-btn" data-diff="pro">🔴 PRO (38-85 MPH)</button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:12px; color:#88a0c0; font-weight:bold;">HUNTER CALLSIGN:</label>
+          <input type="text" id="menu-callsign-input" class="input-field" maxlength="12" style="margin-top:6px;">
+        </div>
+      </div>
+    </div>
+
+    <button class="modal-btn" id="btn-resume-game" style="margin-top:20px;">RESUME HUNT 🎿</button>
+  </div>
+
+  <!-- Soundtrack Audio -->
+  <audio id="bg-soundtrack" loop preload="auto">
+    <source src="assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
+  </audio>
 
   <!-- Start Modal with Difficulty Setting -->
   <div id="start-modal">
@@ -555,7 +624,7 @@
     <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
     <button class="modal-btn" id="btn-start">LOCK & LOAD 🚀</button>
     <p style="margin-top:12px; font-size:11px; color:#556688;">
-      [A / D] 90° Carve • [W / S] Throttle • [Hold Shift / Right-Click] Look Back • [Left Click] Shoot • [1/2/3] Change Speed
+      [A / D] 90° Carve • [W / S] Throttle • [Hold Shift / Right-Click] Look Back • [Left Click] Shoot • [ESC/M] Menu • [1/2/3] Change Speed
     </p>
   </div>
 
@@ -1591,6 +1660,138 @@
       if (e.button === 2) keys.shift = false;
     });
 
+    // In-Game Menu & Pause Handling
+    let isMenuOpen = false;
+    let bgSoundtrackAudio = null;
+
+    function toggleMenu(forceState) {
+      isMenuOpen = typeof forceState === 'boolean' ? forceState : !isMenuOpen;
+      const modal = document.getElementById('menu-modal');
+      if (!modal) return;
+
+      if (isMenuOpen) {
+        modal.classList.remove('hidden');
+        fetchInGameLeaderboard();
+        const callsignInput = document.getElementById('menu-callsign-input');
+        if (callsignInput) callsignInput.value = document.getElementById('player-callsign').value || 'YetiSlayer';
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    async function fetchInGameLeaderboard() {
+      const tbody = document.getElementById('in-game-leaderboard-rows');
+      if (!tbody) return;
+      try {
+        const res = await fetch('/api/scores');
+        if (!res.ok) throw new Error("Leaderboard sync failed");
+        const data = await res.json();
+        tbody.innerHTML = '';
+        if (!data.leaderboard || data.leaderboard.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#88a0c0;">No hunts recorded yet. Be the first to strike down the Yeti!</td></tr>';
+          return;
+        }
+
+        data.leaderboard.forEach((entry, idx) => {
+          const tr = document.createElement('tr');
+          const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : ''));
+          
+          const tdRank = document.createElement('td');
+          tdRank.style.padding = '8px 12px';
+          tdRank.style.fontWeight = 'bold';
+          tdRank.className = rankClass;
+          tdRank.textContent = `#${idx + 1}`;
+
+          const tdName = document.createElement('td');
+          tdName.style.padding = '8px 12px';
+          tdName.style.fontWeight = 'bold';
+          tdName.textContent = entry.callsign || 'Hunter';
+
+          const tdScore = document.createElement('td');
+          tdScore.style.padding = '8px 12px';
+          tdScore.style.color = '#39ff14';
+          tdScore.textContent = (entry.score || 0).toLocaleString();
+
+          const tdSpeed = document.createElement('td');
+          tdSpeed.style.padding = '8px 12px';
+          tdSpeed.textContent = `${entry.max_speed || 0} MPH`;
+
+          const tdDist = document.createElement('td');
+          tdDist.style.padding = '8px 12px';
+          tdDist.textContent = `${entry.max_distance || 0} M`;
+
+          tr.appendChild(tdRank);
+          tr.appendChild(tdName);
+          tr.appendChild(tdScore);
+          tr.appendChild(tdSpeed);
+          tr.appendChild(tdDist);
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:15px; color:#ff0033;">Leaderboard connecting on live edge server.</td></tr>';
+      }
+    }
+
+    document.getElementById('btn-menu-open').addEventListener('click', () => toggleMenu(true));
+    document.getElementById('btn-menu-close').addEventListener('click', () => toggleMenu(false));
+    document.getElementById('btn-resume-game').addEventListener('click', () => toggleMenu(false));
+
+    // Menu Tab Switching
+    document.getElementById('tab-leaderboard-btn').addEventListener('click', () => {
+      document.getElementById('tab-leaderboard-btn').style.background = 'rgba(0,240,255,0.2)';
+      document.getElementById('tab-leaderboard-btn').style.borderColor = '#00f0ff';
+      document.getElementById('tab-leaderboard-btn').style.color = '#00f0ff';
+      document.getElementById('tab-settings-btn').style.background = '#050a14';
+      document.getElementById('tab-settings-btn').style.borderColor = '#556688';
+      document.getElementById('tab-settings-btn').style.color = '#88a0c0';
+      document.getElementById('panel-leaderboard').classList.remove('hidden');
+      document.getElementById('panel-settings').classList.add('hidden');
+      fetchInGameLeaderboard();
+    });
+
+    document.getElementById('tab-settings-btn').addEventListener('click', () => {
+      document.getElementById('tab-settings-btn').style.background = 'rgba(0,240,255,0.2)';
+      document.getElementById('tab-settings-btn').style.borderColor = '#00f0ff';
+      document.getElementById('tab-settings-btn').style.color = '#00f0ff';
+      document.getElementById('tab-leaderboard-btn').style.background = '#050a14';
+      document.getElementById('tab-leaderboard-btn').style.borderColor = '#556688';
+      document.getElementById('tab-leaderboard-btn').style.color = '#88a0c0';
+      document.getElementById('panel-settings').classList.remove('hidden');
+      document.getElementById('panel-leaderboard').classList.add('hidden');
+    });
+
+    // Soundtrack Toggle & Volume
+    const soundtrackAudio = document.getElementById('bg-soundtrack');
+    let isSoundtrackPlaying = true;
+    if (soundtrackAudio) {
+      soundtrackAudio.volume = 0.4;
+    }
+
+    document.getElementById('btn-soundtrack-toggle').addEventListener('click', () => {
+      if (!soundtrackAudio) return;
+      isSoundtrackPlaying = !isSoundtrackPlaying;
+      if (isSoundtrackPlaying) {
+        soundtrackAudio.play().catch(() => {});
+        document.getElementById('btn-soundtrack-toggle').innerText = "🔊 SOUNDTRACK: ON";
+        document.getElementById('btn-soundtrack-toggle').style.borderColor = "#39ff14";
+        document.getElementById('btn-soundtrack-toggle').style.color = "#39ff14";
+      } else {
+        soundtrackAudio.pause();
+        document.getElementById('btn-soundtrack-toggle').innerText = "🔇 SOUNDTRACK: OFF";
+        document.getElementById('btn-soundtrack-toggle').style.borderColor = "#ff007f";
+        document.getElementById('btn-soundtrack-toggle').style.color = "#ff007f";
+      }
+    });
+
+    document.getElementById('soundtrack-vol').addEventListener('input', (e) => {
+      if (soundtrackAudio) soundtrackAudio.volume = parseFloat(e.target.value);
+    });
+
+    document.getElementById('menu-callsign-input').addEventListener('input', (e) => {
+      const cleaned = e.target.value.replace(/[^a-zA-Z0-9_\- ]/g, '').slice(0, 12);
+      document.getElementById('player-callsign').value = cleaned;
+    });
+
     // Difficulty Button clicks
     document.querySelectorAll('.diff-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1606,6 +1807,10 @@
       setDifficulty(selectedDifficulty);
       playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
       connectWebSocket(callsign);
+
+      if (soundtrackAudio && isSoundtrackPlaying) {
+        soundtrackAudio.play().catch(() => {});
+      }
 
       document.getElementById('start-modal').classList.add('hidden');
       document.getElementById('hud-overlay').classList.remove('hidden');

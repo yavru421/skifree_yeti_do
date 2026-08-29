@@ -17,7 +17,6 @@
       overflow-x: hidden;
       line-height: 1.5;
     }
-    /* CRT Scanline Effect */
     #crt {
       position: fixed;
       top: 0; left: 0; width: 100vw; height: 100vh;
@@ -29,7 +28,7 @@
     }
     .hero {
       position: relative;
-      min-height: 90vh;
+      min-height: 85vh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -110,7 +109,6 @@
       box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
     }
 
-    /* Video & Media Section */
     .media-container {
       max-width: 900px;
       width: 100%;
@@ -128,7 +126,6 @@
       object-fit: cover;
     }
 
-    /* Soundtrack Player */
     .soundtrack-box {
       max-width: 600px;
       width: 100%;
@@ -156,6 +153,54 @@
       height: 38px;
       outline: none;
     }
+
+    /* Leaderboard Section */
+    .leaderboard-section {
+      max-width: 900px;
+      margin: 0 auto 80px auto;
+      padding: 0 20px;
+    }
+    .section-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: #00f0ff;
+      text-align: center;
+      margin-bottom: 20px;
+      text-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+      letter-spacing: 2px;
+    }
+    .leaderboard-table-container {
+      background: rgba(10, 18, 32, 0.9);
+      border: 2px solid #00f0ff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.25);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 14px;
+    }
+    th {
+      background: rgba(0, 240, 255, 0.15);
+      color: #00f0ff;
+      padding: 14px 16px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      border-bottom: 2px solid #00f0ff;
+    }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #1a2a48;
+      color: #d0e0f0;
+    }
+    tr:hover {
+      background: rgba(255, 0, 127, 0.1);
+    }
+    .rank-1 { color: #ffff00; font-weight: 900; }
+    .rank-2 { color: #c0c0c0; font-weight: 900; }
+    .rank-3 { color: #cd7f32; font-weight: 900; }
 
     /* Features Grid */
     .grid {
@@ -215,7 +260,7 @@
     
     <div class="cta-group">
       <a href="index.html" class="btn-primary">LOCK & LOAD • PLAY NOW 🚀</a>
-      <a href="#teaser" class="btn-secondary">WATCH TRAILER 🎬</a>
+      <a href="#leaderboard" class="btn-secondary">VIEW LEADERBOARD 🏆</a>
     </div>
 
     <!-- Video Teaser -->
@@ -236,6 +281,27 @@
         <source src="assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
         Your browser does not support audio playback.
       </audio>
+    </div>
+  </section>
+
+  <!-- Live Leaderboard Section -->
+  <section class="leaderboard-section" id="leaderboard">
+    <div class="section-title">🏆 GLOBAL YETI HUNTER LEADERBOARD</div>
+    <div class="leaderboard-table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:10%;">RANK</th>
+            <th style="width:30%;">HUNTER CALLSIGN</th>
+            <th style="width:20%;">SCORE</th>
+            <th style="width:20%;">MAX SPEED</th>
+            <th style="width:20%;">DISTANCE</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-rows">
+          <tr><td colspan="5" style="text-align:center; padding:20px; color:#88a0c0;">Syncing Edge Records...</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -266,5 +332,57 @@
   <footer>
     <p>© 2026 SkiFree 2: Hunt for the Yeti • Built with Three.js & Cloudflare Edge • Zero-Liability Architecture</p>
   </footer>
+
+  <script>
+    async function loadLeaderboard() {
+      const tbody = document.getElementById('leaderboard-rows');
+      try {
+        const res = await fetch('/api/scores');
+        if (!res.ok) throw new Error("Fetch failed");
+        const data = await res.json();
+        
+        tbody.innerHTML = '';
+        if (!data.leaderboard || data.leaderboard.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#88a0c0;">No hunts recorded yet. Be the first to strike down the Yeti!</td></tr>';
+          return;
+        }
+
+        data.leaderboard.forEach((entry, idx) => {
+          const tr = document.createElement('tr');
+          const rankClass = idx === 0 ? 'rank-1' : (idx === 1 ? 'rank-2' : (idx === 2 ? 'rank-3' : ''));
+          
+          const tdRank = document.createElement('td');
+          tdRank.className = rankClass;
+          tdRank.textContent = `#${idx + 1}`;
+          
+          const tdName = document.createElement('td');
+          tdName.style.fontWeight = 'bold';
+          tdName.textContent = entry.callsign || 'Hunter';
+          
+          const tdScore = document.createElement('td');
+          tdScore.style.color = '#39ff14';
+          tdScore.textContent = (entry.score || 0).toLocaleString();
+          
+          const tdSpeed = document.createElement('td');
+          tdSpeed.textContent = `${entry.max_speed || 0} MPH`;
+          
+          const tdDist = document.createElement('td');
+          tdDist.textContent = `${entry.max_distance || 0} M`;
+          
+          tr.appendChild(tdRank);
+          tr.appendChild(tdName);
+          tr.appendChild(tdScore);
+          tr.appendChild(tdSpeed);
+          tr.appendChild(tdDist);
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#ff0033;">Leaderboard connecting on live edge server.</td></tr>';
+      }
+    }
+
+    loadLeaderboard();
+    setInterval(loadLeaderboard, 15000);
+  </script>
 </body>
 </html>

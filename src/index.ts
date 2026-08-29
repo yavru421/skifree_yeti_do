@@ -7,6 +7,28 @@ export interface Env {
   ASSETS: Fetcher;
 }
 
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Content-Security-Policy": "default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' ws: wss:; media-src 'self' blob:; img-src 'self' data: blob:;"
+};
+
+function withSecurityHeaders(response: Response): Response {
+  const newHeaders = new Headers(response.headers);
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!newHeaders.has(key)) {
+      newHeaders.set(key, value);
+    }
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -22,29 +44,33 @@ export default {
       }
     }
 
-    // API Scores endpoint
-    if (url.pathname === "/api/scores") {
+    // API Scores / Leaderboard endpoint
+    if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
       const roomId = url.searchParams.get("room") || "main-alps";
       const doId = env.MOUNTAIN_DO.idFromName(roomId);
       const doStub = env.MOUNTAIN_DO.get(doId);
-      return doStub.fetch(request);
+      const res = await doStub.fetch(request);
+      return withSecurityHeaders(res);
     }
 
     // Landing page & Game shortcuts
     if (url.pathname === "/" || url.pathname === "/landing") {
       const landingReq = new Request(new URL("/landing.html", request.url), request);
-      return env.ASSETS.fetch(landingReq);
+      const res = await env.ASSETS.fetch(landingReq);
+      return withSecurityHeaders(res);
     }
     if (url.pathname === "/play" || url.pathname === "/game") {
       const gameReq = new Request(new URL("/index.html", request.url), request);
-      return env.ASSETS.fetch(gameReq);
+      const res = await env.ASSETS.fetch(gameReq);
+      return withSecurityHeaders(res);
     }
 
     // Static Assets from public/
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const res = await env.ASSETS.fetch(request);
+      return withSecurityHeaders(res);
     }
 
-    return new Response("SkiFree 2 Edge Server Active", { status: 200 });
+    return withSecurityHeaders(new Response("SkiFree 2 Edge Server Active", { status: 200 }));
   }
 };
