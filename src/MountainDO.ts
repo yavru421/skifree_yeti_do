@@ -31,6 +31,13 @@ function sanitizeCallsign(raw: string | null | undefined): string {
   return cleaned.length > 0 ? cleaned : "Hunter";
 }
 
+interface HitboxSnapshot {
+  timestamp: number;
+  x: number;
+  z: number;
+  state: string;
+}
+
 export class MountainDO extends DurableObject {
   private players = new Map<string, SkierState & { lastShotTime?: number }>();
   
@@ -46,6 +53,7 @@ export class MountainDO extends DurableObject {
   private currentWave = 1;
   private yetiKillCount = 0;
   private yetiTargetId: string | null = null;
+  private hitboxHistory: HitboxSnapshot[] = [];
   
   private matchStatus: "active" | "ended" = "active";
   private matchStartTime = 0;
@@ -289,6 +297,17 @@ export class MountainDO extends DurableObject {
     }
 
     furthestZ = furthestSkierZ;
+
+    // Snapshot Yeti Hitbox for Lag-Compensated Rewind Raycasting
+    this.hitboxHistory.push({
+      timestamp: now,
+      x: this.yetiX,
+      z: this.yetiZ,
+      state: this.yetiState
+    });
+    if (this.hitboxHistory.length > 24) {
+      this.hitboxHistory.shift();
+    }
 
     // Yeti Charging & Biting AI
     if (this.yetiActive && this.yetiState !== "DEAD") {

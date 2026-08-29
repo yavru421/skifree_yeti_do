@@ -464,6 +464,22 @@
   <div id="crt-overlay"></div>
   <div id="damage-flash"></div>
   <div id="bite-alert">🩸 YETI BITE! ARM LOST (-1 HEART)</div>
+
+  <!-- Cinematic Skippable Intro Video Overlay -->
+  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:500; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.6s ease-out;">
+    <video id="intro-video" playsinline style="width:100%; height:100%; object-fit:cover; max-height:100vh;">
+      <source src="assets/media/teaser_trailer.mp4" type="video/mp4">
+    </video>
+    <div style="position:absolute; bottom:30px; display:flex; flex-direction:column; align-items:center; gap:12px; z-index:510;">
+      <div style="width:280px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; overflow:hidden;">
+        <div id="intro-progress" style="width:0%; height:100%; background:#00f0ff; box-shadow:0 0 10px #00f0ff; transition:width 0.1s linear;"></div>
+      </div>
+      <button id="btn-skip-intro" style="background:linear-gradient(135deg, rgba(255,0,127,0.9), rgba(121,40,202,0.9)); border:2px solid #00f0ff; color:#fff; font-family:inherit; font-weight:900; font-size:16px; letter-spacing:2px; padding:12px 32px; border-radius:30px; cursor:pointer; box-shadow:0 0 25px rgba(0,240,255,0.6); transition:transform 0.2s;">
+        SKIP INTRO [SPACE / ESC] ⏭️
+      </button>
+    </div>
+  </div>
+
   <div id="crosshair">
     <div class="crosshair-line ch-h"></div>
     <div class="crosshair-line ch-v"></div>
@@ -669,10 +685,11 @@
 
     let selectedDifficulty = "medium";
 
-    // --- Procedural Sound Engine ---
-    class ProceduralSoundEngine {
+    // --- Spatial 3D Positional WebAudio Engine ---
+    class SpatialWebAudioEngine {
       constructor() {
         this.ctx = null;
+        this.listener = null;
         this.windGain = null;
         this.windFilter = null;
         this.carveGain = null;
@@ -683,6 +700,20 @@
         if (this.isInitialized) return;
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.ctx = new AudioContext();
+        this.listener = this.ctx.listener;
+
+        // Set listener position & orientation
+        if (this.listener.positionX) {
+          this.listener.positionX.setValueAtTime(0, this.ctx.currentTime);
+          this.listener.positionY.setValueAtTime(1.8, this.ctx.currentTime);
+          this.listener.positionZ.setValueAtTime(0, this.ctx.currentTime);
+          this.listener.forwardX.setValueAtTime(0, this.ctx.currentTime);
+          this.listener.forwardY.setValueAtTime(0, this.ctx.currentTime);
+          this.listener.forwardZ.setValueAtTime(-1, this.ctx.currentTime);
+          this.listener.upX.setValueAtTime(0, this.ctx.currentTime);
+          this.listener.upY.setValueAtTime(1, this.ctx.currentTime);
+          this.listener.upZ.setValueAtTime(0, this.ctx.currentTime);
+        }
 
         const bufferSize = this.ctx.sampleRate * 2;
         const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -691,6 +722,7 @@
           output[i] = (Math.random() * 2 - 1) * 0.5;
         }
 
+        // Wind Rush Sound
         const whiteNoise = this.ctx.createBufferSource();
         whiteNoise.buffer = noiseBuffer;
         whiteNoise.loop = true;
@@ -708,6 +740,7 @@
         this.windGain.connect(this.ctx.destination);
         whiteNoise.start();
 
+        // Edge Carving Sound
         const carveNoise = this.ctx.createBufferSource();
         carveNoise.buffer = noiseBuffer;
         carveNoise.loop = true;
@@ -727,15 +760,36 @@
         this.isInitialized = true;
       }
 
+      create3DPanner(x, y, z) {
+        if (!this.isInitialized) return null;
+        const panner = this.ctx.createPanner();
+        panner.panningModel = 'HRTF';
+        panner.distanceModel = 'exponential';
+        panner.refDistance = 5;
+        panner.maxDistance = 180;
+        panner.rolloffFactor = 1.4;
+        panner.coneInnerAngle = 360;
+
+        if (panner.positionX) {
+          panner.positionX.setValueAtTime(x, this.ctx.currentTime);
+          panner.positionY.setValueAtTime(y, this.ctx.currentTime);
+          panner.positionZ.setValueAtTime(z, this.ctx.currentTime);
+        } else {
+          panner.setPosition(x, y, z);
+        }
+        panner.connect(this.ctx.destination);
+        return panner;
+      }
+
       playGunshot() {
         if (!this.isInitialized) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(450, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(480, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(75, this.ctx.currentTime + 0.16);
 
-        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
 
         osc.connect(gain);
@@ -743,13 +797,14 @@
         osc.start();
         osc.stop(this.ctx.currentTime + 0.18);
 
+        // Sub-bass recoil shockwave
         const oscBoom = this.ctx.createOscillator();
         const gainBoom = this.ctx.createGain();
         oscBoom.type = 'sine';
-        oscBoom.frequency.setValueAtTime(140, this.ctx.currentTime);
-        oscBoom.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.35);
+        oscBoom.frequency.setValueAtTime(160, this.ctx.currentTime);
+        oscBoom.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.38);
 
-        gainBoom.gain.setValueAtTime(0.9, this.ctx.currentTime);
+        gainBoom.gain.setValueAtTime(1.0, this.ctx.currentTime);
         gainBoom.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
 
         oscBoom.connect(gainBoom);
@@ -776,38 +831,42 @@
         osc.stop(this.ctx.currentTime + 0.4);
       }
 
-      playBiteChomp() {
+      playBiteChomp(x = 0, y = 1.8, z = 2) {
         if (!this.isInitialized) return;
+        const panner = this.create3DPanner(x, y, z);
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(320, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+        osc.frequency.setValueAtTime(350, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.28);
 
-        gain.gain.setValueAtTime(0.9, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.95, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.32);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        if (panner) gain.connect(panner);
+        else gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.3);
+        osc.stop(this.ctx.currentTime + 0.32);
       }
 
-      playNpcScream() {
+      playNpcScream(x = 0, y = 1.8, z = -30) {
         if (!this.isInitialized) return;
+        const panner = this.create3DPanner(x, y, z);
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(450, this.ctx.currentTime + 0.4);
+        osc.frequency.setValueAtTime(620, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(420, this.ctx.currentTime + 0.45);
 
-        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.45);
+        gain.gain.setValueAtTime(0.45, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.48);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        if (panner) gain.connect(panner);
+        else gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.45);
+        osc.stop(this.ctx.currentTime + 0.48);
       }
 
       playTreeThud() {
@@ -815,16 +874,16 @@
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(120, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(130, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.32);
 
-        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.38);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.35);
+        osc.stop(this.ctx.currentTime + 0.38);
       }
 
       playHitFlesh() {
@@ -832,33 +891,35 @@
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(240, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.12);
+        osc.frequency.setValueAtTime(250, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(55, this.ctx.currentTime + 0.14);
 
-        gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.75, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.16);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.15);
+        osc.stop(this.ctx.currentTime + 0.16);
       }
 
-      playYetiStaggerRoar() {
+      playYetiStaggerRoar(x = 0, y = 3.5, z = 20) {
         if (!this.isInitialized) return;
+        const panner = this.create3DPanner(x, y, z);
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(190, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.8);
+        osc.frequency.setValueAtTime(210, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.85);
 
-        gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.85);
+        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.9);
 
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        if (panner) gain.connect(panner);
+        else gain.connect(this.ctx.destination);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.85);
+        osc.stop(this.ctx.currentTime + 0.9);
       }
 
       playWastedSound() {
@@ -890,7 +951,7 @@
       }
     }
 
-    const soundEngine = new ProceduralSoundEngine();
+    const soundEngine = new SpatialWebAudioEngine();
 
     // --- 3D Scene State ---
     let scene, camera, renderer;
@@ -1436,42 +1497,52 @@
       }, 3500);
     }
 
-    function handleNextWave(msg) {
-      if (yetiSprite) yetiSprite.scale.set(8.0, 8.0, 1);
-      playerHearts = Math.min(3, playerHearts + 1);
-      if (playerHearts >= 2) document.getElementById('h2').classList.remove('heart-lost');
-      if (playerHearts >= 3) document.getElementById('h3').classList.remove('heart-lost');
+    // Camera Trauma & Screen Shake
+    let cameraTrauma = 0;
+    let skiSprayParticles = null;
+
+    function addCameraTrauma(amount) {
+      cameraTrauma = Math.min(1.0, cameraTrauma + amount);
     }
 
-    function triggerWastedSequence(reasonText) {
-      if (isWasted) return;
-      isWasted = true;
-      isPlaying = false;
-      wastedTime = 0;
-      wastedFrame = 0;
-
-      soundEngine.playWastedSound();
-
-      skiGroup.visible = false;
-      rifleMesh.visible = false;
-      
-      if (wastedSkierSprite) {
-        wastedSkierSprite.position.set(playerX, 1.6, 0);
-        wastedSkierSprite.visible = true;
+    function createSkiSprayParticles() {
+      const sprayCount = 180;
+      const sprayGeo = new THREE.BufferGeometry();
+      const sprayPos = new Float32Array(sprayCount * 3);
+      for (let i = 0; i < sprayCount * 3; i += 3) {
+        sprayPos[i] = (Math.random() - 0.5) * 1.5;
+        sprayPos[i + 1] = -0.8 + Math.random() * 0.4;
+        sprayPos[i + 2] = -0.5 - Math.random() * 3.5;
       }
+      sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPos, 3));
+      const sprayMat = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.16,
+        transparent: true,
+        opacity: 0.75
+      });
+      skiSprayParticles = new THREE.Points(sprayGeo, sprayMat);
+      skiGroup.add(skiSprayParticles);
+    }
 
-      document.getElementById('hud-overlay').classList.add('hidden');
-      const wastedScreen = document.getElementById('wasted-screen');
-      document.getElementById('wasted-subtitle').innerText = reasonText.toUpperCase();
-      wastedScreen.style.opacity = '1';
-      document.getElementById('wasted-banner').style.transform = 'scale(1.0)';
+    function onTreeHit() {
+      if (spawnGraceTimer > 0) return;
+      soundEngine.playTreeThud();
+      addCameraTrauma(0.55);
+      const flash = document.getElementById('damage-flash');
+      flash.style.opacity = '0.9';
+      setTimeout(() => { flash.style.opacity = '0'; }, 180);
 
-      setTimeout(() => {
-        wastedScreen.style.opacity = '0';
-        document.getElementById('death-title').innerText = "💥 HUNT FAILED";
-        document.getElementById('death-stat').innerHTML = `Surviving Wave: <strong>Wave ${currentWaveNum}</strong><br>Total Damage: <strong>${damageDealtTotal} DMG</strong>`;
-        document.getElementById('death-modal').classList.remove('hidden');
-      }, 3500);
+      playerHearts--;
+      if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
+      else if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
+      else if (playerHearts <= 0) {
+        document.getElementById('h1').classList.add('heart-lost');
+        triggerWastedSequence("Smashed into Alpine Pine");
+        return;
+      }
+      spawnGraceTimer = 1.8;
+      playerSpeed = Math.max(10, playerSpeed * 0.4);
     }
 
     // --- Main Game Loop with Difficulty Presets ---
@@ -1539,6 +1610,21 @@
         camera.rotation.y = targetYaw;
         camera.rotation.z = isLookingBack ? 0 : -playerHeadingAngle * 0.35;
 
+        // Camera screen shake decay
+        if (cameraTrauma > 0) {
+          camera.position.x += (Math.random() - 0.5) * cameraTrauma * 0.35;
+          camera.position.y += (Math.random() - 0.5) * cameraTrauma * 0.25;
+          camera.rotation.z += (Math.random() - 0.5) * cameraTrauma * 0.08;
+          cameraTrauma = Math.max(0, cameraTrauma - 0.035);
+        }
+
+        // Dynamic Ski Spray Particles
+        if (skiSprayParticles) {
+          const sidewaysFactor = Math.abs(Math.sin(playerHeadingAngle));
+          skiSprayParticles.material.opacity = (sidewaysFactor * 0.6) + (playerSpeed / 90 * 0.3);
+          skiSprayParticles.rotation.y = -playerHeadingAngle * 0.5;
+        }
+
         skiGroup.rotation.y = -playerHeadingAngle;
         skiGroup.rotation.z = -playerHeadingAngle * 0.4;
 
@@ -1562,8 +1648,9 @@
             const distToYeti = Math.hypot(npc.position.x - yetiMesh.position.x, npc.position.z - yetiMesh.position.z);
             if (distToYeti < 4.0) {
               npc.userData.isEaten = true;
-              soundEngine.playNpcScream();
-              soundEngine.playBiteChomp();
+              soundEngine.playNpcScream(npc.position.x, 1.8, npc.position.z);
+              soundEngine.playBiteChomp(npc.position.x, 1.8, npc.position.z);
+              addCameraTrauma(0.3);
               npc.scale.set(4.5, 1.5, 1);
               npc.position.y += 1.5;
             }
@@ -1628,12 +1715,20 @@
     // --- Controls & Hotkeys ---
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
+      if (e.key === ' ' || e.key === 'Escape' || e.key === 'Enter') {
+        skipIntroVideo();
+      }
       if (k === 'a' || e.key === 'ArrowLeft') keys.a = true;
       if (k === 'd' || e.key === 'ArrowRight') keys.d = true;
       if (k === 'w' || e.key === 'ArrowUp') keys.w = true;
       if (k === 's' || e.key === 'ArrowDown') keys.s = true;
       if (k === 'r') reloadGun();
       if (e.key === 'Shift') keys.shift = true;
+      if (k === 'm' || e.key === 'Escape') {
+        if (!document.getElementById('intro-overlay') || document.getElementById('intro-overlay').classList.contains('hidden')) {
+          toggleMenu();
+        }
+      }
       if (k === '1') setDifficulty('easy');
       if (k === '2') setDifficulty('medium');
       if (k === '3') setDifficulty('pro');
@@ -1799,11 +1894,56 @@
       });
     });
 
+    // --- Cinematic Skippable Intro Video Controller ---
+    const introOverlay = document.getElementById('intro-overlay');
+    const introVideo = document.getElementById('intro-video');
+    const introProgressBar = document.getElementById('intro-progress');
+    const btnSkipIntro = document.getElementById('btn-skip-intro');
+    let isIntroSkipped = false;
+
+    function skipIntroVideo() {
+      if (isIntroSkipped || !introOverlay) return;
+      isIntroSkipped = true;
+      if (introVideo) {
+        introVideo.pause();
+      }
+      introOverlay.style.opacity = '0';
+      setTimeout(() => {
+        introOverlay.classList.add('hidden');
+        document.getElementById('start-modal').classList.remove('hidden');
+        if (!scene) init3D();
+        setDifficulty(selectedDifficulty);
+      }, 500);
+    }
+
+    if (btnSkipIntro) {
+      btnSkipIntro.addEventListener('click', skipIntroVideo);
+    }
+
+    if (introVideo) {
+      introVideo.addEventListener('timeupdate', () => {
+        if (introVideo.duration && introProgressBar) {
+          const pct = (introVideo.currentTime / introVideo.duration) * 100;
+          introProgressBar.style.width = `${pct}%`;
+        }
+      });
+      introVideo.addEventListener('ended', skipIntroVideo);
+      
+      // Auto-attempt playback with sound
+      const playPromise = introVideo.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay policy prevented playback, video remains queued with skip button
+        });
+      }
+    }
+
     // Start Button
     document.getElementById('btn-start').addEventListener('click', () => {
       const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
       soundEngine.init();
       if (!scene) init3D();
+      createSkiSprayParticles();
       setDifficulty(selectedDifficulty);
       playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
       connectWebSocket(callsign);
@@ -1857,7 +1997,7 @@
       connectWebSocket(callsign);
     });
 
-    // Instant Page Load 3D Boot (eliminates startup black-screen)
+    // Instant Page Load 3D Boot
     window.addEventListener('DOMContentLoaded', () => {
       init3D();
       setDifficulty(selectedDifficulty);
