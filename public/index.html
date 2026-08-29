@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SkiFree 2: The Hunt for the Yeti (35 Years Later)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0e1a;
+      font-family: 'Courier New', Courier, monospace;
+      color: #fff;
+      cursor: crosshair;
+    }
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #hud-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 15px 20px;
+    }
+
+    /* Boss Health Bar */
+    #boss-hud {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 480px;
+      max-width: 90%;
+      background: rgba(10, 20, 35, 0.9);
+      border: 2px solid #ff0033;
+      border-radius: 8px;
+      padding: 10px 16px;
+      box-shadow: 0 0 20px rgba(255, 0, 50, 0.5);
+      text-align: center;
+    }
+    .boss-label {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #ff0033;
+      text-shadow: 0 0 10px #ff0033;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .hp-bar-bg {
+      width: 100%;
+      height: 14px;
+      background: #200508;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid #550011;
+    }
+    .hp-bar-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #ff0055, #ff3300);
+      box-shadow: 0 0 12px #ff0033;
+      transition: width 0.15s ease-out;
+    }
+
+    #lookback-hint {
+      position: absolute;
+      top: 75px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #00f0ff;
+      background: rgba(0,0,0,0.6);
+      padding: 4px 12px;
+      border-radius: 4px;
+      letter-spacing: 1px;
+      border: 1px solid #00f0ff;
+      opacity: 0.85;
+    }
+
+    .hud-top-sides {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 50px;
+    }
+    .hud-gauge {
+      background: rgba(10, 20, 35, 0.85);
+      border: 2px solid #00f0ff;
+      border-radius: 8px;
+      padding: 10px 16px;
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+    }
+    .hud-title {
+      font-size: 10px;
+      color: #88a0c0;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .hud-value {
+      font-size: 24px;
+      font-weight: 900;
+      color: #00f0ff;
+      text-shadow: 0 0 10px #00f0ff;
+    }
+    .hud-sub {
+      font-size: 11px;
+      color: #ff007f;
+      font-weight: bold;
+    }
+
+    /* Difficulty Badge in HUD */
+    #diff-badge {
+      font-size: 11px;
+      color: #ffff00;
+      font-weight: 900;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    /* Player Health & Limb Status */
+    #hearts-container {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .heart-icon {
+      font-size: 18px;
+      color: #ff0033;
+      text-shadow: 0 0 8px #ff0033;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .heart-lost {
+      opacity: 0.2;
+      filter: grayscale(1);
+      transform: scale(0.85);
+    }
+
+    #rearview-mirror {
+      width: 150px;
+      height: 85px;
+      background: #000;
+      border: 2px solid #ff007f;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+    }
+    #rearview-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #mirror-label {
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 9px;
+      color: #ff007f;
+      letter-spacing: 1px;
+      font-weight: bold;
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .hud-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    #skier-roster {
+      background: rgba(10, 20, 35, 0.85);
+      border: 2px solid #39ff14;
+      border-radius: 8px;
+      padding: 8px 14px;
+      max-height: 120px;
+      overflow-y: auto;
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.3);
+      font-size: 11px;
+    }
+    .roster-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 3px;
+    }
+    .roster-alive { color: #39ff14; }
+    .roster-eaten { color: #ff0033; text-decoration: line-through; }
+
+    /* Crosshair & Hitmarker */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 32px;
+      height: 32px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 70;
+    }
+    .crosshair-line {
+      position: absolute;
+      background: #00f0ff;
+      box-shadow: 0 0 8px #00f0ff;
+    }
+    .ch-h { top: 15px; left: 0; width: 32px; height: 2px; }
+    .ch-v { top: 0; left: 15px; width: 2px; height: 32px; }
+    .ch-dot { top: 13px; left: 13px; width: 6px; height: 6px; border-radius: 50%; background: #ff007f; box-shadow: 0 0 8px #ff007f; }
+
+    #hitmarker {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      border: 2px solid #ff0033;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.08s;
+      z-index: 75;
+    }
+
+    #muzzle-flash {
+      position: absolute;
+      bottom: 20px;
+      right: 25%;
+      width: 140px;
+      height: 140px;
+      background: radial-gradient(circle, rgba(255,255,200,1) 0%, rgba(255,150,0,0.8) 40%, rgba(255,0,0,0) 70%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 60;
+      transition: opacity 0.05s ease-out;
+    }
+
+    #damage-flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, rgba(255, 0, 50, 0.7) 0%, rgba(180, 0, 0, 0.9) 100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease-out;
+      z-index: 55;
+    }
+
+    #bite-alert {
+      position: absolute;
+      top: 25%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 30px;
+      font-weight: 900;
+      color: #ff0033;
+      text-shadow: 0 0 15px #ff0000, 2px 2px 0px #000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 85;
+      text-align: center;
+    }
+
+    /* WASTED Screen */
+    #wasted-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 90;
+      background: rgba(0, 0, 0, 0.45);
+      transition: opacity 0.4s ease-in;
+    }
+    #wasted-banner {
+      font-family: 'Arial Black', Impact, sans-serif;
+      font-size: 80px;
+      font-weight: 900;
+      letter-spacing: 6px;
+      color: #b70000;
+      text-shadow: 0 0 15px rgba(255, 0, 0, 0.9), 3px 3px 0px #000;
+      transform: scale(1.3);
+      transition: transform 0.5s ease-out;
+    }
+    #wasted-subtitle {
+      font-size: 18px;
+      letter-spacing: 3px;
+      color: #fff;
+      margin-top: 15px;
+      text-shadow: 2px 2px 4px #000;
+    }
+
+    #victory-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 95;
+      background: rgba(0, 30, 60, 0.7);
+      transition: opacity 0.5s ease-in;
+    }
+    #victory-banner {
+      font-family: 'Arial Black', Impact, sans-serif;
+      font-size: 52px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #ffff00;
+      text-shadow: 0 0 25px #00f0ff, 0 0 40px #ffff00;
+      text-align: center;
+    }
+
+    #floating-dmg-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 65;
+    }
+    .dmg-popup {
+      position: absolute;
+      font-weight: 900;
+      font-size: 24px;
+      pointer-events: none;
+      animation: floatUp 0.8s ease-out forwards;
+    }
+    .dmg-normal { color: #ff3344; text-shadow: 0 0 8px #ff0000, 2px 2px 0 #000; }
+    .dmg-crit { color: #ffff00; font-size: 30px; text-shadow: 0 0 12px #ff007f, 2px 2px 0 #000; }
+
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
+      30% { transform: translate(-50%, -20px) scale(1.2); }
+      100% { opacity: 0; transform: translate(-50%, -50px) scale(1.0); }
+    }
+
+    /* Start Screen with Difficulty Selector */
+    #start-modal, #death-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 18, 30, 0.95);
+      border: 3px solid #00f0ff;
+      border-radius: 12px;
+      padding: 25px 30px;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(0, 240, 255, 0.6);
+      z-index: 100;
+      max-width: 540px;
+      width: 90%;
+    }
+    .modal-title {
+      font-size: 28px;
+      color: #00f0ff;
+      margin-bottom: 8px;
+      text-shadow: 0 0 15px #00f0ff;
+      font-weight: 900;
+    }
+    .difficulty-group {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 14px 0;
+    }
+    .diff-btn {
+      flex: 1;
+      padding: 10px 14px;
+      border: 2px solid #556688;
+      border-radius: 6px;
+      background: #050a14;
+      color: #88a0c0;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .diff-btn.active {
+      border-color: #00f0ff;
+      color: #00f0ff;
+      background: rgba(0, 240, 255, 0.15);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+    }
+    .modal-btn {
+      background: linear-gradient(135deg, #ff007f, #7928ca);
+      border: none;
+      color: #fff;
+      padding: 14px 28px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 15px;
+      box-shadow: 0 0 20px rgba(255, 0, 127, 0.5);
+      transition: 0.2s;
+      width: 100%;
+    }
+    .modal-btn:hover {
+      transform: scale(1.03);
+      box-shadow: 0 0 30px rgba(255, 0, 127, 0.8);
+    }
+    .input-field {
+      width: 100%;
+      padding: 10px;
+      background: #050a14;
+      border: 2px solid #88a0c0;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 15px;
+      margin: 10px 0;
+      font-family: inherit;
+      text-align: center;
+    }
+    .hidden { display: none !important; }
+
+    #crt-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      opacity: 0.45;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div id="crt-overlay"></div>
+  <div id="damage-flash"></div>
+  <div id="bite-alert">🩸 YETI BITE! ARM LOST (-1 HEART)</div>
+  <div id="crosshair">
+    <div class="crosshair-line ch-h"></div>
+    <div class="crosshair-line ch-v"></div>
+    <div class="crosshair-line ch-dot"></div>
+  </div>
+  <div id="hitmarker"></div>
+  <div id="muzzle-flash"></div>
+  <div id="floating-dmg-container"></div>
+
+  <!-- WASTED Screen -->
+  <div id="wasted-screen">
+    <div id="wasted-banner">WASTED</div>
+    <div id="wasted-subtitle">SKELETONIZED BY THE YETI</div>
+  </div>
+
+  <!-- Victory Screen -->
+  <div id="victory-screen">
+    <div id="victory-banner">🏆 YETI DEFEATED!<br><span style="font-size:26px; color:#00f0ff;" id="wave-advance-text">WAVE 1 CLEARED — SURVIVAL MODE ENGAGED!</span></div>
+  </div>
+
+  <canvas id="game-canvas"></canvas>
+
+  <!-- In-Game HUD -->
+  <div id="hud-overlay" class="hidden">
+    <div id="boss-hud">
+      <div class="boss-label">
+        <span id="boss-wave-title">👹 ALPINE YETI (WAVE 1)</span>
+        <span id="boss-hp-text">8,000 / 8,000 HP</span>
+      </div>
+      <div class="hp-bar-bg">
+        <div class="hp-bar-fill" id="boss-hp-fill"></div>
+      </div>
+    </div>
+
+    <div id="lookback-hint"><span id="hud-view" style="color:#00f0ff; font-weight:900;">DOWNHILL</span> • HOLD [SHIFT] OR RIGHT-CLICK TO AIM & SHOOT BEHIND YOU • [1/2/3] SPEED DIFFICULTY</div>
+
+    <div class="hud-top-sides">
+      <div class="hud-gauge">
+        <div class="hud-title">SPEED (W/S)</div>
+        <div class="hud-value" id="hud-speed">0 <span style="font-size:14px;">MPH</span></div>
+        <div id="diff-badge">DIFFICULTY: MEDIUM</div>
+      </div>
+
+      <div class="hud-gauge">
+        <div class="hud-title">HEALTH / LIMBS</div>
+        <div id="hearts-container">
+          <span class="heart-icon" id="h1">❤️</span>
+          <span class="heart-icon" id="h2">❤️</span>
+          <span class="heart-icon" id="h3">❤️</span>
+        </div>
+        <div class="hud-sub" id="limb-status" style="color:#39ff14;">INTACT ⛷️</div>
+      </div>
+
+      <div id="rearview-mirror">
+        <canvas id="rearview-canvas"></canvas>
+        <div id="mirror-label">YETI CAM</div>
+      </div>
+
+      <div class="hud-gauge">
+        <div class="hud-title">DAMAGE DEALT</div>
+        <div class="hud-value" id="hud-dmg">0 <span style="font-size:14px;">DMG</span></div>
+        <div class="hud-sub" id="ammo-count">AMMO: 8 / 8 [R]</div>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div id="skier-roster">
+        <div style="font-weight:bold; color:#00f0ff; margin-bottom:4px;">YETI HUNTER MILITIA</div>
+        <div id="roster-list"></div>
+      </div>
+      <div class="hud-gauge" style="text-align:right;">
+        <div class="hud-title">YETI STATUS</div>
+        <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:18px;">CHARGING</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start Modal with Difficulty Setting -->
+  <div id="start-modal">
+    <div class="modal-title">🎿 SKIFREE 2: HUNT FOR THE YETI</div>
+    <div style="color:#ff007f; font-weight:bold; font-size:13px; margin-bottom:6px;">SELECT DIFFICULTY / SPEED</div>
+    
+    <div class="difficulty-group">
+      <button class="diff-btn" data-diff="easy">🟢 EASY<br><span style="font-size:10px; color:#aaa;">20-45 MPH</span></button>
+      <button class="diff-btn active" data-diff="medium">🟡 MEDIUM<br><span style="font-size:10px; color:#aaa;">28-60 MPH</span></button>
+      <button class="diff-btn" data-diff="pro">🔴 PRO SPEED<br><span style="font-size:10px; color:#aaa;">38-85 MPH</span></button>
+    </div>
+
+    <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
+    <button class="modal-btn" id="btn-start">LOCK & LOAD 🚀</button>
+    <p style="margin-top:12px; font-size:11px; color:#556688;">
+      [A / D] 90° Carve • [W / S] Throttle • [Hold Shift / Right-Click] Look Back • [Left Click] Shoot • [1/2/3] Change Speed
+    </p>
+  </div>
+
+  <!-- Death Modal -->
+  <div id="death-modal" class="hidden">
+    <div class="modal-title" style="color:#ff0033;" id="death-title">💀 HUNT FAILED</div>
+    <p id="death-stat" style="color:#fff; font-size:15px; margin: 15px 0;"></p>
+    <button class="modal-btn" id="btn-respawn">RESPAWN & HUNT AGAIN</button>
+  </div>
+
+  <script>
+    // --- Speed Difficulty Settings ---
+    const DIFFICULTY_PRESETS = {
+      easy: {
+        name: "EASY / CASUAL",
+        cruiseSpeed: 20,
+        tuckSpeed: 45,
+        brakeSpeed: 12,
+        lateralFactor: 0.045,
+        forwardFactor: 0.030,
+        badgeColor: "#39ff14"
+      },
+      medium: {
+        name: "MEDIUM ARCADE",
+        cruiseSpeed: 28,
+        tuckSpeed: 60,
+        brakeSpeed: 16,
+        lateralFactor: 0.055,
+        forwardFactor: 0.038,
+        badgeColor: "#ffff00"
+      },
+      pro: {
+        name: "PRO REALISTIC",
+        cruiseSpeed: 38,
+        tuckSpeed: 85,
+        brakeSpeed: 20,
+        lateralFactor: 0.068,
+        forwardFactor: 0.046,
+        badgeColor: "#ff007f"
+      }
+    };
+
+    let selectedDifficulty = "medium";
+
+    // --- Procedural Sound Engine ---
+    class ProceduralSoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.windGain = null;
+        this.windFilter = null;
+        this.carveGain = null;
+        this.isInitialized = false;
+      }
+
+      init() {
+        if (this.isInitialized) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+
+        const bufferSize = this.ctx.sampleRate * 2;
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = (Math.random() * 2 - 1) * 0.5;
+        }
+
+        const whiteNoise = this.ctx.createBufferSource();
+        whiteNoise.buffer = noiseBuffer;
+        whiteNoise.loop = true;
+
+        this.windFilter = this.ctx.createBiquadFilter();
+        this.windFilter.type = 'bandpass';
+        this.windFilter.frequency.value = 400;
+        this.windFilter.Q.value = 3.0;
+
+        this.windGain = this.ctx.createGain();
+        this.windGain.gain.value = 0.05;
+
+        whiteNoise.connect(this.windFilter);
+        this.windFilter.connect(this.windGain);
+        this.windGain.connect(this.ctx.destination);
+        whiteNoise.start();
+
+        const carveNoise = this.ctx.createBufferSource();
+        carveNoise.buffer = noiseBuffer;
+        carveNoise.loop = true;
+
+        const carveFilter = this.ctx.createBiquadFilter();
+        carveFilter.type = 'highpass';
+        carveFilter.frequency.value = 1000;
+
+        this.carveGain = this.ctx.createGain();
+        this.carveGain.gain.value = 0.0;
+
+        carveNoise.connect(carveFilter);
+        carveFilter.connect(this.carveGain);
+        this.carveGain.connect(this.ctx.destination);
+        carveNoise.start();
+
+        this.isInitialized = true;
+      }
+
+      playGunshot() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(450, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.15);
+
+        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.18);
+
+        const oscBoom = this.ctx.createOscillator();
+        const gainBoom = this.ctx.createGain();
+        oscBoom.type = 'sine';
+        oscBoom.frequency.setValueAtTime(140, this.ctx.currentTime);
+        oscBoom.frequency.exponentialRampToValueAtTime(25, this.ctx.currentTime + 0.35);
+
+        gainBoom.gain.setValueAtTime(0.9, this.ctx.currentTime);
+        gainBoom.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+
+        oscBoom.connect(gainBoom);
+        gainBoom.connect(this.ctx.destination);
+        oscBoom.start();
+        oscBoom.stop(this.ctx.currentTime + 0.4);
+      }
+
+      playReload() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(550, this.ctx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.4);
+      }
+
+      playBiteChomp() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+
+        gain.gain.setValueAtTime(0.9, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
+
+      playNpcScream() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(450, this.ctx.currentTime + 0.4);
+
+        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.45);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.45);
+      }
+
+      playTreeThud() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.35);
+      }
+
+      playHitFlesh() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(240, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.12);
+
+        gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+      }
+
+      playYetiStaggerRoar() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(190, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(35, this.ctx.currentTime + 0.8);
+
+        gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.85);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.85);
+      }
+
+      playWastedSound() {
+        if (!this.isInitialized) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(24, this.ctx.currentTime + 1.2);
+
+        gain.gain.setValueAtTime(0.9, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.4);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 1.4);
+      }
+
+      updateSpeed(speedMph, carveAngleRad) {
+        if (!this.isInitialized || !this.ctx) return;
+        const ratio = Math.min(1.0, speedMph / 80);
+        this.windFilter.frequency.setTargetAtTime(300 + ratio * 1600, this.ctx.currentTime, 0.05);
+        this.windGain.gain.setTargetAtTime(0.02 + ratio * 0.25, this.ctx.currentTime, 0.05);
+
+        const sidewaysFactor = Math.abs(Math.sin(carveAngleRad));
+        const carveVolume = Math.min(0.40, (sidewaysFactor * 0.30) + (speedMph / 70 * 0.1));
+        this.carveGain.gain.setTargetAtTime(carveVolume, this.ctx.currentTime, 0.05);
+      }
+    }
+
+    const soundEngine = new ProceduralSoundEngine();
+
+    // --- 3D Scene State ---
+    let scene, camera, renderer;
+    let mirrorScene, mirrorCamera, mirrorRenderer;
+    let leftSki, rightSki, skiGroup, rifleMesh;
+    let trees = [];
+    let npcSkiers = [];
+    let snowParticles;
+    let yetiMesh, yetiSprite, yetiTexture;
+    let wastedSkierSprite, skierTexture, npcTexture;
+
+    let ws = null;
+    let myPlayerId = null;
+    let isPlaying = false;
+    let isWasted = false;
+    let wastedTime = 0;
+    let spawnGraceTimer = 0;
+    let biteInvulnerabilityTimer = 0;
+
+    let playerHearts = 3;
+    let ammoCount = 8;
+    const maxAmmo = 8;
+    let isReloading = false;
+
+    const keys = { w: false, a: false, s: false, d: false, shift: false };
+    let isLookingBack = false;
+
+    let playerX = 0;
+    let playerZ = 0;
+    let playerSpeed = 28;
+    let playerHeadingAngle = 0;
+    let turnSteerVelocity = 0;
+    let damageDealtTotal = 0;
+
+    let yetiSpriteFrame = 0;
+    let yetiAnimTimer = 0;
+    let wastedAnimTimer = 0;
+    let wastedFrame = 0;
+
+    let currentWaveNum = 1;
+    let yetiWorldX = 0;
+    let yetiWorldZ = 120;
+    let yetiCurrentHp = 8000;
+    let yetiMaxHp = 8000;
+    let yetiStateStr = "CHARGING";
+
+    const mousePos = { x: 0, y: 0 };
+    const raycaster = new THREE.Raycaster();
+
+    function setDifficulty(diff) {
+      if (!DIFFICULTY_PRESETS[diff]) return;
+      selectedDifficulty = diff;
+      const p = DIFFICULTY_PRESETS[diff];
+      const badge = document.getElementById('diff-badge');
+      badge.innerText = `DIFF: ${p.name}`;
+      badge.style.color = p.badgeColor;
+
+      document.querySelectorAll('.diff-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.diff === diff);
+      });
+    }
+
+    function init3D() {
+      const canvas = document.getElementById('game-canvas');
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xddeeff);
+      scene.fog = new THREE.FogExp2(0xddeeff, 0.005);
+
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 1.8, 0);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
+      dirLight.position.set(30, 60, -30);
+      scene.add(dirLight);
+      scene.add(new THREE.AmbientLight(0x88aacc, 0.8));
+
+      // Snow Slope
+      const terrainGeo = new THREE.PlaneGeometry(350, 600, 32, 32);
+      const terrainMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+      terrain.rotation.x = -Math.PI / 2.2;
+      terrain.position.z = -220;
+      scene.add(terrain);
+
+      // FPV Ski Tips
+      skiGroup = new THREE.Group();
+      const skiGeo = new THREE.BoxGeometry(0.14, 0.05, 2.2);
+      const skiMatLeft = new THREE.MeshStandardMaterial({ color: 0xff007f, roughness: 0.2 });
+      const skiMatRight = new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.2 });
+
+      leftSki = new THREE.Mesh(skiGeo, skiMatLeft);
+      leftSki.position.set(-0.4, -0.9, -1.2);
+      rightSki = new THREE.Mesh(skiGeo, skiMatRight);
+      rightSki.position.set(0.4, -0.9, -1.2);
+      skiGroup.add(leftSki);
+      skiGroup.add(rightSki);
+
+      // Hunting Rifle
+      const rifleGeo = new THREE.BoxGeometry(0.08, 0.12, 1.2);
+      const rifleMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 });
+      rifleMesh = new THREE.Mesh(rifleGeo, rifleMat);
+      rifleMesh.position.set(0.45, -0.4, -0.8);
+      rifleMesh.rotation.x = 0.05;
+      camera.add(rifleMesh);
+
+      camera.add(skiGroup);
+      scene.add(camera);
+
+      createWastedSkierSprite();
+      createCleanSpacedTrees();
+      createNpcSkiers();
+      createSnowParticles();
+      createRealisticYetiV2();
+      initRearviewMirror();
+
+      window.addEventListener('resize', onWindowResize);
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mousedown', onShoot);
+      window.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    function createWastedSkierSprite() {
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load('assets/npc_skiers.jpg', (texture) => {
+        skierTexture = texture;
+        skierTexture.magFilter = THREE.NearestFilter;
+        skierTexture.minFilter = THREE.NearestFilter;
+        skierTexture.repeat.set(1 / 8, 1 / 8);
+        skierTexture.offset.set(0, 0);
+
+        const mat = new THREE.SpriteMaterial({ map: skierTexture, transparent: true });
+        wastedSkierSprite = new THREE.Sprite(mat);
+        wastedSkierSprite.scale.set(4.5, 4.5, 1);
+        wastedSkierSprite.visible = false;
+        scene.add(wastedSkierSprite);
+      });
+    }
+
+    function createNpcSkiers() {
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load('assets/npc_skiers.jpg', (texture) => {
+        npcTexture = texture;
+        npcTexture.magFilter = THREE.NearestFilter;
+        npcTexture.minFilter = THREE.NearestFilter;
+
+        for (let i = 0; i < 14; i++) {
+          const mat = new THREE.SpriteMaterial({ map: npcTexture.clone(), transparent: true });
+          mat.map.repeat.set(1 / 8, 1 / 8);
+          mat.map.offset.set((i % 8) * (1 / 8), Math.floor(i / 8) * (1 / 8) + 0.4);
+
+          const npc = new THREE.Sprite(mat);
+          npc.scale.set(3.8, 3.8, 1);
+          npc.position.set((Math.random() - 0.5) * 140, 1.8, -30 - (i * 35));
+          npc.userData = {
+            speed: 20 + Math.random() * 12,
+            steer: (Math.random() - 0.5) * 0.6,
+            isEaten: false
+          };
+          scene.add(npc);
+          npcSkiers.push(npc);
+        }
+      });
+    }
+
+    function createCleanSpacedTrees() {
+      trees.forEach(t => scene.remove(t));
+      trees = [];
+
+      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5a3d28 });
+      const leavesMat = new THREE.MeshLambertMaterial({ color: 0x1d4d2d });
+
+      for (let i = 0; i < 60; i++) {
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.8, 6), trunkMat);
+        const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.2, 5.5, 6), leavesMat);
+        leaves.position.y = 3.2;
+        tree.add(trunk);
+        tree.add(leaves);
+
+        tree.position.x = (Math.random() - 0.5) * 180;
+        tree.position.z = -45 - (i * 8.5);
+        tree.position.y = -tree.position.z * 0.15;
+        tree.userData = { radius: 2.0 };
+
+        scene.add(tree);
+        trees.push(tree);
+      }
+    }
+
+    function createSnowParticles() {
+      const count = 400;
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(count * 3);
+      for (let i = 0; i < count * 3; i += 3) {
+        pos[i] = (Math.random() - 0.5) * 15;
+        pos[i + 1] = Math.random() * 4 - 1;
+        pos[i + 2] = -Math.random() * 15;
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.85 });
+      snowParticles = new THREE.Points(geo, mat);
+      camera.add(snowParticles);
+    }
+
+    function createRealisticYetiV2() {
+      const targetGeo = new THREE.BoxGeometry(6.5, 7.5, 3.5);
+      const targetMat = new THREE.MeshBasicMaterial({ visible: false });
+      yetiMesh = new THREE.Mesh(targetGeo, targetMat);
+      yetiMesh.position.set(0, 3.5, 120);
+      yetiMesh.userData = { isYeti: true };
+      scene.add(yetiMesh);
+
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load('assets/yeti_v2.jpg', (texture) => {
+        yetiTexture = texture;
+        yetiTexture.magFilter = THREE.NearestFilter;
+        yetiTexture.minFilter = THREE.NearestFilter;
+        
+        yetiTexture.repeat.set(1 / 6, 1 / 3.4);
+        yetiTexture.offset.set(0, 0.68);
+
+        const mat = new THREE.SpriteMaterial({ map: yetiTexture, transparent: true });
+        yetiSprite = new THREE.Sprite(mat);
+        yetiSprite.scale.set(8.0, 8.0, 1);
+        yetiSprite.position.set(0, 4.0, 120);
+        scene.add(yetiSprite);
+      });
+    }
+
+    function updateYetiSpriteAnimation(delta) {
+      if (!yetiTexture || !yetiSprite) return;
+      yetiAnimTimer += delta;
+      if (yetiAnimTimer >= 0.10) {
+        yetiAnimTimer = 0;
+        yetiSpriteFrame = (yetiSpriteFrame + 1) % 6;
+        yetiTexture.offset.x = yetiSpriteFrame * (1 / 6);
+      }
+    }
+
+    function updateWastedSkierAnimation(delta) {
+      if (!skierTexture || !wastedSkierSprite || !wastedSkierSprite.visible) return;
+      wastedAnimTimer += delta;
+      if (wastedAnimTimer >= 0.12) {
+        wastedAnimTimer = 0;
+        wastedFrame = (wastedFrame + 1) % 8;
+        skierTexture.offset.x = wastedFrame * (1 / 8);
+      }
+    }
+
+    function initRearviewMirror() {
+      const mirrorCanvas = document.getElementById('rearview-canvas');
+      mirrorRenderer = new THREE.WebGLRenderer({ canvas: mirrorCanvas });
+      mirrorRenderer.setSize(150, 85);
+      mirrorCamera = new THREE.PerspectiveCamera(60, 150 / 85, 0.1, 400);
+      mirrorCamera.rotation.y = Math.PI;
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onMouseMove(e) {
+      mousePos.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mousePos.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      const ch = document.getElementById('crosshair');
+      ch.style.left = `${e.clientX}px`;
+      ch.style.top = `${e.clientY}px`;
+    }
+
+    function reloadGun() {
+      if (isReloading || ammoCount === maxAmmo) return;
+      isReloading = true;
+      soundEngine.playReload();
+      document.getElementById('ammo-count').innerText = "RELOADING...";
+      document.getElementById('ammo-count').style.color = "#ffff00";
+
+      setTimeout(() => {
+        ammoCount = maxAmmo;
+        isReloading = false;
+        document.getElementById('ammo-count').innerText = `AMMO: ${ammoCount} / ${maxAmmo} [R]`;
+        document.getElementById('ammo-count').style.color = "#ff007f";
+      }, 1000);
+    }
+
+    function onShoot(e) {
+      if (!isPlaying || isWasted || yetiStateStr === "DEAD") return;
+
+      if (ammoCount <= 0) {
+        reloadGun();
+        return;
+      }
+      if (isReloading) return;
+
+      ammoCount--;
+      document.getElementById('ammo-count').innerText = `AMMO: ${ammoCount} / ${maxAmmo} [R]`;
+      soundEngine.playGunshot();
+
+      rifleMesh.position.z = -0.65;
+      const flash = document.getElementById('muzzle-flash');
+      flash.style.opacity = '1';
+      setTimeout(() => {
+        rifleMesh.position.z = -0.8;
+        flash.style.opacity = '0';
+      }, 70);
+
+      raycaster.setFromCamera(mousePos, camera);
+      const intersects = raycaster.intersectObject(yetiMesh);
+
+      let isHit = false;
+      let isCrit = false;
+
+      if (intersects.length > 0) {
+        isHit = true;
+        if (intersects[0].point.y > 4.5) isCrit = true;
+      } else {
+        const mirrorBox = document.getElementById('rearview-mirror').getBoundingClientRect();
+        if (e.clientX >= mirrorBox.left && e.clientX <= mirrorBox.right &&
+            e.clientY >= mirrorBox.top && e.clientY <= mirrorBox.bottom) {
+          isHit = true;
+          isCrit = Math.random() < 0.4;
+        }
+      }
+
+      if (!isHit && yetiSprite && yetiSprite.visible) {
+        const yetiScreenPos = yetiSprite.position.clone().project(camera);
+        const screenDist = Math.hypot(yetiScreenPos.x - mousePos.x, yetiScreenPos.y - mousePos.y);
+        if (screenDist < 0.28) {
+          isHit = true;
+          isCrit = screenDist < 0.1;
+        }
+      }
+
+      if (isHit) {
+        soundEngine.playHitFlesh();
+        showHitmarker();
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "SHOOT",
+          hit: isHit,
+          crit: isCrit
+        }));
+      }
+
+      if (ammoCount === 0) {
+        setTimeout(reloadGun, 300);
+      }
+    }
+
+    function showHitmarker() {
+      const hm = document.getElementById('hitmarker');
+      const ch = document.getElementById('crosshair').getBoundingClientRect();
+      hm.style.left = `${ch.left + 16}px`;
+      hm.style.top = `${ch.top + 16}px`;
+      hm.style.opacity = '1';
+      setTimeout(() => hm.style.opacity = '0', 90);
+    }
+
+    function spawnDamagePopup(dmg, isCrit) {
+      const container = document.getElementById('floating-dmg-container');
+      const el = document.createElement('div');
+      el.className = `dmg-popup ${isCrit ? 'dmg-crit' : 'dmg-normal'}`;
+      el.innerText = isCrit ? `-${dmg} CRIT!` : `-${dmg}`;
+      
+      const ch = document.getElementById('crosshair').getBoundingClientRect();
+      el.style.left = `${ch.left + 16}px`;
+      el.style.top = `${ch.top - 20}px`;
+
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 800);
+    }
+
+    function onYetiBiteAttack() {
+      if (biteInvulnerabilityTimer > 0 || isWasted) return;
+      biteInvulnerabilityTimer = 2.5;
+      playerHearts--;
+      soundEngine.playBiteChomp();
+
+      const df = document.getElementById('damage-flash');
+      df.style.opacity = '0.95';
+      setTimeout(() => df.style.opacity = '0', 250);
+
+      playerSpeed = Math.min(80, playerSpeed + 24);
+
+      const biteToast = document.getElementById('bite-alert');
+      let limbMsg = "🩸 YETI BITE! ARM LOST (-1 HEART)";
+      if (playerHearts === 2) {
+        document.getElementById('h3').classList.add('heart-lost');
+        document.getElementById('limb-status').innerText = "LEFT ARM LOST 🩸";
+        document.getElementById('limb-status').style.color = "#ffff00";
+        limbMsg = "🩸 YETI CHOMPED YOUR LEFT ARM! (-1 HEART)";
+      } else if (playerHearts === 1) {
+        document.getElementById('h2').classList.add('heart-lost');
+        document.getElementById('limb-status').innerText = "BOTH ARMS LOST 🩸🩸";
+        document.getElementById('limb-status').style.color = "#ff8800";
+        limbMsg = "🩸 YETI CHOMPED YOUR RIGHT ARM! (-1 HEART)";
+      }
+
+      biteToast.innerText = limbMsg;
+      biteToast.style.opacity = '1';
+      biteToast.style.transform = 'translate(-50%, -50%) scale(1.15)';
+      setTimeout(() => {
+        biteToast.style.opacity = '0';
+        biteToast.style.transform = 'translate(-50%, -50%) scale(1.0)';
+      }, 1500);
+
+      if (playerHearts <= 0) {
+        document.getElementById('h1').classList.add('heart-lost');
+        document.getElementById('limb-status').innerText = "SKELETONIZED 💀";
+        document.getElementById('limb-status').style.color = "#ff0033";
+        triggerWastedSequence("SKELETONIZED BY THE YETI");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
+        }
+      }
+    }
+
+    function onTreeHit() {
+      playerHearts--;
+      soundEngine.playTreeThud();
+
+      const df = document.getElementById('damage-flash');
+      df.style.opacity = '0.85';
+      setTimeout(() => df.style.opacity = '0', 200);
+
+      playerSpeed = 15;
+
+      if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
+      if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
+
+      if (playerHearts <= 0) {
+        document.getElementById('h1').classList.add('heart-lost');
+        triggerWastedSequence("SMACKED INTO TOO MANY PINE TREES");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "PLAYER_DIED" }));
+        }
+      }
+    }
+
+    // --- Networking ---
+    function connectWebSocket(callsign) {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws?callsign=${encodeURIComponent(callsign)}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "WELCOME") {
+          myPlayerId = msg.playerId;
+        } else if (msg.type === "FRAME") {
+          handleFrame(msg);
+        } else if (msg.type === "YETI_HIT") {
+          handleYetiHit(msg);
+        } else if (msg.type === "YETI_DEFEATED") {
+          handleYetiDefeat(msg);
+        } else if (msg.type === "NEXT_WAVE") {
+          handleNextWave(msg);
+        } else if (msg.type === "YETI_BITE_ATTACK") {
+          if (msg.victimId === myPlayerId && !isWasted) {
+            onYetiBiteAttack();
+          }
+        }
+      };
+    }
+
+    function handleFrame(msg) {
+      const rosterList = document.getElementById('roster-list');
+      let rosterHTML = '';
+
+      msg.skiers.forEach(skier => {
+        const isMe = skier.id === myPlayerId;
+        const statusClass = skier.isDead ? 'roster-eaten' : 'roster-alive';
+        const tag = isMe ? `${skier.callsign} (YOU)` : skier.callsign;
+        rosterHTML += `<div class="roster-item"><span class="${statusClass}">${tag}</span><span>${skier.damageDealt} DMG</span></div>`;
+
+        if (isMe) {
+          damageDealtTotal = skier.damageDealt;
+          document.getElementById('hud-dmg').innerHTML = `${damageDealtTotal} <span style="font-size:14px;">DMG</span>`;
+        }
+      });
+      rosterList.innerHTML = rosterHTML;
+
+      currentWaveNum = msg.wave || 1;
+      document.getElementById('boss-wave-title').innerText = `👹 ALPINE YETI (WAVE ${currentWaveNum})`;
+
+      yetiCurrentHp = msg.yeti.hp;
+      yetiMaxHp = msg.yeti.maxHp;
+      yetiWorldX = msg.yeti.x;
+      yetiWorldZ = msg.yeti.z;
+      yetiStateStr = msg.yeti.state;
+
+      const hpPct = Math.max(0, Math.min(100, (yetiCurrentHp / yetiMaxHp) * 100));
+      document.getElementById('boss-hp-fill').style.width = `${hpPct}%`;
+      document.getElementById('boss-hp-text').innerText = `${yetiCurrentHp.toLocaleString()} / ${yetiMaxHp.toLocaleString()} HP`;
+
+      const yetiHud = document.getElementById('hud-yeti');
+      if (msg.yeti.active && msg.yeti.state !== "DEAD") {
+        const distFromPlayer = Math.round(msg.yeti.z - playerZ);
+        const distLabel = distFromPlayer > 0 ? `${distFromPlayer}M AHEAD` : `${Math.abs(distFromPlayer)}M BEHIND`;
+        
+        yetiHud.innerText = msg.yeti.state === "STAGGERED" ? "⚡ STAGGERED!" : (msg.yeti.state === "RETREATING" ? "💨 RETREATING!" : `CHARGING (${distLabel})`);
+        yetiHud.style.color = msg.yeti.state === "STAGGERED" ? "#ffff00" : (msg.yeti.state === "RETREATING" ? "#00f0ff" : "#ff0033");
+
+        const relZ = -(playerZ - msg.yeti.z);
+        const relX = msg.yeti.x - playerX;
+        
+        yetiMesh.position.set(relX, 3.5, relZ);
+        if (yetiSprite) {
+          yetiSprite.position.set(relX, 3.8, relZ);
+          yetiSprite.visible = true;
+        }
+      } else if (msg.yeti.state === "DEAD") {
+        yetiHud.innerText = "💀 DEFEATED";
+        yetiHud.style.color = "#39ff14";
+      }
+    }
+
+    function handleYetiHit(msg) {
+      if (msg.shooterId === myPlayerId) {
+        spawnDamagePopup(msg.damage, msg.isCrit);
+      }
+      if (msg.isCrit) {
+        soundEngine.playYetiStaggerRoar();
+      }
+    }
+
+    function handleYetiDefeat(msg) {
+      const vScreen = document.getElementById('victory-screen');
+      document.getElementById('wave-advance-text').innerText = `WAVE ${msg.wave} CLEARED — SURVIVAL MODE ENGAGED!`;
+      vScreen.style.opacity = '1';
+      if (yetiSprite) yetiSprite.scale.set(10, 3, 1);
+
+      setTimeout(() => {
+        vScreen.style.opacity = '0';
+      }, 3500);
+    }
+
+    function handleNextWave(msg) {
+      if (yetiSprite) yetiSprite.scale.set(8.0, 8.0, 1);
+      playerHearts = Math.min(3, playerHearts + 1);
+      if (playerHearts >= 2) document.getElementById('h2').classList.remove('heart-lost');
+      if (playerHearts >= 3) document.getElementById('h3').classList.remove('heart-lost');
+    }
+
+    function triggerWastedSequence(reasonText) {
+      if (isWasted) return;
+      isWasted = true;
+      isPlaying = false;
+      wastedTime = 0;
+      wastedFrame = 0;
+
+      soundEngine.playWastedSound();
+
+      skiGroup.visible = false;
+      rifleMesh.visible = false;
+      
+      if (wastedSkierSprite) {
+        wastedSkierSprite.position.set(playerX, 1.6, 0);
+        wastedSkierSprite.visible = true;
+      }
+
+      document.getElementById('hud-overlay').classList.add('hidden');
+      const wastedScreen = document.getElementById('wasted-screen');
+      document.getElementById('wasted-subtitle').innerText = reasonText.toUpperCase();
+      wastedScreen.style.opacity = '1';
+      document.getElementById('wasted-banner').style.transform = 'scale(1.0)';
+
+      setTimeout(() => {
+        wastedScreen.style.opacity = '0';
+        document.getElementById('death-title').innerText = "💥 HUNT FAILED";
+        document.getElementById('death-stat').innerHTML = `Surviving Wave: <strong>Wave ${currentWaveNum}</strong><br>Total Damage: <strong>${damageDealtTotal} DMG</strong>`;
+        document.getElementById('death-modal').classList.remove('hidden');
+      }, 3500);
+    }
+
+    // --- Main Game Loop with Difficulty Presets ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (!scene || !renderer || !camera) return;
+
+      if (!isPlaying && !isWasted) {
+        // Idle camera sweep across mountain slope behind start modal
+        camera.position.x = Math.sin(Date.now() * 0.0006) * 14;
+        camera.position.z = -8 + Math.cos(Date.now() * 0.0006) * 8;
+        camera.position.y = 3.5;
+        camera.lookAt(0, 1.5, -70);
+        if (snowParticles) snowParticles.rotation.y += 0.002;
+        renderer.render(scene, camera);
+        return;
+      }
+
+      if (isPlaying && !isWasted) {
+        if (spawnGraceTimer > 0) spawnGraceTimer -= 0.016;
+        if (biteInvulnerabilityTimer > 0) biteInvulnerabilityTimer -= 0.016;
+
+        const preset = DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium;
+
+        let targetSpeed = preset.cruiseSpeed;
+        if (keys.w) targetSpeed = preset.tuckSpeed;
+        if (keys.s) targetSpeed = preset.brakeSpeed;
+
+        const sidewaysBraking = Math.abs(Math.sin(playerHeadingAngle)) * 18;
+        targetSpeed = Math.max(10, targetSpeed - sidewaysBraking);
+        playerSpeed += (targetSpeed - playerSpeed) * 0.05;
+
+        // 90° Carving
+        const maxAngle = Math.PI / 2.1;
+        if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07);
+        else if (keys.d) turnSteerVelocity = Math.min(1.8, turnSteerVelocity + 0.07);
+        else {
+          turnSteerVelocity *= 0.85;
+          playerHeadingAngle *= 0.92;
+        }
+
+        playerHeadingAngle += turnSteerVelocity * 0.04;
+        playerHeadingAngle = Math.max(-maxAngle, Math.min(maxAngle, playerHeadingAngle));
+
+        const forwardVel = Math.cos(playerHeadingAngle) * playerSpeed * preset.forwardFactor;
+        const lateralVel = Math.sin(playerHeadingAngle) * playerSpeed * preset.lateralFactor;
+
+        playerZ += forwardVel;
+        playerX += lateralVel;
+        playerX = Math.max(-120, Math.min(120, playerX));
+
+        const hudSpeed = document.getElementById('hud-speed');
+        if (hudSpeed) hudSpeed.innerHTML = `${Math.floor(playerSpeed)} <span style="font-size:14px;">MPH</span>`;
+
+        isLookingBack = keys.shift;
+        const hudView = document.getElementById('hud-view');
+        if (hudView) {
+          hudView.innerText = isLookingBack ? "👀 LOOKING BACK" : "DOWNHILL";
+          hudView.style.color = isLookingBack ? "#ff007f" : "#00f0ff";
+        }
+
+        const targetYaw = isLookingBack ? Math.PI : -playerHeadingAngle * 0.9;
+        camera.position.y = 1.8 + Math.sin(Date.now() * 0.015) * 0.03;
+        camera.rotation.y = targetYaw;
+        camera.rotation.z = isLookingBack ? 0 : -playerHeadingAngle * 0.35;
+
+        skiGroup.rotation.y = -playerHeadingAngle;
+        skiGroup.rotation.z = -playerHeadingAngle * 0.4;
+
+        if (isLookingBack) {
+          rifleMesh.rotation.y = Math.PI;
+          rifleMesh.position.set(-0.45, -0.4, 0.8);
+        } else {
+          rifleMesh.rotation.y = 0;
+          rifleMesh.position.set(0.45, -0.4, -0.8);
+        }
+
+        updateYetiSpriteAnimation(0.016);
+
+        // Update & Scroll NPC Skiers
+        npcSkiers.forEach(npc => {
+          npc.position.z += forwardVel - (npc.userData.speed * preset.forwardFactor * 0.8);
+          npc.position.x += npc.userData.steer;
+          npc.position.y = -npc.position.z * 0.15;
+
+          if (!npc.userData.isEaten && yetiSprite && yetiSprite.visible) {
+            const distToYeti = Math.hypot(npc.position.x - yetiMesh.position.x, npc.position.z - yetiMesh.position.z);
+            if (distToYeti < 4.0) {
+              npc.userData.isEaten = true;
+              soundEngine.playNpcScream();
+              soundEngine.playBiteChomp();
+              npc.scale.set(4.5, 1.5, 1);
+              npc.position.y += 1.5;
+            }
+          }
+
+          if (npc.position.z > 20) {
+            npc.position.z = -380;
+            npc.position.x = (Math.random() - 0.5) * 140;
+            npc.userData.isEaten = false;
+            npc.scale.set(3.8, 3.8, 1);
+          }
+        });
+
+        // Tree scroll & Collision
+        trees.forEach(tree => {
+          tree.position.z += forwardVel;
+          tree.position.x -= lateralVel;
+          tree.position.y = -tree.position.z * 0.15;
+
+          if (spawnGraceTimer <= 0 && Math.abs(tree.position.z) < 1.8 && Math.abs(tree.position.x) < tree.userData.radius) {
+            onTreeHit();
+            tree.position.z = 25;
+          }
+          if (tree.position.z > 20) {
+            tree.position.z = -480;
+            tree.position.x = (Math.random() - 0.5) * 180;
+          }
+        });
+
+        soundEngine.updateSpeed(playerSpeed, playerHeadingAngle);
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "INPUT",
+            steer: playerHeadingAngle,
+            tuck: keys.w,
+            brake: keys.s
+          }));
+        }
+
+        if (mirrorRenderer && mirrorCamera) {
+          mirrorCamera.position.copy(camera.position);
+          mirrorCamera.rotation.y = Math.PI - playerHeadingAngle * 0.5;
+          mirrorRenderer.render(scene, mirrorCamera);
+        }
+      }
+
+      if (isWasted) {
+        wastedTime += 0.016;
+        updateWastedSkierAnimation(0.016);
+
+        const orbitAngle = wastedTime * 0.75;
+        camera.position.x = playerX + Math.sin(orbitAngle) * 5.5;
+        camera.position.z = Math.cos(orbitAngle) * 5.5;
+        camera.position.y = 2.8;
+        camera.lookAt(playerX, 1.2, 0);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // --- Controls & Hotkeys ---
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'a' || e.key === 'ArrowLeft') keys.a = true;
+      if (k === 'd' || e.key === 'ArrowRight') keys.d = true;
+      if (k === 'w' || e.key === 'ArrowUp') keys.w = true;
+      if (k === 's' || e.key === 'ArrowDown') keys.s = true;
+      if (k === 'r') reloadGun();
+      if (e.key === 'Shift') keys.shift = true;
+      if (k === '1') setDifficulty('easy');
+      if (k === '2') setDifficulty('medium');
+      if (k === '3') setDifficulty('pro');
+      if (k === 'c') {
+        const crt = document.getElementById('crt-overlay');
+        if (crt) crt.classList.toggle('hidden');
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'a' || e.key === 'ArrowLeft') keys.a = false;
+      if (k === 'd' || e.key === 'ArrowRight') keys.d = false;
+      if (k === 'w' || e.key === 'ArrowUp') keys.w = false;
+      if (k === 's' || e.key === 'ArrowDown') keys.s = false;
+      if (e.key === 'Shift') keys.shift = false;
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 2) keys.shift = true;
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) keys.shift = false;
+    });
+
+    // Difficulty Button clicks
+    document.querySelectorAll('.diff-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setDifficulty(btn.dataset.diff);
+      });
+    });
+
+    // Start Button
+    document.getElementById('btn-start').addEventListener('click', () => {
+      const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
+      soundEngine.init();
+      if (!scene) init3D();
+      setDifficulty(selectedDifficulty);
+      playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
+      connectWebSocket(callsign);
+
+      document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('hud-overlay').classList.remove('hidden');
+      isPlaying = true;
+      isWasted = false;
+      playerHearts = 3;
+      ammoCount = maxAmmo;
+      spawnGraceTimer = 3.0;
+    });
+
+    // Respawn Button
+    document.getElementById('btn-respawn').addEventListener('click', () => {
+      document.getElementById('death-modal').classList.add('hidden');
+      document.getElementById('hud-overlay').classList.remove('hidden');
+      document.getElementById('wasted-screen').style.opacity = '0';
+
+      document.getElementById('h1').classList.remove('heart-lost');
+      document.getElementById('h2').classList.remove('heart-lost');
+      document.getElementById('h3').classList.remove('heart-lost');
+      document.getElementById('limb-status').innerText = "INTACT ⛷️";
+      document.getElementById('limb-status').style.color = "#39ff14";
+
+      skiGroup.visible = true;
+      rifleMesh.visible = true;
+      if (wastedSkierSprite) wastedSkierSprite.visible = false;
+      camera.position.set(0, 1.8, 0);
+      camera.rotation.set(0, 0, 0);
+
+      createCleanSpacedTrees();
+      playerHearts = 3;
+      ammoCount = maxAmmo;
+      spawnGraceTimer = 3.0;
+      biteInvulnerabilityTimer = 0;
+
+      playerX = 0;
+      playerZ = 0;
+      playerSpeed = (DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium).cruiseSpeed;
+      playerHeadingAngle = 0;
+      turnSteerVelocity = 0;
+      isWasted = false;
+      isPlaying = true;
+
+      const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
+      connectWebSocket(callsign);
+    });
+
+    // Instant Page Load 3D Boot (eliminates startup black-screen)
+    window.addEventListener('DOMContentLoaded', () => {
+      init3D();
+      setDifficulty(selectedDifficulty);
+      animate();
+    });
+  </script>
+</body>
+</html>

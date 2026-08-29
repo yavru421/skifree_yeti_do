@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SkiFree 2: The Hunt for the Yeti — Official Launch</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #060913;
+      color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+    /* CRT Scanline Effect */
+    #crt {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 255, 0, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      opacity: 0.5;
+      z-index: 999;
+    }
+    .hero {
+      position: relative;
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 20px;
+      background: radial-gradient(circle at center, #101c38 0%, #060913 75%);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(255, 0, 127, 0.15);
+      border: 1px solid #ff007f;
+      border-radius: 20px;
+      color: #ff007f;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+    }
+    h1 {
+      font-family: 'Arial Black', Impact, sans-serif;
+      font-size: clamp(36px, 7vw, 76px);
+      letter-spacing: 4px;
+      color: #00f0ff;
+      text-shadow: 0 0 25px rgba(0, 240, 255, 0.8), 3px 3px 0 #000;
+      margin-bottom: 10px;
+      line-height: 1.1;
+    }
+    .subtitle {
+      font-size: clamp(14px, 2.5vw, 20px);
+      color: #88a0c0;
+      max-width: 720px;
+      margin-bottom: 30px;
+    }
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #ff007f, #7928ca);
+      color: #fff;
+      text-decoration: none;
+      padding: 18px 40px;
+      font-size: 20px;
+      font-weight: 900;
+      border-radius: 8px;
+      letter-spacing: 2px;
+      box-shadow: 0 0 30px rgba(255, 0, 127, 0.6);
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-primary:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 45px rgba(255, 0, 127, 0.9);
+    }
+    .btn-secondary {
+      background: rgba(0, 240, 255, 0.1);
+      border: 2px solid #00f0ff;
+      color: #00f0ff;
+      text-decoration: none;
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      letter-spacing: 1.5px;
+      transition: 0.2s;
+    }
+    .btn-secondary:hover {
+      background: rgba(0, 240, 255, 0.25);
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.5);
+    }
+
+    /* Video & Media Section */
+    .media-container {
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto 50px auto;
+      border: 3px solid #00f0ff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0, 240, 255, 0.4);
+      background: #000;
+    }
+    video {
+      width: 100%;
+      display: block;
+      max-height: 520px;
+      object-fit: cover;
+    }
+
+    /* Soundtrack Player */
+    .soundtrack-box {
+      max-width: 600px;
+      width: 100%;
+      background: rgba(10, 20, 35, 0.9);
+      border: 2px solid #39ff14;
+      border-radius: 10px;
+      padding: 18px 24px;
+      margin: 0 auto 60px auto;
+      box-shadow: 0 0 20px rgba(57, 255, 20, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .audio-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      color: #39ff14;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+    audio {
+      width: 100%;
+      height: 38px;
+      outline: none;
+    }
+
+    /* Features Grid */
+    .grid {
+      max-width: 1100px;
+      margin: 0 auto 80px auto;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: rgba(10, 18, 32, 0.85);
+      border: 2px solid #1a2a48;
+      border-radius: 10px;
+      padding: 24px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: #00f0ff;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+    }
+    .card-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 900;
+      color: #00f0ff;
+      margin-bottom: 8px;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: #88a0c0;
+      line-height: 1.6;
+    }
+
+    footer {
+      text-align: center;
+      padding: 40px 20px;
+      border-top: 1px solid #1a2a48;
+      font-size: 12px;
+      color: #556688;
+    }
+  </style>
+</head>
+<body>
+  <div id="crt"></div>
+
+  <section class="hero">
+    <div class="badge">🎿 35 YEARS OF HUNTING • THE RETRIBUTION</div>
+    <h1>SKIFREE 2<br><span style="color:#ff007f;">HUNT FOR THE YETI</span></h1>
+    <p class="subtitle">
+      The Windows 95 legend returns as a high-octane 3D FPV multiplayer survival shooter. Turn around with your hunting rifle, lock in, and put down the abominable terror of the mountain.
+    </p>
+    
+    <div class="cta-group">
+      <a href="index.html" class="btn-primary">LOCK & LOAD • PLAY NOW 🚀</a>
+      <a href="#teaser" class="btn-secondary">WATCH TRAILER 🎬</a>
+    </div>
+
+    <!-- Video Teaser -->
+    <div class="media-container" id="teaser">
+      <video controls poster="assets/yeti_v2.jpg" preload="metadata">
+        <source src="assets/media/teaser_trailer.mp4" type="video/mp4">
+        Your browser does not support HTML5 video.
+      </video>
+    </div>
+
+    <!-- Soundtrack Player -->
+    <div class="soundtrack-box">
+      <div class="audio-header">
+        <span>🎵 ORIGINAL SOUNDTRACK: "WALTZ ON THE SLOPE"</span>
+        <span>48kHz MASTER</span>
+      </div>
+      <audio controls loop>
+        <source src="assets/media/waltz_on_the_slope.mp3" type="audio/mpeg">
+        Your browser does not support audio playback.
+      </audio>
+    </div>
+  </section>
+
+  <!-- Feature Grid -->
+  <section class="grid">
+    <div class="card">
+      <div class="card-icon">🎯</div>
+      <div class="card-title">3D FPV Rifle Aiming</div>
+      <div class="card-desc">Carve down slopes at 85 MPH while holding [Shift] or Right-Click to swivel 180° downhill and fire high-caliber precision rounds at the charging beast.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">👹</div>
+      <div class="card-title">Multi-Wave Yeti Bosses</div>
+      <div class="card-desc">Battle the 8,000 HP Alpine Yeti and survive Wave 2 Enraged mutations featuring speed bursts, limb-bite attacks, and tactical retreats.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-title">Cloudflare Durable Objects</div>
+      <div class="card-desc">Authoritative 20Hz WebGL physics engine backed by Cloudflare edge compute, native SQLite leaderboards, and zero-latency multiplayer sync.</div>
+    </div>
+    <div class="card">
+      <div class="card-icon">⛷️</div>
+      <div class="card-title">14 NPC Skier Militia</div>
+      <div class="card-desc">Dodge retro snowboarders and use 90s skiers as tactical bait while the Yeti stalks the mountain slope.</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>© 2026 SkiFree 2: Hunt for the Yeti • Built with Three.js & Cloudflare Edge • Zero-Liability Architecture</p>
+  </footer>
+</body>
+</html>
