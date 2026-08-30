@@ -9,7 +9,15 @@ export class AudioSystem {
     this.carveGain = null;
     this.isInitialized = false;
     this.isSoundOn = true;
-    this.bgMusic = null;
+    this.bgAudio = null;
+
+    // Automatic global unlock on first user interaction to satisfy browser autoplay policy
+    const unlockHandler = () => {
+      this.unlockAndStart();
+    };
+    ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((evt) => {
+      window.addEventListener(evt, unlockHandler, { passive: true });
+    });
   }
 
   unlockAndStart() {
@@ -17,16 +25,20 @@ export class AudioSystem {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
-    if (this.bgMusic && this.isSoundOn && this.bgMusic.paused) {
-      this.bgMusic.play().catch(() => {});
+    if (!this.bgAudio) {
+      this.bgAudio = document.getElementById("bg-music-player");
+    }
+    if (this.bgAudio && this.isSoundOn) {
+      this.bgAudio.volume = 0.65;
+      this.bgAudio.play().catch(() => {});
     }
   }
 
   init() {
     if (this.isInitialized) {
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
-      if (this.bgMusic && this.isSoundOn && this.bgMusic.paused) {
-        this.bgMusic.play().catch(() => {});
+      if (this.bgAudio && this.isSoundOn && this.bgAudio.paused) {
+        this.bgAudio.play().catch(() => {});
       }
       return;
     }
@@ -71,13 +83,10 @@ export class AudioSystem {
       carveNoise.start();
 
       // Load & Stream the Authentic Recorded Soundtrack
-      this.bgMusic = new Audio('/assets/media/waltz_on_the_slope.mp3');
-      this.bgMusic.loop = true;
-      this.bgMusic.volume = 0.45;
-      if (this.isSoundOn) {
-        this.bgMusic.play().catch(() => {
-          // Will unlock on first click/touch
-        });
+      this.bgAudio = document.getElementById("bg-music-player");
+      if (this.bgAudio && this.isSoundOn) {
+        this.bgAudio.volume = 0.65;
+        this.bgAudio.play().catch(() => {});
       }
 
       this.isInitialized = true;
@@ -88,11 +97,11 @@ export class AudioSystem {
 
   toggleSound() {
     this.isSoundOn = !this.isSoundOn;
-    if (this.bgMusic) {
+    if (this.bgAudio) {
       if (this.isSoundOn) {
-        this.bgMusic.play().catch(() => {});
+        this.bgAudio.play().catch(() => {});
       } else {
-        this.bgMusic.pause();
+        this.bgAudio.pause();
       }
     }
     return this.isSoundOn;
