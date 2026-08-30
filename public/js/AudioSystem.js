@@ -1,5 +1,5 @@
 // public/js/AudioSystem.js
-// Autonomous WebAudio Alpine Synth Engine & Spatial Audio Layer
+// Autonomous WebAudio Alpine SFX Engine & MP3 Soundtrack Layer
 
 export class AudioSystem {
   constructor() {
@@ -7,11 +7,9 @@ export class AudioSystem {
     this.windGain = null;
     this.windFilter = null;
     this.carveGain = null;
-    this.musicGain = null;
     this.isInitialized = false;
     this.isSoundOn = true;
-    this.synthLoopInterval = null;
-    this.melodyNoteIdx = 0;
+    this.bgMusic = null;
   }
 
   unlockAndStart() {
@@ -19,11 +17,17 @@ export class AudioSystem {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
+    if (this.bgMusic && this.isSoundOn && this.bgMusic.paused) {
+      this.bgMusic.play().catch(() => {});
+    }
   }
 
   init() {
     if (this.isInitialized) {
       if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.bgMusic && this.isSoundOn && this.bgMusic.paused) {
+        this.bgMusic.play().catch(() => {});
+      }
       return;
     }
     try {
@@ -66,11 +70,15 @@ export class AudioSystem {
       this.carveGain.connect(this.ctx.destination);
       carveNoise.start();
 
-      // Procedural Chiptune Music Bus
-      this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.value = 0.22;
-      this.musicGain.connect(this.ctx.destination);
-      this.startAlpineSynthWaltz();
+      // Load & Stream the Authentic Recorded Soundtrack
+      this.bgMusic = new Audio('/assets/media/waltz_on_the_slope.mp3');
+      this.bgMusic.loop = true;
+      this.bgMusic.volume = 0.45;
+      if (this.isSoundOn) {
+        this.bgMusic.play().catch(() => {
+          // Will unlock on first click/touch
+        });
+      }
 
       this.isInitialized = true;
     } catch (e) {
@@ -78,48 +86,16 @@ export class AudioSystem {
     }
   }
 
-  startAlpineSynthWaltz() {
-    if (this.synthLoopInterval) clearInterval(this.synthLoopInterval);
-    const notes = [
-      392.00, 440.00, 523.25, 659.25, 783.99, 659.25, 523.25, 440.00,
-      349.23, 392.00, 440.00, 587.33, 698.46, 587.33, 440.00, 392.00,
-      329.63, 392.00, 523.25, 659.25, 783.99, 659.25, 523.25, 392.00,
-      293.66, 349.23, 440.00, 587.33, 783.99, 587.33, 440.00, 349.23
-    ];
-    const bassNotes = [130.81, 130.81, 174.61, 174.61, 164.81, 164.81, 196.00, 196.00];
-
-    this.synthLoopInterval = setInterval(() => {
-      if (!this.ctx || !this.isSoundOn) return;
-      const t = this.ctx.currentTime;
-      
-      const freq = notes[this.melodyNoteIdx % notes.length];
-      const osc = this.ctx.createOscillator();
-      const noteGain = this.ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, t);
-      noteGain.gain.setValueAtTime(0.18, t);
-      noteGain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
-      osc.connect(noteGain);
-      noteGain.connect(this.musicGain);
-      osc.start(t);
-      osc.stop(t + 0.23);
-
-      if (this.melodyNoteIdx % 4 === 0) {
-        const bassFreq = bassNotes[(this.melodyNoteIdx / 4) % bassNotes.length];
-        const bassOsc = this.ctx.createOscillator();
-        const bassGain = this.ctx.createGain();
-        bassOsc.type = 'sawtooth';
-        bassOsc.frequency.setValueAtTime(bassFreq, t);
-        bassGain.gain.setValueAtTime(0.24, t);
-        bassGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
-        bassOsc.connect(bassGain);
-        bassGain.connect(this.musicGain);
-        bassOsc.start(t);
-        bassOsc.stop(t + 0.42);
+  toggleSound() {
+    this.isSoundOn = !this.isSoundOn;
+    if (this.bgMusic) {
+      if (this.isSoundOn) {
+        this.bgMusic.play().catch(() => {});
+      } else {
+        this.bgMusic.pause();
       }
-
-      this.melodyNoteIdx++;
-    }, 160);
+    }
+    return this.isSoundOn;
   }
 
   playGunshot() {
