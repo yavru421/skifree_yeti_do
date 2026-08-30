@@ -51,7 +51,8 @@ export default {
           headers.set("Cache-Control", "public, max-age=31536000, immutable");
 
           const status = object.range ? 206 : 200;
-          return new Response(object.body, {
+          const body = "body" in object ? object.body : null;
+          return new Response(body, {
             headers,
             status
           });
