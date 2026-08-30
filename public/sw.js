@@ -1,4 +1,4 @@
-const CACHE_NAME = 'skifree-v2-cache-v7';
+const CACHE_NAME = 'skifree-v2-cache-v8';
 const ASSETS = [
   '/',
   '/index.html',
@@ -10,7 +10,8 @@ const ASSETS = [
   '/assets/snow_texture.jpg',
   '/assets/ice_texture.jpg',
   '/assets/mountain_horizon.jpg',
-  '/assets/media/waltz_on_the_slope.mp3'
+  '/assets/media/waltz_on_the_slope.mp3',
+  '/assets/media/teaser_trailer.mp4'
 ];
 
 self.addEventListener('install', (event) => {

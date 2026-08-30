@@ -21,6 +21,19 @@ interface SkierState {
   lastShotTime?: number;
 }
 
+interface NPCState {
+  id: string;
+  x: number;
+  z: number;
+  speed: number;
+  steer: number;
+  color: string;
+  type: "skier" | "snowboarder" | "speedster";
+  isEaten: boolean;
+  isRescued: boolean;
+  eatTimer?: number;
+}
+
 interface Boulder {
   id: string;
   x: number;
@@ -28,6 +41,14 @@ interface Boulder {
   vx: number;
   vz: number;
   radius: number;
+}
+
+interface BaitItem {
+  id: string;
+  dropperId: string;
+  x: number;
+  z: number;
+  createdAt: number;
 }
 
 function sanitizeCallsign(raw: string | null | undefined): string {
@@ -42,6 +63,16 @@ async function hashPin(pin: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+const NPC_COLORS = [
+  "#ff0055", // Neon Magenta
+  "#00f0ff", // Alpine Cyan
+  "#39ff14", // Acid Green
+  "#ffff00", // Retro Yellow
+  "#ff7700", // Blaze Orange
+  "#aa00ff", // Electric Purple
+  "#0088ff"  // Royal Blue
+];
+
 export class MountainDO extends DurableObject {
   private players = new Map<string, SkierState>();
   
@@ -50,16 +81,23 @@ export class MountainDO extends DurableObject {
   private countdownTimer = 0;
   private restTimer = 0;
   private boulders: Boulder[] = [];
+  private activeBaitItems: BaitItem[] = [];
+  private npcs: NPCState[] = [];
 
   // Yeti Boss State
-  private yetiZ = 65;
+  private yetiZ = 35;
   private yetiX = 0;
   private yetiActive = true;
   private yetiMaxHp = 8000;
   private yetiHp = 8000;
-  private yetiState: "CHARGING" | "STAGGERED" | "RETREATING" | "DEAD" = "CHARGING";
+  private yetiState: "STALKING_NPCS" | "EATING_NPC" | "CHARGING" | "STAGGERED" | "RETREATING" | "DISTRACTED" | "DEAD" = "STALKING_NPCS";
   private currentWave = 1;
   private yetiKillCount = 0;
+  private yetiDistractedTimer = 0;
+  private yetiEatingTimer = 0;
+  private yetiStaggerTimer = 0;
+  private currentTargetNpcId: string | null = null;
+  private currentTargetPlayerId: string | null = null;
   
   private matchStartTime = 0;
   private tickIntervalMs = 50; // 20Hz tick
@@ -108,6 +146,11 @@ export class MountainDO extends DurableObject {
         squad_size INTEGER NOT NULL,
         timestamp INTEGER NOT NULL
       );
+
+      CREATE INDEX IF NOT EXISTS idx_global_score ON global_leaderboard(score DESC);
+      CREATE INDEX IF NOT EXISTS idx_race_time ON race_leaderboard(clear_time_sec ASC, score DESC);
+      CREATE INDEX IF NOT EXISTS idx_hunter_callsign ON hunter_profiles(callsign);
+      CREATE INDEX IF NOT EXISTS idx_yeti_kills_ts ON yeti_kills(timestamp DESC);
     `);
   }
 
@@ -143,7 +186,6 @@ export class MountainDO extends DurableObject {
         const score = Number(body.score) || 0;
         const maxSpeed = Number(body.maxSpeed) || 0;
 
-        // Check if callsign profile exists
         const existing = [...this.ctx.storage.sql.exec(
           "SELECT callsign, pin_hash FROM hunter_profiles WHERE callsign = ?",
           callsign
@@ -158,14 +200,12 @@ export class MountainDO extends DurableObject {
             }), { status: 403, headers: { "Content-Type": "application/json" } });
           }
         } else {
-          // Register new hunter callsign with their chosen PIN
           this.ctx.storage.sql.exec(
             "INSERT INTO hunter_profiles (callsign, pin_hash, hunter_id, created_at) VALUES (?, ?, ?, ?)",
             callsign, pinH, hunterId, Date.now()
           );
         }
 
-        // Record verified score
         const recordId = crypto.randomUUID();
         if (mode === "slalom") {
           const clearTimeSec = Number(body.clearTimeSec) || 0;
@@ -260,9 +300,19 @@ export class MountainDO extends DurableObject {
 
       player.lastActive = Date.now();
 
+      if (data.type === "PING") {
+        try {
+          ws.send(JSON.stringify({ type: "PONG", timestamp: Date.now() }));
+        } catch (e) {}
+        return;
+      }
+
       if (data.type === "INPUT") {
         player.steer = data.steer || 0;
         player.pitch = data.pitch || 0;
+        if (typeof data.z === "number") player.z = data.z;
+        if (typeof data.x === "number") player.x = data.x;
+        if (typeof data.speed === "number") player.speed = data.speed;
       } else if (data.type === "READY") {
         player.isReady = !!data.ready;
         player.gameMode = data.mode === "slalom" ? "slalom" : "hunt";
@@ -271,20 +321,60 @@ export class MountainDO extends DurableObject {
       } else if (data.type === "FORCE_LAUNCH") {
         player.gameMode = data.mode === "slalom" ? "slalom" : "hunt";
         this.startMatchCountdown();
+      } else if (data.type === "DROP_BAIT") {
+        const bait: BaitItem = {
+          id: crypto.randomUUID(),
+          dropperId: playerId,
+          x: player.x,
+          z: player.z,
+          createdAt: Date.now()
+        };
+        this.activeBaitItems.push(bait);
+        this.broadcast({
+          type: "BAIT_DROPPED",
+          dropper: player.callsign,
+          x: bait.x,
+          z: bait.z
+        });
       } else if (data.type === "SHOOT") {
         player.shotsFired++;
         if (data.hit && this.matchState === "ACTIVE_HUNT" && this.yetiHp > 0) {
-          const dmg = data.crit ? 250 : 100;
+          const dmg = data.crit ? 300 : 120;
           this.yetiHp = Math.max(0, this.yetiHp - dmg);
           player.damageDealt += dmg;
           player.score += dmg;
+
+          // Kinetic Stagger & Knockback on Yeti
+          const knockbackDist = data.crit ? 6.0 : 3.5;
+          this.yetiZ += knockbackDist; // Knocks yeti further downhill away from player
+          this.yetiStaggerTimer = 0.8;
+          this.yetiState = "STAGGERED";
+
+          // Hunter Rescue Check: If Yeti was hunting or eating an NPC
+          if (this.currentTargetNpcId) {
+            const targetedNpc = this.npcs.find(n => n.id === this.currentTargetNpcId);
+            if (targetedNpc && !targetedNpc.isRescued) {
+              targetedNpc.isRescued = true;
+              targetedNpc.isEaten = false;
+              player.score += 1500;
+              this.broadcast({
+                type: "SKIER_RESCUED",
+                rescuerId: playerId,
+                rescuerCallsign: player.callsign,
+                npcId: targetedNpc.id,
+                bonusScore: 1500
+              });
+            }
+          }
 
           this.broadcast({
             type: "YETI_HIT",
             shooterId: playerId,
             damage: dmg,
             isCrit: !!data.crit,
-            yetiHp: this.yetiHp
+            yetiHp: this.yetiHp,
+            yetiZ: this.yetiZ,
+            yetiX: this.yetiX
           });
 
           if (this.yetiHp <= 0) {
@@ -342,14 +432,40 @@ export class MountainDO extends DurableObject {
     }, 1000);
   }
 
+  private spawnProceduralNPCs(leadZ: number) {
+    this.npcs = [];
+    const npcTypes: ("skier" | "snowboarder" | "speedster")[] = ["skier", "snowboarder", "speedster"];
+    for (let i = 0; i < 22; i++) {
+      const type = npcTypes[i % 3];
+      const baseSpeed = type === "speedster" ? 36 : (type === "snowboarder" ? 28 : 22);
+      this.npcs.push({
+        id: `npc_${i}_${Date.now()}`,
+        x: (Math.random() - 0.5) * 70,
+        z: leadZ + 15 + (i * 8) + (Math.random() * 6),
+        speed: baseSpeed + (Math.random() * 6),
+        steer: (Math.random() - 0.5) * 0.4,
+        color: NPC_COLORS[i % NPC_COLORS.length],
+        type,
+        isEaten: false,
+        isRescued: false
+      });
+    }
+  }
+
   private launchMatch() {
     this.matchState = "ACTIVE_HUNT";
     this.matchStartTime = Date.now();
     this.yetiHp = 8000 * this.currentWave;
     this.yetiMaxHp = this.yetiHp;
-    this.yetiZ = 65;
+    this.yetiZ = 30;
     this.yetiX = 0;
     this.boulders = [];
+    this.activeBaitItems = [];
+    this.yetiDistractedTimer = 0;
+    this.yetiEatingTimer = 0;
+    this.yetiStaggerTimer = 0;
+    this.currentTargetNpcId = null;
+    this.currentTargetPlayerId = null;
 
     this.players.forEach(p => {
       p.z = 0;
@@ -358,6 +474,8 @@ export class MountainDO extends DurableObject {
       p.damageDealt = 0;
       p.score = 0;
     });
+
+    this.spawnProceduralNPCs(0);
 
     this.broadcast({
       type: "MATCH_LAUNCH",
@@ -371,6 +489,7 @@ export class MountainDO extends DurableObject {
     this.yetiKillCount++;
     this.matchState = "GONDOLA_REST";
     this.restTimer = 5;
+    this.yetiState = "DEAD";
 
     this.ctx.storage.sql.exec(
       "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, timestamp) VALUES (?, ?, ?, ?, ?)",
@@ -388,8 +507,10 @@ export class MountainDO extends DurableObject {
       this.matchState = "ACTIVE_HUNT";
       this.yetiHp = 8000 * this.currentWave;
       this.yetiMaxHp = this.yetiHp;
-      this.yetiZ = 70;
+      this.yetiZ = 35;
       this.players.forEach(p => p.isDead = false);
+      const leadZ = Math.max(0, ...Array.from(this.players.values()).map(p => p.z));
+      this.spawnProceduralNPCs(leadZ);
 
       this.broadcast({
         type: "NEXT_WAVE",
@@ -411,7 +532,140 @@ export class MountainDO extends DurableObject {
       }
 
       if (this.matchState === "ACTIVE_HUNT") {
-        this.yetiZ = Math.max(-20, this.yetiZ - 0.08);
+        const dt = this.tickIntervalMs / 1000;
+        const alivePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
+        
+        if (alivePlayers.length > 0) {
+          const leadSkierZ = Math.max(...alivePlayers.map(p => p.z));
+          const avgSkierX = alivePlayers.reduce((acc, p) => acc + p.x, 0) / alivePlayers.length;
+
+          // 1. Update NPC Downhill Movement & Recycle Swarm
+          this.npcs.forEach(npc => {
+            if (!npc.isEaten) {
+              // Carving motion
+              npc.steer += (Math.random() - 0.5) * 0.1;
+              npc.steer = Math.max(-0.6, Math.min(0.6, npc.steer));
+              npc.x += Math.sin(npc.steer) * (npc.speed * 0.038);
+              npc.z += Math.cos(npc.steer) * (npc.speed * 0.038);
+              npc.x = Math.max(-60, Math.min(60, npc.x));
+            } else if (npc.eatTimer) {
+              npc.eatTimer -= dt;
+            }
+
+            // Recycle NPCs that fall behind or go too far
+            if (leadSkierZ - npc.z > 35) {
+              npc.z = leadSkierZ + 60 + Math.random() * 80;
+              npc.x = (Math.random() - 0.5) * 70;
+              npc.isEaten = false;
+              npc.isRescued = false;
+              npc.eatTimer = undefined;
+            }
+          });
+
+          // 2. Yeti State Machine & Predator AI
+          if (this.yetiStaggerTimer > 0) {
+            this.yetiStaggerTimer -= dt;
+            this.yetiState = "STAGGERED";
+          } else if (this.yetiDistractedTimer > 0) {
+            this.yetiDistractedTimer -= dt;
+            this.yetiState = "DISTRACTED";
+          } else if (this.activeBaitItems.length > 0) {
+            const nearestBait = this.activeBaitItems[0];
+            const distToBait = Math.hypot(this.yetiX - nearestBait.x, this.yetiZ - nearestBait.z);
+            if (distToBait < 35) {
+              this.yetiDistractedTimer = 3.5;
+              this.yetiState = "DISTRACTED";
+              this.activeBaitItems.shift();
+              this.broadcast({ type: "YETI_EATING_BAIT" });
+            }
+          } else if (this.yetiEatingTimer > 0) {
+            this.yetiEatingTimer -= dt;
+            this.yetiState = "EATING_NPC";
+            if (this.yetiEatingTimer <= 0) {
+              this.currentTargetNpcId = null;
+              this.yetiState = "STALKING_NPCS";
+            }
+          } else {
+            // Predator Loop: Target closest NPC downhill in view
+            const aliveNPCs = this.npcs.filter(n => !n.isEaten);
+            let closestNpc: NPCState | null = null;
+            let minNpcDist = 9999;
+
+            aliveNPCs.forEach(n => {
+              const dist = Math.hypot(this.yetiX - n.x, this.yetiZ - n.z);
+              if (dist < minNpcDist) {
+                minNpcDist = dist;
+                closestNpc = n;
+              }
+            });
+
+            // Check if player is aggressively close (< 8m) or provoking
+            let closestPlayer: SkierState | null = null;
+            let minPlayerDist = 9999;
+            alivePlayers.forEach(p => {
+              const pDist = Math.hypot(p.x - this.yetiX, p.z - this.yetiZ);
+              if (pDist < minPlayerDist) {
+                minPlayerDist = pDist;
+                closestPlayer = p;
+              }
+            });
+
+            if (minPlayerDist < 8.0 && closestPlayer) {
+              // Switch to charging player
+              this.yetiState = "CHARGING";
+              this.currentTargetPlayerId = (closestPlayer as SkierState).id;
+              const dx = (closestPlayer as SkierState).x - this.yetiX;
+              const dz = (closestPlayer as SkierState).z - this.yetiZ;
+              this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx), 0.35);
+              this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz), 0.45);
+
+              if (minPlayerDist < 3.2) {
+                this.broadcast({ type: "YETI_BITE_ATTACK", victimId: (closestPlayer as SkierState).id });
+              }
+            } else if (closestNpc && minNpcDist < 60) {
+              // Hunt NPC in front view
+              this.yetiState = "STALKING_NPCS";
+              this.currentTargetNpcId = (closestNpc as NPCState).id;
+              const target = closestNpc as NPCState;
+              const dx = target.x - this.yetiX;
+              const dz = target.z - this.yetiZ;
+              this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx) * 0.08, 0.4);
+              this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz) * 0.08, 0.5);
+
+              if (minNpcDist < 3.5) {
+                target.isEaten = true;
+                target.eatTimer = 1.4;
+                this.yetiEatingTimer = 1.2;
+                this.yetiState = "EATING_NPC";
+                this.broadcast({
+                  type: "YETI_MAUL_NPC",
+                  npcId: target.id,
+                  x: target.x,
+                  z: target.z
+                });
+              }
+            } else {
+              // Default Prowl in front of lead skier (18m-35m ahead)
+              this.yetiState = "STALKING_NPCS";
+              const targetZ = leadSkierZ + 25;
+              this.yetiZ += (targetZ - this.yetiZ) * 0.06;
+              this.yetiX += (avgSkierX - this.yetiX) * 0.05 + Math.sin(Date.now() * 0.003) * 0.4;
+            }
+
+            // Keep Yeti in active forward zone (between leadSkierZ - 5 and leadSkierZ + 55)
+            if (this.yetiZ < leadSkierZ - 10) {
+              this.yetiZ = leadSkierZ + 25;
+              this.yetiX = avgSkierX + (Math.random() - 0.5) * 14;
+              this.broadcast({
+                type: "YETI_AMBUSH",
+                x: this.yetiX,
+                z: this.yetiZ
+              });
+            } else if (this.yetiZ > leadSkierZ + 65) {
+              this.yetiZ = leadSkierZ + 40;
+            }
+          }
+        }
 
         const skiers = Array.from(this.players.values()).map(p => ({
           id: p.id,
@@ -433,10 +687,13 @@ export class MountainDO extends DurableObject {
             hp: this.yetiHp,
             maxHp: this.yetiMaxHp,
             state: this.yetiState,
-            active: this.yetiActive
+            active: this.yetiActive,
+            targetNpcId: this.currentTargetNpcId
           },
+          npcs: this.npcs,
           skiers,
-          boulders: this.boulders
+          boulders: this.boulders,
+          baitItems: this.activeBaitItems
         });
       }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>SkiFree 2: The Hunt for the Yeti & Slalom Alpine Raid</title>
+  <title>SkiFree 2: Alpine Yeti Hunt & Living Mountain Raid</title>
 
   <!-- PWA & Native Mobile WebApp Tags -->
   <link rel="manifest" href="/manifest.json">
@@ -42,6 +42,45 @@
       left: 0;
     }
 
+    /* Screen Shake FX on Damage */
+    .screen-shake {
+      animation: shakeScreen 0.35s cubic-bezier(.36,.07,.19,.97) both;
+    }
+    @keyframes shakeScreen {
+      10%, 90% { transform: translate3d(-3px, 2px, 0) rotate(-0.5deg); }
+      20%, 80% { transform: translate3d(4px, -3px, 0) rotate(0.8deg); }
+      30%, 50%, 70% { transform: translate3d(-6px, 4px, 0) rotate(-1.2deg); }
+      40%, 60% { transform: translate3d(6px, -4px, 0) rotate(1.0deg); }
+    }
+
+    /* In-Your-Face Yeti Claw Attack Overlay */
+    #claw-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 90;
+      display: none;
+    }
+    .claw-slash {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+    }
+    .slash-active {
+      display: block !important;
+      animation: slashSwipe 0.45s ease-out forwards;
+    }
+    @keyframes slashSwipe {
+      0% { opacity: 0; transform: scale(0.7) rotate(-15deg); filter: drop-shadow(0 0 25px #ff0033); }
+      25% { opacity: 1; transform: scale(1.15) rotate(0deg); }
+      70% { opacity: 0.9; transform: scale(1.0) translateY(10px); }
+      100% { opacity: 0; transform: scale(0.95) translateY(30px); }
+    }
+
     /* HUD Layout */
     #hud-overlay {
       position: absolute;
@@ -63,16 +102,16 @@
       top: clamp(6px, 1.5vh, 12px);
       left: 50%;
       transform: translateX(-50%);
-      width: min(480px, 80vw);
-      background: rgba(10, 20, 35, 0.92);
+      width: min(520px, 85vw);
+      background: rgba(10, 20, 35, 0.94);
       border: 2px solid #ff0033;
       border-radius: 8px;
-      padding: 5px 12px;
-      box-shadow: 0 0 16px rgba(255, 0, 50, 0.45);
+      padding: 5px 14px;
+      box-shadow: 0 0 18px rgba(255, 0, 50, 0.5);
       text-align: center;
     }
     .boss-label {
-      font-size: clamp(10px, 2vw, 12px);
+      font-size: clamp(10px, 2vw, 13px);
       font-weight: 900;
       letter-spacing: 1px;
       color: #ff0033;
@@ -95,6 +134,16 @@
       background: linear-gradient(90deg, #ff0055, #ff3300);
       box-shadow: 0 0 10px #ff0033;
       transition: width 0.15s ease-out;
+    }
+
+    /* Active Objective & Target Tracker */
+    #boss-target-banner {
+      font-size: 10px;
+      font-weight: 900;
+      color: #ffff00;
+      text-shadow: 0 0 6px #ff7700;
+      letter-spacing: 1px;
+      margin-top: 2px;
     }
 
     /* Race Slalom Top HUD */
@@ -132,7 +181,7 @@
       text-shadow: 0 0 8px #00f0ff;
     }
 
-    #draft-indicator, #air-trick-indicator {
+    #draft-indicator, #air-trick-indicator, #rescue-indicator {
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
@@ -145,25 +194,32 @@
       transition: opacity 0.15s, transform 0.15s;
     }
     #draft-indicator {
-      top: clamp(48px, 11vh, 65px);
+      top: clamp(52px, 11vh, 70px);
       color: #00ffff;
       background: rgba(0, 40, 80, 0.85);
       border: 2px solid #00ffff;
       box-shadow: 0 0 15px #00f0ff;
     }
     #air-trick-indicator {
-      top: clamp(75px, 16vh, 95px);
+      top: clamp(80px, 16vh, 100px);
       color: #ffff00;
       background: rgba(40, 20, 0, 0.9);
       border: 2px solid #ffff00;
       box-shadow: 0 0 18px #ffff00;
+    }
+    #rescue-indicator {
+      top: clamp(108px, 21vh, 130px);
+      color: #39ff14;
+      background: rgba(5, 35, 15, 0.92);
+      border: 2px solid #39ff14;
+      box-shadow: 0 0 20px #39ff14;
     }
 
     .hud-top-sides {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: clamp(24px, 6vh, 38px);
+      margin-top: clamp(28px, 6.5vh, 44px);
     }
     .hud-gauge {
       background: rgba(10, 20, 35, 0.88);
@@ -212,14 +268,14 @@
     }
 
     #rearview-mirror {
-      width: clamp(75px, 13vw, 120px);
-      height: clamp(42px, 7.5vw, 68px);
+      width: clamp(80px, 14vw, 130px);
+      height: clamp(45px, 8vw, 72px);
       background: #000;
       border: 2px solid #ff007f;
       border-radius: 6px;
       overflow: hidden;
       position: relative;
-      box-shadow: 0 0 10px rgba(255, 0, 127, 0.4);
+      box-shadow: 0 0 12px rgba(255, 0, 127, 0.4);
     }
     #rearview-canvas {
       width: 100%;
@@ -236,7 +292,7 @@
       color: #ff007f;
       letter-spacing: 1px;
       font-weight: bold;
-      background: rgba(0, 0, 0, 0.65);
+      background: rgba(0, 0, 0, 0.7);
     }
 
     .hud-bottom {
@@ -249,11 +305,11 @@
       border: 2px solid #39ff14;
       border-radius: 6px;
       padding: 4px 8px;
-      max-height: clamp(50px, 15vh, 90px);
+      max-height: clamp(55px, 15vh, 95px);
       overflow-y: auto;
       box-shadow: 0 0 10px rgba(57, 255, 20, 0.25);
       font-size: clamp(8px, 1.5vw, 10px);
-      min-width: min(150px, 35vw);
+      min-width: min(160px, 38vw);
     }
     .roster-item {
       display: flex;
@@ -285,8 +341,8 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       transform: translate(-50%, -50%) rotate(45deg);
       border: 2px solid #ff0033;
       opacity: 0;
@@ -298,8 +354,8 @@
       position: absolute;
       bottom: 20px;
       right: 25%;
-      width: 100px;
-      height: 100px;
+      width: 110px;
+      height: 110px;
       background: radial-gradient(circle, rgba(255,255,200,1) 0%, rgba(255,150,0,0.8) 40%, rgba(255,0,0,0) 70%);
       opacity: 0;
       pointer-events: none;
@@ -311,7 +367,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: radial-gradient(circle, rgba(255, 0, 50, 0.7) 0%, rgba(180, 0, 0, 0.9) 100%);
+      background: radial-gradient(circle, rgba(255, 0, 50, 0.75) 0%, rgba(180, 0, 0, 0.95) 100%);
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.15s ease-out;
@@ -322,10 +378,10 @@
       top: 25%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: clamp(14px, 3.5vw, 22px);
+      font-size: clamp(14px, 3.5vw, 24px);
       font-weight: 900;
       color: #ff0033;
-      text-shadow: 0 0 12px #ff0000, 2px 2px 0px #000;
+      text-shadow: 0 0 14px #ff0000, 2px 2px 0px #000;
       opacity: 0;
       pointer-events: none;
       z-index: 85;
@@ -345,7 +401,7 @@
     .dmg-popup {
       position: absolute;
       font-weight: 900;
-      font-size: clamp(14px, 3.2vw, 20px);
+      font-size: clamp(14px, 3.2vw, 22px);
       pointer-events: none;
       animation: floatUp 0.8s ease-out forwards;
     }
@@ -353,13 +409,14 @@
     .dmg-crit { color: #ffff00; text-shadow: 0 0 10px #ff007f; }
     .dmg-crossfire { color: #00ffff; text-shadow: 0 0 15px #00ffff; }
     .dmg-gate { color: #39ff14; text-shadow: 0 0 12px #39ff14; }
+    .dmg-rescue { color: #39ff14; font-size: clamp(16px, 3.8vw, 26px); text-shadow: 0 0 18px #39ff14; }
     .dmg-miss { color: #ff0033; text-shadow: 0 0 12px #ff0033; }
     .dmg-trick { color: #ffff00; text-shadow: 0 0 16px #ff007f; }
 
     @keyframes floatUp {
       0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
-      30% { transform: translate(-50%, -15px) scale(1.15); }
-      100% { opacity: 0; transform: translate(-50%, -40px) scale(1.0); }
+      30% { transform: translate(-50%, -18px) scale(1.2); }
+      100% { opacity: 0; transform: translate(-50%, -45px) scale(1.0); }
     }
 
     /* Mobile Landscape Prompt */
@@ -420,13 +477,197 @@
 
     #mobile-action-bar {
       position: absolute;
-      bottom: clamp(10px, 3vh, 20px);
-      right: clamp(10px, 3vw, 20px);
+      bottom: max(10px, env(safe-area-inset-bottom, 10px));
+      right: max(10px, env(safe-area-inset-right, 10px));
       display: flex;
       flex-direction: row;
       gap: clamp(6px, 1.5vw, 12px);
       z-index: 80;
       pointer-events: auto;
+    }
+
+    /* Onboarding Control Hint Overlay */
+    #hud-controls-hint {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 20, 35, 0.94);
+      border: 2px solid #00f0ff;
+      border-radius: 12px;
+      padding: clamp(12px, 2.5vh, 20px) clamp(16px, 3vw, 26px);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.55);
+      text-align: center;
+      pointer-events: none;
+      z-index: 95;
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+      width: min(520px, 92vw);
+    }
+    .hint-title {
+      font-size: clamp(14px, 3vw, 18px);
+      font-weight: 900;
+      color: #00f0ff;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      text-shadow: 0 0 10px #00f0ff;
+    }
+    .hint-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: clamp(10px, 2vw, 12px);
+      color: #fff;
+      text-align: left;
+    }
+    .hint-key {
+      display: inline-block;
+      background: rgba(0, 240, 255, 0.2);
+      border: 1px solid #00f0ff;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-weight: 900;
+      color: #ffff00;
+      margin-right: 4px;
+    }
+
+    /* Slalom Dynamic Waypoint Indicator */
+    #slalom-waypoint-arrow {
+      position: absolute;
+      top: clamp(80px, 15vh, 120px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10, 25, 45, 0.92);
+      border: 2px solid #39ff14;
+      border-radius: 20px;
+      padding: 4px 16px;
+      font-size: clamp(11px, 2.2vw, 13px);
+      font-weight: 900;
+      color: #39ff14;
+      box-shadow: 0 0 16px rgba(57, 255, 20, 0.6);
+      pointer-events: none;
+      z-index: 60;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.15s;
+      white-space: nowrap;
+    }
+
+    /* Yeti Threat Radar */
+    #yeti-threat-radar {
+      position: absolute;
+      bottom: clamp(65px, 14vh, 95px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(40, 5, 12, 0.92);
+      border: 2px solid #ff0033;
+      border-radius: 20px;
+      padding: 4px 16px;
+      font-size: clamp(11px, 2.2vw, 13px);
+      font-weight: 900;
+      color: #ff3344;
+      box-shadow: 0 0 18px rgba(255, 0, 50, 0.6);
+      pointer-events: none;
+      z-index: 65;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.15s;
+      white-space: nowrap;
+    }
+
+    /* Vertical Downhill Progression Minimap */
+    #minimap-container {
+      position: absolute;
+      left: clamp(8px, 1.5vw, 16px);
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: min(240px, 45vh);
+      background: rgba(10, 20, 35, 0.88);
+      border: 2px solid #00f0ff;
+      border-radius: 12px;
+      padding: 3px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+      z-index: 60;
+      pointer-events: none;
+    }
+    .minimap-track {
+      position: relative;
+      width: 4px;
+      height: 85%;
+      background: rgba(0, 240, 255, 0.25);
+      border-radius: 2px;
+    }
+    .minimap-icon {
+      position: absolute;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+      transition: top 0.1s linear;
+    }
+
+    /* Combat Live Feed */
+    #combat-feed {
+      position: absolute;
+      top: clamp(48px, 10vh, 75px);
+      left: clamp(10px, 2vw, 20px);
+      max-width: 250px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      pointer-events: none;
+      z-index: 62;
+    }
+    .feed-toast {
+      background: rgba(6, 12, 24, 0.9);
+      border-left: 3px solid #00f0ff;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: bold;
+      border-radius: 4px;
+      color: #fff;
+      animation: feedIn 0.3s ease-out;
+    }
+    @keyframes feedIn {
+      0% { opacity: 0; transform: translateX(-15px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Power-Up HUD Badges */
+    #powerup-hud {
+      display: flex;
+      gap: 4px;
+      margin-top: 3px;
+    }
+    .powerup-badge {
+      font-size: 9px;
+      font-weight: 900;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+    .badge-nitro { background: rgba(0, 240, 255, 0.2); border-color: #00f0ff; color: #00f0ff; }
+    .badge-shield { background: rgba(57, 255, 20, 0.2); border-color: #39ff14; color: #39ff14; }
+    .badge-bait { background: rgba(255, 0, 127, 0.2); border-color: #ff007f; color: #ff007f; }
+
+    /* Reconnection Toast */
+    #network-toast {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 0, 85, 0.92);
+      border: 2px solid #ff0033;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 900;
+      font-size: 12px;
+      padding: 6px 16px;
+      z-index: 9999;
+      box-shadow: 0 0 20px rgba(255, 0, 50, 0.6);
+      pointer-events: none;
+      display: none;
     }
     .touch-btn {
       background: rgba(10, 20, 35, 0.92);
@@ -616,6 +857,34 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+  <!-- Network Reconnection Toast -->
+  <div id="network-toast">⚠️ RECONNECTING TO ALPINE LOBBY...</div>
+
+  <!-- In-Your-Face Yeti Claw Attack Overlay -->
+  <div id="claw-overlay">
+    <svg class="claw-slash" viewBox="0 0 800 600" preserveAspectRatio="none">
+      <!-- Bloody Giant Yeti Claw Slashes -->
+      <path d="M 120,40 Q 380,280 680,480" stroke="#ff0033" stroke-width="18" stroke-linecap="round" fill="none" opacity="0.9" filter="drop-shadow(0 0 12px #ff0000)"/>
+      <path d="M 190,20 Q 440,270 740,450" stroke="#ff0055" stroke-width="22" stroke-linecap="round" fill="none" opacity="0.95" filter="drop-shadow(0 0 15px #ff0055)"/>
+      <path d="M 270,10 Q 510,250 800,420" stroke="#ff0033" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.9" filter="drop-shadow(0 0 12px #ff0000)"/>
+      <path d="M 70,80 Q 320,310 600,520" stroke="#ffffff" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.8"/>
+    </svg>
+  </div>
+
+  <!-- Onboarding Cheat Sheet -->
+  <div id="hud-controls-hint" class="hidden">
+    <div class="hint-title">🎿 HOW TO SKI & HUNT</div>
+    <div class="hint-grid">
+      <div><span class="hint-key">A / D</span> Carve Left / Right</div>
+      <div><span class="hint-key">W / S</span> Tuck Speed / Brake</div>
+      <div><span class="hint-key">SPACE</span> Big Air Jump</div>
+      <div><span class="hint-key">CLICK</span> Shoot Rifle (Stagger Yeti!)</div>
+      <div><span class="hint-key">E</span> Drop Meat Bait</div>
+      <div><span class="hint-key">R</span> Reload Mag</div>
+    </div>
+    <div style="font-size:9px; color:#88a0c0; margin-top:8px; text-align:center;">🎯 Directives: Shoot the Yeti to RESCUE skiers for +1,500 PTS bonuses!</div>
+  </div>
+
   <!-- Mobile Landscape Prompt -->
   <div id="rotate-prompt">
     <div style="font-size:48px; margin-bottom:15px;">📱 ↷</div>
@@ -653,6 +922,7 @@
   <div id="touch-stick-thumb"></div>
 
   <div id="mobile-action-bar" class="hidden">
+    <button id="btn-touch-bait" class="touch-btn" type="button">🥩 BAIT</button>
     <button id="btn-touch-rearview" class="touch-btn" type="button">👀 REAR</button>
     <button id="btn-touch-reload" class="touch-btn" type="button">🔄 RELOAD</button>
     <button id="btn-touch-shoot" class="touch-btn touch-btn-shoot" type="button">💥 SHOOT</button>
@@ -700,6 +970,7 @@
       <div class="hp-bar-bg">
         <div class="hp-bar-fill" id="boss-hp-fill"></div>
       </div>
+      <div id="boss-target-banner">⚠️ OBJECTIVE: DEFEND DOWNHILL SKIERS • SHOOT YETI TO RESCUE</div>
     </div>
 
     <div id="race-hud" class="hidden">
@@ -719,6 +990,22 @@
 
     <div id="draft-indicator">💨 DRAFTING (+18 MPH)</div>
     <div id="air-trick-indicator">🚀 BIG AIR (+1,500 PTS)</div>
+    <div id="rescue-indicator">🎉 SKIER RESCUED (+1,500 PTS)</div>
+    <div id="slalom-waypoint-arrow">⚡ ON TRACK • GATE: 25M</div>
+    <div id="yeti-threat-radar">👹 YETI PROWLING AHEAD [FIRE RIFLE]</div>
+
+    <!-- Vertical Downhill Progression Minimap -->
+    <div id="minimap-container">
+      <div style="font-size:8px; font-weight:900; color:#00f0ff;">▲</div>
+      <div class="minimap-track">
+        <div id="minimap-yeti" class="minimap-icon" style="top: 15%;">👹</div>
+        <div id="minimap-player" class="minimap-icon" style="top: 30%;">🎿</div>
+      </div>
+      <div style="font-size:8px; font-weight:900; color:#39ff14;">🏁</div>
+    </div>
+
+    <!-- Combat & Squad Live Feed -->
+    <div id="combat-feed"></div>
 
     <div class="hud-top-sides">
       <div class="hud-gauge">
@@ -756,12 +1043,12 @@
 
     <div class="hud-bottom">
       <div id="skier-roster">
-        <div style="font-weight:bold; color:#00f0ff; margin-bottom:2px;">SQUAD</div>
+        <div style="font-weight:bold; color:#00f0ff; margin-bottom:2px;">SQUAD & MOUNTAIN</div>
         <div id="roster-list"></div>
       </div>
       <div class="hud-gauge" style="text-align:right;" id="yeti-status-gauge">
-        <div class="hud-title">YETI</div>
-        <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:13px;">CHARGING</div>
+        <div class="hud-title">YETI STATE</div>
+        <div class="hud-value" id="hud-yeti" style="color:#ff0033; font-size:13px;">HUNTING SKIERS</div>
       </div>
     </div>
   </div>
@@ -885,7 +1172,6 @@
   </audio>
 
   <script>
-    // Cryptographic Hunter Token & Callsign Protection
     function getOrCreateHunterCredentials() {
       let hunterId = localStorage.getItem('skifree_hunter_id');
       let pin = localStorage.getItem('skifree_hunter_pin');
@@ -935,18 +1221,18 @@
     let isSoundOn = true;
     let clock = null;
 
-    // --- 2026 Mobile Haptic Vibration Engine ---
     function triggerHaptic(type) {
       if (!navigator.vibrate) return;
       try {
         switch (type) {
           case 'shoot': navigator.vibrate(15); break;
           case 'gate': navigator.vibrate(20); break;
+          case 'rescue': navigator.vibrate([30, 40, 50]); break;
           case 'kicker': navigator.vibrate(35); break;
           case 'land': navigator.vibrate([20, 25, 20]); break;
           case 'grind': navigator.vibrate([10, 15, 10]); break;
           case 'damage': navigator.vibrate([60, 40, 60]); break;
-          case 'bite': navigator.vibrate([100, 50, 150]); break;
+          case 'bite': navigator.vibrate([120, 60, 180]); break;
         }
       } catch (e) {}
     }
@@ -969,7 +1255,6 @@
         if (this.ctx && this.ctx.state === 'suspended') {
           this.ctx.resume().catch(() => {});
         }
-        // ONLY play background soundtrack if intro has been skipped / completed
         if (isIntroSkipped) {
           const bg = document.getElementById('bg-soundtrack');
           if (bg && isSoundOn) {
@@ -1038,7 +1323,7 @@
       startAlpineSynthWaltz() {
         if (this.synthLoopInterval) clearInterval(this.synthLoopInterval);
         const notes = [
-          392.00, 440.00, 523.25, 659.25, 783.99, 659.25, 523.25, 440.00, // G4, A4, C5, E5, G5...
+          392.00, 440.00, 523.25, 659.25, 783.99, 659.25, 523.25, 440.00,
           349.23, 392.00, 440.00, 587.33, 698.46, 587.33, 440.00, 392.00,
           329.63, 392.00, 523.25, 659.25, 783.99, 659.25, 523.25, 392.00,
           293.66, 349.23, 440.00, 587.33, 783.99, 587.33, 440.00, 349.23
@@ -1049,7 +1334,6 @@
           if (!this.ctx || !isSoundOn || !isPlaying) return;
           const t = this.ctx.currentTime;
           
-          // Lead melody note
           const freq = notes[this.melodyNoteIdx % notes.length];
           const osc = this.ctx.createOscillator();
           const noteGain = this.ctx.createGain();
@@ -1062,7 +1346,6 @@
           osc.start(t);
           osc.stop(t + 0.23);
 
-          // Bass pulse on quarter beats
           if (this.melodyNoteIdx % 4 === 0) {
             const bassFreq = bassNotes[(this.melodyNoteIdx / 4) % bassNotes.length];
             const bassOsc = this.ctx.createOscillator();
@@ -1128,6 +1411,58 @@
         gain.connect(this.ctx.destination);
         osc.start();
         osc.stop(this.ctx.currentTime + 0.32);
+      }
+
+      playYetiRoar() {
+        if (!this.ctx || !isSoundOn) return;
+        this.unlockAndStart();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(110, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(260, this.ctx.currentTime + 0.2);
+        osc.frequency.exponentialRampToValueAtTime(45, this.ctx.currentTime + 0.6);
+        gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.65);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.65);
+      }
+
+      playSkierScream() {
+        if (!this.ctx || !isSoundOn) return;
+        this.unlockAndStart();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(750, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, this.ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.7, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.4);
+      }
+
+      playRescueFanfare() {
+        if (!this.ctx || !isSoundOn) return;
+        this.unlockAndStart();
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const t = this.ctx.currentTime + idx * 0.08;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.8, t);
+          gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.26);
+        });
       }
 
       playHitFlesh() {
@@ -1258,7 +1593,13 @@
     let isRaceFinished = false;
 
     const remoteSkierMeshes = new Map();
+    const npcMeshes = new Map();
     const boulderMeshes = new Map();
+    let powerUpCrates = [];
+    let activeBaitMeshes = new Map();
+    let playerBaitCount = 1;
+    let activeShieldCharges = 0;
+    let nitroBoostTimer = 0;
 
     let ws = null;
     let myPlayerId = null;
@@ -1286,10 +1627,11 @@
     let currentRoom = "main-alps";
     let currentWaveNum = 1;
     let yetiWorldX = 0;
-    let yetiWorldZ = 65;
+    let yetiWorldZ = 35;
     let yetiCurrentHp = 8000;
     let yetiMaxHp = 8000;
-    let yetiStateStr = "CHARGING";
+    let yetiStateStr = "STALKING_NPCS";
+    let yetiVisualStagger = 0;
 
     const mousePos = { x: 0, y: 0 };
     const raycaster = new THREE.Raycaster();
@@ -1324,6 +1666,7 @@
       createGrindableRails();
       createIcePatches();
       createSkiLiftSystem();
+      createPowerUpCrates();
 
       skiGroup = new THREE.Group();
       const skiGeo = new THREE.BoxGeometry(0.14, 0.05, 2.2);
@@ -1367,7 +1710,6 @@
       horizonTexture.wrapS = THREE.ClampToEdgeWrapping;
       horizonTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-      // 180-degree panoramic background cylinder arc along the downhill horizon
       const horizonGeo = new THREE.CylinderGeometry(950, 950, 520, 64, 1, true, -Math.PI * 0.85, Math.PI * 1.7);
       const horizonMat = new THREE.MeshBasicMaterial({
         map: horizonTexture,
@@ -1383,7 +1725,6 @@
       mountainPeaks.push(horizonMesh);
     }
 
-    // 100% Solid & Textured Continuous Snow Ground
     function createContinuousSnowTerrain() {
       const terrainGeo = new THREE.PlaneGeometry(1600, 2400, 32, 32);
       
@@ -1551,6 +1892,91 @@
       }
     }
 
+    function createPowerUpCrates() {
+      powerUpCrates.forEach(c => scene.remove(c.mesh));
+      powerUpCrates = [];
+
+      const crateTypes = ['nitro', 'shield', 'bait'];
+      const colors = { nitro: 0x00f0ff, shield: 0x39ff14, bait: 0xff007f };
+      const icons = { nitro: '⚡ NITRO', shield: '🛡️ SHIELD', bait: '🥩 BAIT' };
+      const crateGeo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
+
+      for (let i = 0; i < 18; i++) {
+        const type = crateTypes[i % 3];
+        const crateMat = new THREE.MeshStandardMaterial({
+          color: colors[type],
+          emissive: colors[type],
+          emissiveIntensity: 0.5,
+          roughness: 0.2
+        });
+        const mesh = new THREE.Mesh(crateGeo, crateMat);
+        const cz = -70 - (i * 65) - (Math.random() * 20);
+        const cx = (Math.sin(i * 2.1) * 35);
+        mesh.position.set(cx, 0.7, cz);
+        scene.add(mesh);
+
+        powerUpCrates.push({
+          type,
+          label: icons[type],
+          mesh,
+          collected: false
+        });
+      }
+    }
+
+    function dropBait() {
+      if (!isPlaying || isWasted || activeGameMode === "slalom") return;
+      if (playerBaitCount <= 0) {
+        spawnPopup('🥩 NO BAIT LEFT!', 'miss');
+        return;
+      }
+      playerBaitCount--;
+      soundEngine.playReload();
+      triggerHaptic('gate');
+      spawnPopup('🥩 DROPPED MEAT BAIT!', 'bait');
+      addCombatFeed('🥩 Dropped Meat Bait to distract the Yeti!', 'bait');
+      updatePowerUpBadges();
+
+      spawnLocalBaitMesh(playerX, playerZ);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "DROP_BAIT" }));
+      }
+    }
+
+    function spawnLocalBaitMesh(x, z) {
+      const baitGeo = new THREE.DodecahedronGeometry(0.8, 0);
+      const baitMat = new THREE.MeshStandardMaterial({ color: 0xff2255, roughness: 0.3, emissive: 0xaa0033, emissiveIntensity: 0.6 });
+      const mesh = new THREE.Mesh(baitGeo, baitMat);
+      mesh.position.set(x - playerX, 0.4, -(z - playerZ));
+      scene.add(mesh);
+      setTimeout(() => scene.remove(mesh), 6000);
+    }
+
+    function addCombatFeed(text, type) {
+      const feed = document.getElementById('combat-feed');
+      if (!feed) return;
+      const el = document.createElement('div');
+      el.className = 'feed-toast';
+      if (type === 'bait') el.style.borderLeftColor = '#ff007f';
+      if (type === 'shield') el.style.borderLeftColor = '#39ff14';
+      if (type === 'nitro') el.style.borderLeftColor = '#00f0ff';
+      if (type === 'yeti') el.style.borderLeftColor = '#ff0033';
+      if (type === 'rescue') el.style.borderLeftColor = '#39ff14';
+      el.innerText = text;
+      feed.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
+    function updatePowerUpBadges() {
+      const ammoEl = document.getElementById('ammo-count');
+      if (activeGameMode === "hunt" && ammoEl) {
+        const shieldStr = activeShieldCharges > 0 ? " • 🛡️ SHIELD" : "";
+        const nitroStr = nitroBoostTimer > 0 ? " • ⚡ NITRO" : "";
+        ammoEl.innerText = `AMMO: ${ammoCount}/8 [R] • 🥩 BAIT: ${playerBaitCount}${shieldStr}${nitroStr}`;
+      }
+    }
+
     function createSnowParticles() {
       const count = 450;
       const geo = new THREE.BufferGeometry();
@@ -1570,7 +1996,7 @@
       const targetGeo = new THREE.BoxGeometry(6.5, 7.5, 3.5);
       const targetMat = new THREE.MeshBasicMaterial({ visible: false });
       yetiMesh = new THREE.Mesh(targetGeo, targetMat);
-      yetiMesh.position.set(0, 3.5, 65);
+      yetiMesh.position.set(0, 3.5, -35);
       yetiMesh.userData = { isYeti: true };
       scene.add(yetiMesh);
 
@@ -1583,8 +2009,8 @@
         yetiTexture.offset.set(0, 0.68);
         const mat = new THREE.SpriteMaterial({ map: yetiTexture, transparent: true });
         yetiSprite = new THREE.Sprite(mat);
-        yetiSprite.scale.set(8.0, 8.0, 1);
-        yetiSprite.position.set(0, 4.0, 65);
+        yetiSprite.scale.set(8.5, 8.5, 1);
+        yetiSprite.position.set(0, 4.0, -35);
         scene.add(yetiSprite);
       });
     }
@@ -1649,8 +2075,8 @@
     function initRearviewMirror() {
       const mirrorCanvas = document.getElementById('rearview-canvas');
       mirrorRenderer = new THREE.WebGLRenderer({ canvas: mirrorCanvas });
-      mirrorRenderer.setSize(120, 68);
-      mirrorCamera = new THREE.PerspectiveCamera(60, 120 / 68, 0.1, 400);
+      mirrorRenderer.setSize(130, 72);
+      mirrorCamera = new THREE.PerspectiveCamera(60, 130 / 72, 0.1, 400);
       mirrorCamera.rotation.y = Math.PI;
     }
 
@@ -1710,12 +2136,13 @@
 
       if (intersects.length > 0) {
         isHit = true;
-        if (intersects[0].point.y > 4.8) isCrit = true;
+        if (intersects[0].point.y > 4.5) isCrit = true;
       }
 
       if (isHit) {
         soundEngine.playHitFlesh();
         showHitmarker();
+        yetiVisualStagger = 0.5; // Visual recoil kickback
       }
 
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1751,7 +2178,13 @@
     }
 
     // --- Networking & WebSocket ---
+    let wsPingInterval = null;
+    let wsReconnectTimeout = null;
+
     function connectWebSocket(callsign) {
+      if (wsReconnectTimeout) clearTimeout(wsReconnectTimeout);
+      if (wsPingInterval) clearInterval(wsPingInterval);
+
       currentRoom = getRoomParam();
       document.getElementById('squad-room-code').innerText = currentRoom.toUpperCase();
 
@@ -1759,9 +2192,36 @@
       const wsUrl = `${protocol}//${location.host}/ws?room=${encodeURIComponent(currentRoom)}&callsign=${encodeURIComponent(callsign)}&hunterId=${encodeURIComponent(MY_HUNTER_ID)}&pin=${encodeURIComponent(MY_SECRET_PIN)}&mode=${activeGameMode}`;
       ws = new WebSocket(wsUrl);
 
+      ws.onopen = () => {
+        const toast = document.getElementById('network-toast');
+        if (toast) toast.style.display = 'none';
+        wsPingInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "PING" }));
+          }
+        }, 15000);
+      };
+
+      ws.onclose = () => {
+        if (wsPingInterval) clearInterval(wsPingInterval);
+        const toast = document.getElementById('network-toast');
+        if (toast && isPlaying) toast.style.display = 'block';
+        wsReconnectTimeout = setTimeout(() => {
+          const name = document.getElementById('player-callsign').value || 'YetiSlayer';
+          connectWebSocket(name);
+        }, 3000);
+      };
+
+      ws.onerror = () => {
+        const toast = document.getElementById('network-toast');
+        if (toast && isPlaying) toast.style.display = 'block';
+      };
+
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
-        if (msg.type === "WELCOME") {
+        if (msg.type === "PONG") {
+          return;
+        } else if (msg.type === "WELCOME") {
           myPlayerId = msg.playerId;
           if (msg.callsign) {
             document.getElementById('player-callsign').value = msg.callsign;
@@ -1777,6 +2237,10 @@
           handleFrame(msg);
         } else if (msg.type === "YETI_HIT") {
           handleYetiHit(msg);
+        } else if (msg.type === "SKIER_RESCUED") {
+          handleSkierRescued(msg);
+        } else if (msg.type === "YETI_MAUL_NPC") {
+          handleYetiMaulNPC(msg);
         } else if (msg.type === "YETI_DEFEATED") {
           handleYetiDefeat(msg);
         } else if (msg.type === "NEXT_WAVE") {
@@ -1785,6 +2249,17 @@
           if (msg.victimId === myPlayerId && !isWasted) onTreeHit();
         } else if (msg.type === "YETI_BITE_ATTACK") {
           if (msg.victimId === myPlayerId && !isWasted) onYetiBiteAttack();
+        } else if (msg.type === "BAIT_DROPPED") {
+          spawnLocalBaitMesh(msg.x, msg.z);
+          addCombatFeed(`🥩 ${msg.dropper || 'Skier'} dropped Meat Bait!`, 'bait');
+        } else if (msg.type === "YETI_AMBUSH") {
+          spawnPopup('⚡ YETI SNOW BURST AMBUSH!', 'miss');
+          soundEngine.playYetiRoar();
+          triggerHaptic('damage');
+          addCombatFeed('⚠️ Yeti erupted from a snowdrift ahead!', 'yeti');
+        } else if (msg.type === "YETI_EATING_BAIT") {
+          spawnPopup('🥩 YETI DISTRACTED BY BAIT (3.5s)!', 'gate');
+          addCombatFeed('🥩 Yeti is distracted eating bait!', 'bait');
         }
       };
     }
@@ -1823,12 +2298,25 @@
       document.getElementById('countdown-overlay').style.opacity = '0';
     }
 
+    let hintDismissTimeout = null;
+
     function startMatchClient() {
       document.getElementById('modal-backdrop').classList.add('hidden');
       document.getElementById('race-complete-overlay').classList.add('hidden');
       document.getElementById('hud-overlay').classList.remove('hidden');
       document.getElementById('touch-steer-zone').classList.remove('hidden');
       document.getElementById('mobile-action-bar').classList.remove('hidden');
+
+      const hintEl = document.getElementById('hud-controls-hint');
+      if (hintEl) {
+        hintEl.classList.remove('hidden');
+        hintEl.style.opacity = '1';
+        if (hintDismissTimeout) clearTimeout(hintDismissTimeout);
+        hintDismissTimeout = setTimeout(() => {
+          hintEl.style.opacity = '0';
+          setTimeout(() => hintEl.classList.add('hidden'), 500);
+        }, 4500);
+      }
 
       soundEngine.unlockAndStart();
 
@@ -1869,6 +2357,81 @@
       }
     }
 
+    // --- Dynamic 3D NPC Render Pool ---
+    function updateNPCMeshes(npcs) {
+      if (!npcs) return;
+      const activeIds = new Set(npcs.map(n => n.id));
+
+      for (const [id, group] of npcMeshes.entries()) {
+        if (!activeIds.has(id)) {
+          scene.remove(group);
+          npcMeshes.delete(id);
+        }
+      }
+
+      npcs.forEach(npc => {
+        let group = npcMeshes.get(npc.id);
+        if (!group) {
+          group = create3DNPCMesh(npc);
+          scene.add(group);
+          npcMeshes.set(npc.id, group);
+        }
+
+        const relX = npc.x - playerX;
+        const relZ = -(npc.z - playerZ);
+        group.position.set(relX, npc.isEaten ? -0.2 : 0, relZ);
+        group.rotation.y = -npc.steer;
+        group.visible = true;
+
+        if (npc.isEaten) {
+          group.rotation.x = Math.PI / 2; // Knocked down
+          group.position.y = 0.1;
+        } else {
+          group.rotation.x = 0;
+        }
+      });
+    }
+
+    function create3DNPCMesh(npc) {
+      const group = new THREE.Group();
+      const colorVal = parseInt(npc.color.replace('#', '0x'), 16) || 0xff0055;
+
+      // Jacket Torso
+      const bodyGeo = new THREE.BoxGeometry(0.5, 0.7, 0.35);
+      const bodyMat = new THREE.MeshStandardMaterial({ color: colorVal, roughness: 0.3 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.y = 0.85;
+      group.add(body);
+
+      // Beanie Head
+      const headGeo = new THREE.SphereGeometry(0.22, 8, 8);
+      const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc88, roughness: 0.5 });
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.y = 1.35;
+      group.add(head);
+
+      if (npc.type === "snowboarder") {
+        // Neon Snowboard
+        const boardGeo = new THREE.BoxGeometry(0.35, 0.05, 1.7);
+        const boardMat = new THREE.MeshStandardMaterial({ color: 0x39ff14, metalness: 0.6 });
+        const board = new THREE.Mesh(boardGeo, boardMat);
+        board.position.y = 0.04;
+        group.add(board);
+      } else {
+        // Dual Alpine Skis & Poles
+        const skiGeo = new THREE.BoxGeometry(0.1, 0.04, 1.8);
+        const skiMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const lSki = new THREE.Mesh(skiGeo, skiMat);
+        lSki.position.set(-0.25, 0.04, 0);
+        const rSki = new THREE.Mesh(skiGeo, skiMat);
+        rSki.position.set(0.25, 0.04, 0);
+        group.add(lSki);
+        group.add(rSki);
+      }
+
+      return group;
+    }
+
     function handleFrame(msg) {
       const rosterList = document.getElementById('roster-list');
       let rosterHTML = '';
@@ -1883,7 +2446,7 @@
 
         if (isMe) {
           if (activeGameMode === "hunt") {
-            document.getElementById('hud-dmg').innerHTML = `${skier.damageDealt} <span style="font-size:10px;">DMG</span>`;
+            document.getElementById('hud-dmg').innerHTML = `${skier.score || skier.damageDealt} <span style="font-size:10px;">PTS</span>`;
           }
         } else if (!skier.isDead) {
           const dz = skier.z - playerZ;
@@ -1907,6 +2470,7 @@
       }
 
       if (msg.boulders) updateBoulders(msg.boulders);
+      if (msg.npcs) updateNPCMeshes(msg.npcs);
 
       if (activeGameMode === "hunt") {
         currentWaveNum = msg.wave || 1;
@@ -1922,18 +2486,46 @@
         document.getElementById('boss-hp-text').innerText = `${yetiCurrentHp.toLocaleString()} / ${yetiMaxHp.toLocaleString()} HP`;
 
         const yetiHud = document.getElementById('hud-yeti');
+        const targetBanner = document.getElementById('boss-target-banner');
+
         if (msg.yeti.active && msg.yeti.state !== "DEAD") {
           const distFromPlayer = Math.round(msg.yeti.z - playerZ);
           const distLabel = distFromPlayer > 0 ? `${distFromPlayer}M AHEAD` : `${Math.abs(distFromPlayer)}M BEHIND`;
-          yetiHud.innerText = msg.yeti.state === "STAGGERED" ? "⚡ STAGGERED!" : (msg.yeti.state === "RETREATING" ? "💨 RETREAT" : `CHARGE (${distLabel})`);
-          yetiHud.style.color = msg.yeti.state === "STAGGERED" ? "#ffff00" : (msg.yeti.state === "RETREATING" ? "#00f0ff" : "#ff0033");
+          
+          if (msg.yeti.state === "STAGGERED") {
+            yetiHud.innerText = "⚡ STAGGERED!";
+            yetiHud.style.color = "#ffff00";
+            if (targetBanner) targetBanner.innerText = "🎯 YETI STAGGERED! UNLEASH CRITICAL HEADSHOTS!";
+          } else if (msg.yeti.state === "EATING_NPC") {
+            yetiHud.innerText = "🩸 MAULING SKIER!";
+            yetiHud.style.color = "#ff0033";
+            if (targetBanner) targetBanner.innerText = "⚠️ YETI MAULING SKIER! SHOOT NOW FOR +1,500 RESCUE!";
+          } else if (msg.yeti.state === "CHARGING") {
+            yetiHud.innerText = `👹 BOSS CHARGE (${distLabel})`;
+            yetiHud.style.color = "#ff0033";
+            if (targetBanner) targetBanner.innerText = "🚨 DANGER: YETI LOCK-ON! CARVE OR SHOOT HEAD!";
+          } else {
+            yetiHud.innerText = `HUNTING (${distLabel})`;
+            yetiHud.style.color = "#00f0ff";
+            if (targetBanner) targetBanner.innerText = "🎿 DEFEND THE SLOPE: PROTECT DOWNHILL SKIERS!";
+          }
 
-          const relZ = -(playerZ - msg.yeti.z);
+          // Camera-Relative Coordinates: In Three.js, ahead downhill is -Z!
+          const relZ = -(msg.yeti.z - playerZ) - yetiVisualStagger;
           const relX = msg.yeti.x - playerX;
           yetiMesh.position.set(relX, 3.5, relZ);
           if (yetiSprite) {
             yetiSprite.position.set(relX, 3.8, relZ);
             yetiSprite.visible = true;
+            
+            // Animation frames based on Yeti state
+            if (msg.yeti.state === "EATING_NPC") {
+              yetiSprite.scale.set(9.2, 9.2 + Math.sin(Date.now() * 0.02) * 0.8, 1);
+            } else if (msg.yeti.state === "CHARGING") {
+              yetiSprite.scale.set(9.8, 9.8, 1);
+            } else {
+              yetiSprite.scale.set(8.5, 8.5, 1);
+            }
           }
         }
       } else {
@@ -1959,7 +2551,7 @@
       }
 
       const relX = skier.x - playerX;
-      const relZ = -(playerZ - skier.z);
+      const relZ = -(skier.z - playerZ);
       group.position.set(relX, 0, relZ);
       group.rotation.y = -skier.steer;
       group.visible = !skier.isDead;
@@ -1983,14 +2575,35 @@
           boulderMeshes.set(b.id, mesh);
         }
         const relX = b.x - playerX;
-        const relZ = -(playerZ - b.z);
+        const relZ = -(b.z - playerZ);
         mesh.position.set(relX, (b.radius || 2.2), relZ);
         mesh.rotation.x += 0.08;
       });
     }
 
     function handleYetiHit(msg) {
-      if (msg.shooterId === myPlayerId) spawnPopup(`-${msg.damage}`, msg.isCrossfire ? 'crossfire' : (msg.isCrit ? 'crit' : 'normal'));
+      if (msg.shooterId === myPlayerId) {
+        spawnPopup(`-${msg.damage}`, msg.isCrit ? 'crit' : 'normal');
+      }
+    }
+
+    function handleSkierRescued(msg) {
+      soundEngine.playRescueFanfare();
+      triggerHaptic('rescue');
+      const rescueEl = document.getElementById('rescue-indicator');
+      if (rescueEl) {
+        rescueEl.style.opacity = '1';
+        setTimeout(() => rescueEl.style.opacity = '0', 2500);
+      }
+      spawnPopup('🎉 SKIER RESCUED! (+1,500 PTS)', 'rescue');
+      addCombatFeed(`✨ ${msg.rescuerCallsign || 'Hunter'} RESCUED a Skier from the Yeti! (+1,500 PTS)`, 'rescue');
+    }
+
+    function handleYetiMaulNPC(msg) {
+      soundEngine.playSkierScream();
+      soundEngine.playBiteChomp();
+      spawnPopup('🩸 SKIER SKELETONIZED!', 'miss');
+      addCombatFeed('🩸 Yeti devoured a downhill skier!', 'yeti');
     }
 
     function handleYetiDefeat(msg) {
@@ -2013,15 +2626,51 @@
       document.getElementById('boss-wave-title').innerText = `👹 YETI (W${currentWaveNum})`;
     }
 
+    function triggerScreenClawSlash() {
+      const overlay = document.getElementById('claw-overlay');
+      const canvas = document.getElementById('game-canvas');
+      if (overlay) {
+        overlay.classList.remove('slash-active');
+        void overlay.offsetWidth; // Trigger reflow
+        overlay.classList.add('slash-active');
+        setTimeout(() => overlay.classList.remove('slash-active'), 500);
+      }
+      if (canvas) {
+        canvas.classList.remove('screen-shake');
+        void canvas.offsetWidth;
+        canvas.classList.add('screen-shake');
+        setTimeout(() => canvas.classList.remove('screen-shake'), 400);
+      }
+    }
+
     function onYetiBiteAttack() {
       if (biteInvulnerabilityTimer > 0 || isWasted) return;
       biteInvulnerabilityTimer = 2.5;
+
+      triggerScreenClawSlash();
+
+      if (activeShieldCharges > 0) {
+        activeShieldCharges--;
+        soundEngine.playRailGrind();
+        triggerHaptic('kicker');
+        spawnPopup('🛡️ SHIELD ABSORBED BITE!', 'gate');
+        addCombatFeed('🛡️ Avalanche Shield absorbed Yeti bite!', 'shield');
+        updatePowerUpBadges();
+        return;
+      }
+
       playerHearts--;
+      soundEngine.playYetiRoar();
       soundEngine.playBiteChomp();
+      triggerHaptic('bite');
+
       const df = document.getElementById('damage-flash');
       df.style.opacity = '0.95';
       setTimeout(() => df.style.opacity = '0', 250);
       playerSpeed = Math.min(80, playerSpeed + 24);
+
+      if (playerHearts === 2) document.getElementById('h3').classList.add('heart-lost');
+      if (playerHearts === 1) document.getElementById('h2').classList.add('heart-lost');
 
       if (playerHearts <= 0) {
         document.getElementById('h1').classList.add('heart-lost');
@@ -2032,6 +2681,17 @@
 
     function onTreeHit() {
       if (spawnGraceTimer > 0 || isAirborne) return;
+
+      if (activeShieldCharges > 0) {
+        activeShieldCharges--;
+        soundEngine.playRailGrind();
+        triggerHaptic('kicker');
+        spawnPopup('🛡️ SHIELD ABSORBED CRASH!', 'gate');
+        addCombatFeed('🛡️ Avalanche Shield absorbed tree crash!', 'shield');
+        updatePowerUpBadges();
+        return;
+      }
+
       soundEngine.playTreeThud();
       const flash = document.getElementById('damage-flash');
       flash.style.opacity = '0.85';
@@ -2079,6 +2739,10 @@
       const dt = clock ? Math.min(0.05, clock.getDelta()) : 0.016;
       const timeScale = dt * 60;
 
+      if (yetiVisualStagger > 0) {
+        yetiVisualStagger = Math.max(0, yetiVisualStagger - dt * 4.0);
+      }
+
       if (!isPlaying && !isWasted) {
         camera.position.x = Math.sin(Date.now() * 0.0006) * 14;
         camera.position.z = -8 + Math.cos(Date.now() * 0.0006) * 8;
@@ -2092,12 +2756,17 @@
       if (isPlaying && !isWasted) {
         if (spawnGraceTimer > 0) spawnGraceTimer -= dt;
         if (biteInvulnerabilityTimer > 0) biteInvulnerabilityTimer -= dt;
+        if (nitroBoostTimer > 0) {
+          nitroBoostTimer -= dt;
+          if (nitroBoostTimer <= 0) updatePowerUpBadges();
+        }
 
         const preset = DIFFICULTY_PRESETS[selectedDifficulty] || DIFFICULTY_PRESETS.medium;
         let targetSpeed = preset.cruiseSpeed;
         if (keys.w) targetSpeed = preset.tuckSpeed;
         if (keys.s) targetSpeed = preset.brakeSpeed;
         if (isDrafting) targetSpeed += 18;
+        if (nitroBoostTimer > 0) targetSpeed += 30;
 
         const maxAngle = Math.PI / 2.1;
         if (keys.a) turnSteerVelocity = Math.max(-1.8, turnSteerVelocity - 0.07 * timeScale);
@@ -2117,13 +2786,61 @@
         playerX += lateralVel;
         playerX = Math.max(-120, Math.min(120, playerX));
 
-        // Seamless Infinite Snow Ground Scroll
         if (snowTexture) {
           snowTexture.offset.y -= forwardVel * 0.02;
           snowTexture.offset.x += lateralVel * 0.02;
         }
 
-        // --- Synchronized Delta Scroll for All World Entities on Ground Plane ---
+        // Downhill Progression Minimap
+        const pMinimap = document.getElementById('minimap-player');
+        const yMinimap = document.getElementById('minimap-yeti');
+        const totalCourseDist = (activeGameMode === "slalom") ? RACE_FINISH_Z : 1200;
+        if (pMinimap) {
+          const pPct = Math.min(95, Math.max(5, ((playerZ % totalCourseDist) / totalCourseDist) * 90));
+          pMinimap.style.top = `${pPct}%`;
+        }
+        if (yMinimap && activeGameMode === "hunt") {
+          const yPct = Math.min(95, Math.max(5, ((yetiWorldZ % totalCourseDist) / totalCourseDist) * 90));
+          yMinimap.style.top = `${yPct}%`;
+        }
+
+        // 0. Collectible Power-Up Crates
+        powerUpCrates.forEach(crate => {
+          crate.mesh.position.z += forwardVel;
+          crate.mesh.position.x -= lateralVel;
+          crate.mesh.rotation.y += 0.03 * timeScale;
+          crate.mesh.position.y = 0.7 + Math.sin(Date.now() * 0.004) * 0.15;
+
+          if (!crate.collected && Math.abs(crate.mesh.position.z) < 2.0 && Math.abs(crate.mesh.position.x) < 2.2) {
+            crate.collected = true;
+            soundEngine.playGateChime();
+            triggerHaptic('gate');
+
+            if (crate.type === 'nitro') {
+              nitroBoostTimer = 4.5;
+              playerSpeed = Math.min(105, playerSpeed + 25);
+              spawnPopup('⚡ NITRO BOOST (+30 MPH)!', 'trick');
+              addCombatFeed('⚡ Grabbed NITRO BOOST!', 'nitro');
+            } else if (crate.type === 'shield') {
+              activeShieldCharges = 1;
+              spawnPopup('🛡️ HELMET SHIELD ACTIVE!', 'gate');
+              addCombatFeed('🛡️ Equipped AVALANCHE SHIELD!', 'shield');
+            } else if (crate.type === 'bait') {
+              playerBaitCount += 2;
+              spawnPopup('🥩 +2 MEAT BAITS!', 'bait');
+              addCombatFeed('🥩 Picked up +2 MEAT BAITS!', 'bait');
+            }
+            updatePowerUpBadges();
+            crate.mesh.visible = false;
+          }
+
+          if (crate.mesh.position.z > 25) {
+            crate.mesh.position.z = -550 - (Math.random() * 120);
+            crate.mesh.position.x = (Math.sin(Math.random() * 6) * 35);
+            crate.collected = false;
+            crate.mesh.visible = true;
+          }
+        });
         
         // 1. Trees
         trees.forEach(tree => {
@@ -2225,16 +2942,14 @@
           }
         }
 
-        // Dynamic 2026 FOV Speed Dilation ($60^\circ \to 76^\circ$)
         const targetFov = 60 + Math.min(16, Math.max(0, (playerSpeed - 30) / 45) * 16);
         if (Math.abs(camera.fov - targetFov) > 0.2) {
           camera.fov += (targetFov - camera.fov) * 0.08 * timeScale;
           camera.updateProjectionMatrix();
         }
 
-        // Ski-Lift Gondolas
         gondolaCabins.forEach(g => {
-          const relZ = -(playerZ - (g.zBase + Math.sin(Date.now() * 0.001 + g.offset) * 35));
+          const relZ = -(g.zBase - playerZ + Math.sin(Date.now() * 0.001 + g.offset) * 35);
           g.mesh.position.set(72 - playerX, 18, relZ);
         });
 
@@ -2263,7 +2978,6 @@
           rifleMesh.position.set(0.35, -0.38, -0.65);
         }
 
-        // --- Slalom Mode Gate Checking ---
         if (activeGameMode === "slalom") {
           raceElapsedTime = (Date.now() - raceStartTime) / 1000;
           maxRaceSpeed = Math.max(maxRaceSpeed, Math.floor(playerSpeed));
@@ -2271,6 +2985,31 @@
           document.getElementById('race-gates-val').innerText = `${gatesHitCount}/30`;
           document.getElementById('race-streak-val').innerText = `${gateStreak}x`;
           document.getElementById('hud-dmg').innerHTML = `${raceScore} <span style="font-size:10px;">PTS</span>`;
+
+          const waypointEl = document.getElementById('slalom-waypoint-arrow');
+          const nextGate = slalomGates.find(g => !g.cleared && !g.missed && g.group.position.z < 0);
+          if (nextGate && waypointEl) {
+            const gateDist = Math.round(Math.abs(nextGate.group.position.z));
+            const gateRelX = nextGate.group.position.x;
+            if (gateRelX < -8) {
+              waypointEl.innerText = `◀◀ HARD LEFT • GATE: ${gateDist}M`;
+              waypointEl.style.borderColor = '#00f0ff';
+              waypointEl.style.color = '#00f0ff';
+              waypointEl.style.opacity = '1';
+            } else if (gateRelX > 8) {
+              waypointEl.innerText = `HARD RIGHT ▶▶ • GATE: ${gateDist}M`;
+              waypointEl.style.borderColor = '#00f0ff';
+              waypointEl.style.color = '#00f0ff';
+              waypointEl.style.opacity = '1';
+            } else {
+              waypointEl.innerText = `⚡ ON TRACK • GATE: ${gateDist}M`;
+              waypointEl.style.borderColor = '#39ff14';
+              waypointEl.style.color = '#39ff14';
+              waypointEl.style.opacity = gateDist < 40 ? '1' : '0.6';
+            }
+          } else if (waypointEl) {
+            waypointEl.style.opacity = '0';
+          }
 
           slalomGates.forEach(g => {
             g.group.position.z += forwardVel;
@@ -2328,12 +3067,48 @@
 
         soundEngine.updateSpeed(playerSpeed, playerHeadingAngle);
 
+        const threatRadar = document.getElementById('yeti-threat-radar');
+        if (threatRadar) {
+          if (activeGameMode === "hunt" && yetiStateStr !== "DEAD") {
+            const dz = yetiWorldZ - playerZ;
+            if (yetiStateStr === "DISTRACTED") {
+              threatRadar.innerText = `🥩 YETI EATING BAIT! (FLANK NOW)`;
+              threatRadar.style.borderColor = '#39ff14';
+              threatRadar.style.color = '#39ff14';
+              threatRadar.style.opacity = '1';
+            } else if (yetiStateStr === "EATING_NPC") {
+              threatRadar.innerText = `🩸 YETI MAULING SKIER! (SHOOT TO RESCUE)`;
+              threatRadar.style.borderColor = '#ff0033';
+              threatRadar.style.color = '#ff0033';
+              threatRadar.style.opacity = '1';
+            } else if (dz > 0 && dz < 60) {
+              threatRadar.innerText = `👹 YETI AHEAD: ${Math.round(dz)}M [FIRE RIFLE]`;
+              threatRadar.style.borderColor = '#ffff00';
+              threatRadar.style.color = '#ffff00';
+              threatRadar.style.opacity = '1';
+            } else if (dz < 0 && Math.abs(dz) < 55) {
+              const distM = Math.round(Math.abs(dz));
+              threatRadar.innerText = `⚠️ YETI CLOSING: ${distM}M BEHIND [SHIFT / REAR]`;
+              threatRadar.style.borderColor = distM < 18 ? '#ff0033' : '#ff007f';
+              threatRadar.style.color = distM < 18 ? '#ff0033' : '#ff007f';
+              threatRadar.style.opacity = '1';
+            } else {
+              threatRadar.style.opacity = '0';
+            }
+          } else {
+            threatRadar.style.opacity = '0';
+          }
+        }
+
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: "INPUT",
             steer: playerHeadingAngle,
             tuck: keys.w,
-            brake: keys.s
+            brake: keys.s,
+            x: playerX,
+            z: playerZ,
+            speed: playerSpeed
           }));
         }
 
@@ -2347,10 +3122,44 @@
       renderer.render(scene, camera);
     }
 
-    // Controls
+    function dismissHint() {
+      const hintEl = document.getElementById('hud-controls-hint');
+      if (hintEl && !hintEl.classList.contains('hidden')) {
+        hintEl.style.opacity = '0';
+        setTimeout(() => hintEl.classList.add('hidden'), 500);
+      }
+    }
+
+    function jumpPlayer() {
+      if (isPlaying && !isAirborne && !isWasted) {
+        isAirborne = true;
+        airVy = 15.5;
+        soundEngine.playBigAirWhoosh();
+        triggerHaptic('kicker');
+        spawnPopup('🚀 JUMP!', 'trick');
+      }
+    }
+
+    ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        soundEngine.unlockAndStart();
+      }, { capture: true, passive: true });
+    });
+
+    const btnBait = document.getElementById('btn-touch-bait');
+    if (btnBait) {
+      btnBait.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        dropBait();
+      }, { passive: false });
+      btnBait.addEventListener('click', dropBait);
+    }
+
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       soundEngine.unlockAndStart();
+      dismissHint();
+
       if (e.key === ' ' || e.key === 'Escape' || e.key === 'Enter') {
         skipIntroVideo();
       }
@@ -2359,12 +3168,9 @@
       if (k === 'w' || e.key === 'ArrowUp') keys.w = true;
       if (k === 's' || e.key === 'ArrowDown') keys.s = true;
       if (e.key === ' ') {
-        if (isPlaying && !isAirborne) {
-          isAirborne = true;
-          airVy = 14.0;
-          soundEngine.playBigAirWhoosh();
-        }
+        jumpPlayer();
       }
+      if (k === 'e') dropBait();
       if (k === 'r') reloadGun();
       if (e.key === 'Shift') keys.shift = true;
       if (k === 'm' || e.key === 'Escape') toggleMenu();
@@ -2387,7 +3193,6 @@
       if (e.button === 2) keys.shift = false;
     });
 
-    // Sound toggle
     bindAction(document.getElementById('btn-sound-toggle'), () => {
       soundEngine.unlockAndStart();
       isSoundOn = !isSoundOn;
@@ -2403,7 +3208,6 @@
       }
     });
 
-    // In-Game Menu
     let isMenuOpen = false;
     function toggleMenu(forceState) {
       isMenuOpen = typeof forceState === 'boolean' ? forceState : !isMenuOpen;
@@ -2476,7 +3280,6 @@
       document.getElementById('tab-race-board-btn').style.color = '#88a0c0';
     });
 
-    // --- Score Claim & PIN Publishing Flow ---
     let pendingRunScoreData = null;
 
     function promptScoreClaim(scoreData) {
@@ -2662,7 +3465,6 @@
       setTimeout(() => {
         introOverlay.classList.add('hidden');
       }, 300);
-      // Cleanly unlock game audio only when leaving the intro video
       soundEngine.unlockAndStart();
     }
     
@@ -2776,7 +3578,6 @@
             let rawX = Math.max(-1, Math.min(1, dx / 45));
             let rawY = Math.max(-1, Math.min(1, dy / 45));
 
-            // 10% deadzone & quadratic response curve for silky-smooth mobile thumb control
             const deadzone = 0.08;
             if (Math.abs(rawX) < deadzone) rawX = 0;
             else rawX = (rawX > 0 ? 1 : -1) * Math.pow((Math.abs(rawX) - deadzone) / (1 - deadzone), 1.6);
@@ -2808,7 +3609,6 @@
       touchSteerZone.addEventListener('touchcancel', onSteerTouchEnd, { passive: true });
     }
 
-    // Direct Right-Screen Tap to Shoot on Mobile
     window.addEventListener('touchstart', (e) => {
       if (!isPlaying || isWasted) return;
       for (let i = 0; i < e.changedTouches.length; i++) {
@@ -2833,6 +3633,9 @@
     bindAction(document.getElementById('btn-touch-reload'), () => {
       reloadGun();
     });
+    bindAction(document.getElementById('btn-touch-bait'), () => {
+      dropBait();
+    });
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -2840,12 +3643,22 @@
       });
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      init3D();
-      const callsign = document.getElementById('player-callsign').value || 'YetiSlayer';
-      connectWebSocket(callsign);
-      animate();
-    });
+    function bootGame() {
+      try {
+        init3D();
+        const callsign = document.getElementById('player-callsign')?.value || 'YetiSlayer';
+        connectWebSocket(callsign);
+        animate();
+      } catch (err) {
+        console.error("Game boot error:", err);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', bootGame);
+    } else {
+      bootGame();
+    }
   </script>
 </body>
 </html>
