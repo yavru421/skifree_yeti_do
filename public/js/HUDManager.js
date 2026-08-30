@@ -44,11 +44,7 @@ export class HUDManager {
       this.scoreEl.innerHTML = `${playerPhysics.score.toLocaleString()} <span style="font-size:10px;">PTS</span>`;
     }
     if (this.ammoEl) {
-      if (combatSystem.isReloading) {
-        this.ammoEl.innerHTML = `<span style="color:#ffff00;">RELOADING...</span>`;
-      } else {
-        this.ammoEl.innerHTML = `AMMO: ${combatSystem.ammo}/${combatSystem.maxAmmo} [R]`;
-      }
+      this.ammoEl.style.display = 'none';
     }
 
     // 2. Lives Hearts

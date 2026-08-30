@@ -11,14 +11,10 @@ interface SkierState {
   state: number;
   pitch: number;
   score: number;
-  damageDealt: number;
-  shotsFired: number;
   isDead: boolean;
   isReady: boolean;
-  loadout: string;
   gameMode: "hunt" | "slalom";
   lastActive: number;
-  lastShotTime?: number;
 }
 
 interface NPCState {
@@ -85,7 +81,7 @@ export class MountainDO extends DurableObject {
   private npcs: NPCState[] = [];
 
   // Yeti Boss State
-  private yetiZ = 35;
+  private yetiZ = 950;
   private yetiX = 0;
   private yetiActive = true;
   private yetiMaxHp = 8000;
@@ -266,11 +262,8 @@ export class MountainDO extends DurableObject {
         state: 0,
         pitch: 0,
         score: 0,
-        damageDealt: 0,
-        shotsFired: 0,
         isDead: false,
         isReady: false,
-        loadout: "rifle",
         gameMode: mode,
         lastActive: Date.now()
       };
@@ -343,51 +336,6 @@ export class MountainDO extends DurableObject {
           x: bait.x,
           z: bait.z
         });
-      } else if (data.type === "SHOOT") {
-        player.shotsFired++;
-        if (data.hit && this.matchState === "ACTIVE_HUNT" && this.yetiHp > 0) {
-          const dmg = data.crit ? 300 : 120;
-          this.yetiHp = Math.max(0, this.yetiHp - dmg);
-          player.damageDealt += dmg;
-          player.score += dmg;
-
-          // Kinetic Stagger & Knockback on Yeti
-          const knockbackDist = data.crit ? 6.0 : 3.5;
-          this.yetiZ += knockbackDist; // Knocks yeti further downhill away from player
-          this.yetiStaggerTimer = 0.8;
-          this.yetiState = "STAGGERED";
-
-          // Hunter Rescue Check: If Yeti was hunting or eating an NPC
-          if (this.currentTargetNpcId) {
-            const targetedNpc = this.npcs.find(n => n.id === this.currentTargetNpcId);
-            if (targetedNpc && !targetedNpc.isRescued) {
-              targetedNpc.isRescued = true;
-              targetedNpc.isEaten = false;
-              player.score += 1500;
-              this.broadcast({
-                type: "SKIER_RESCUED",
-                rescuerId: playerId,
-                rescuerCallsign: player.callsign,
-                npcId: targetedNpc.id,
-                bonusScore: 1500
-              });
-            }
-          }
-
-          this.broadcast({
-            type: "YETI_HIT",
-            shooterId: playerId,
-            damage: dmg,
-            isCrit: !!data.crit,
-            yetiHp: this.yetiHp,
-            yetiZ: this.yetiZ,
-            yetiX: this.yetiX
-          });
-
-          if (this.yetiHp <= 0) {
-            this.handleYetiDefeated(player);
-          }
-        }
       } else if (data.type === "PLAYER_DIED") {
         player.isDead = true;
       }
@@ -464,7 +412,7 @@ export class MountainDO extends DurableObject {
     this.matchStartTime = Date.now();
     this.yetiHp = 8000 * this.currentWave;
     this.yetiMaxHp = this.yetiHp;
-    this.yetiZ = 30;
+    this.yetiZ = 950;
     this.yetiX = 0;
     this.boulders = [];
     this.activeBaitItems = [];
@@ -478,7 +426,6 @@ export class MountainDO extends DurableObject {
       p.z = 0;
       p.x = (Math.random() - 0.5) * 8;
       p.isDead = false;
-      p.damageDealt = 0;
       p.score = 0;
     });
 
@@ -499,7 +446,7 @@ export class MountainDO extends DurableObject {
     this.yetiState = "DEAD";
 
     this.ctx.storage.sql.exec(
-      "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, timestamp) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, created_at) VALUES (?, ?, ?, ?, ?)",
       killer.callsign, this.currentWave, killer.score, this.players.size, Date.now()
     );
 
@@ -514,7 +461,7 @@ export class MountainDO extends DurableObject {
       this.matchState = "ACTIVE_HUNT";
       this.yetiHp = 8000 * this.currentWave;
       this.yetiMaxHp = this.yetiHp;
-      this.yetiZ = 35;
+      this.yetiZ = 950;
       this.players.forEach(p => p.isDead = false);
       const leadZ = Math.max(0, ...Array.from(this.players.values()).map(p => p.z));
       this.spawnProceduralNPCs(leadZ);
@@ -529,185 +476,180 @@ export class MountainDO extends DurableObject {
   }
 
   private ensureGameLoop() {
-    if ((this as any)._loopRunning) return;
-    (this as any)._loopRunning = true;
+    // Trigger authoritative alarm tick
+    this.ctx.storage.setAlarm(Date.now() + this.tickIntervalMs);
+  }
 
-    const tick = () => {
-      if (this.players.size === 0) {
-        (this as any)._loopRunning = false;
-        return;
-      }
+  async alarm() {
+    if (this.players.size === 0) return;
 
-      if (this.matchState === "ACTIVE_HUNT") {
-        const dt = this.tickIntervalMs / 1000;
-        const alivePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
-        
-        if (alivePlayers.length > 0) {
-          const leadSkierZ = Math.max(...alivePlayers.map(p => p.z));
-          const avgSkierX = alivePlayers.reduce((acc, p) => acc + p.x, 0) / alivePlayers.length;
+    if (this.matchState === "ACTIVE_HUNT") {
+      const dt = this.tickIntervalMs / 1000;
+      const alivePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
+      
+      if (alivePlayers.length > 0) {
+        const leadSkierZ = Math.max(...alivePlayers.map(p => p.z));
+        const avgSkierX = alivePlayers.reduce((acc, p) => acc + p.x, 0) / alivePlayers.length;
 
-          // 1. Update NPC Downhill Movement & Recycle Swarm
-          this.npcs.forEach(npc => {
-            if (!npc.isEaten) {
-              // Carving motion
-              npc.steer += (Math.random() - 0.5) * 0.1;
-              npc.steer = Math.max(-0.6, Math.min(0.6, npc.steer));
-              npc.x += Math.sin(npc.steer) * (npc.speed * 0.038);
-              npc.z += Math.cos(npc.steer) * (npc.speed * 0.038);
-              npc.x = Math.max(-60, Math.min(60, npc.x));
-            } else if (npc.eatTimer) {
-              npc.eatTimer -= dt;
-            }
+        // 1. Update NPC Downhill Movement & Recycle Swarm
+        this.npcs.forEach(npc => {
+          if (!npc.isEaten) {
+            // Carving motion
+            npc.steer += (Math.random() - 0.5) * 0.1;
+            npc.steer = Math.max(-0.6, Math.min(0.6, npc.steer));
+            npc.x += Math.sin(npc.steer) * (npc.speed * 0.038);
+            npc.z += Math.cos(npc.steer) * (npc.speed * 0.038);
+            npc.x = Math.max(-60, Math.min(60, npc.x));
+          } else if (npc.eatTimer) {
+            npc.eatTimer -= dt;
+          }
 
-            // Recycle NPCs that fall behind or go too far
-            if (leadSkierZ - npc.z > 35) {
-              npc.z = leadSkierZ + 60 + Math.random() * 80;
-              npc.x = (Math.random() - 0.5) * 70;
-              npc.isEaten = false;
-              npc.isRescued = false;
-              npc.eatTimer = undefined;
+          // Recycle NPCs that fall behind or go too far
+          if (leadSkierZ - npc.z > 35) {
+            npc.z = leadSkierZ + 60 + Math.random() * 80;
+            npc.x = (Math.random() - 0.5) * 70;
+            npc.isEaten = false;
+            npc.isRescued = false;
+            npc.eatTimer = undefined;
+          }
+        });
+
+        // 2. Yeti State Machine & Predator AI
+        if (this.yetiStaggerTimer > 0) {
+          this.yetiStaggerTimer -= dt;
+          this.yetiState = "STAGGERED";
+        } else if (this.yetiDistractedTimer > 0) {
+          this.yetiDistractedTimer -= dt;
+          this.yetiState = "DISTRACTED";
+        } else if (this.activeBaitItems.length > 0) {
+          const nearestBait = this.activeBaitItems[0];
+          const distToBait = Math.hypot(this.yetiX - nearestBait.x, this.yetiZ - nearestBait.z);
+          if (distToBait < 35) {
+            this.yetiDistractedTimer = 3.5;
+            this.yetiState = "DISTRACTED";
+            this.activeBaitItems.shift();
+            this.broadcast({ type: "YETI_EATING_BAIT" });
+          }
+        } else if (this.yetiEatingTimer > 0) {
+          this.yetiEatingTimer -= dt;
+          this.yetiState = "EATING_NPC";
+          if (this.yetiEatingTimer <= 0) {
+            this.currentTargetNpcId = null;
+            this.yetiState = "STALKING_NPCS";
+          }
+        } else {
+          // Predator Loop: Target closest NPC downhill in view
+          const aliveNPCs = this.npcs.filter(n => !n.isEaten);
+          let closestNpc: NPCState | null = null;
+          let minNpcDist = 9999;
+
+          aliveNPCs.forEach(n => {
+            const dist = Math.hypot(this.yetiX - n.x, this.yetiZ - n.z);
+            if (dist < minNpcDist) {
+              minNpcDist = dist;
+              closestNpc = n;
             }
           });
 
-          // 2. Yeti State Machine & Predator AI
-          if (this.yetiStaggerTimer > 0) {
-            this.yetiStaggerTimer -= dt;
-            this.yetiState = "STAGGERED";
-          } else if (this.yetiDistractedTimer > 0) {
-            this.yetiDistractedTimer -= dt;
-            this.yetiState = "DISTRACTED";
-          } else if (this.activeBaitItems.length > 0) {
-            const nearestBait = this.activeBaitItems[0];
-            const distToBait = Math.hypot(this.yetiX - nearestBait.x, this.yetiZ - nearestBait.z);
-            if (distToBait < 35) {
-              this.yetiDistractedTimer = 3.5;
-              this.yetiState = "DISTRACTED";
-              this.activeBaitItems.shift();
-              this.broadcast({ type: "YETI_EATING_BAIT" });
+          // Check if player is close (< 8m)
+          let closestPlayer: SkierState | null = null;
+          let minPlayerDist = 9999;
+          alivePlayers.forEach(p => {
+            const pDist = Math.hypot(p.x - this.yetiX, p.z - this.yetiZ);
+            if (pDist < minPlayerDist) {
+              minPlayerDist = pDist;
+              closestPlayer = p;
             }
-          } else if (this.yetiEatingTimer > 0) {
-            this.yetiEatingTimer -= dt;
-            this.yetiState = "EATING_NPC";
-            if (this.yetiEatingTimer <= 0) {
-              this.currentTargetNpcId = null;
-              this.yetiState = "STALKING_NPCS";
+          });
+
+          if (minPlayerDist < 8.0 && closestPlayer) {
+            // Charge player
+            this.yetiState = "CHARGING";
+            this.currentTargetPlayerId = (closestPlayer as SkierState).id;
+            const dx = (closestPlayer as SkierState).x - this.yetiX;
+            const dz = (closestPlayer as SkierState).z - this.yetiZ;
+            this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx), 0.35);
+            this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz), 0.45);
+
+            if (minPlayerDist < 3.2) {
+              this.broadcast({ type: "YETI_BITE_ATTACK", victimId: (closestPlayer as SkierState).id });
+            }
+          } else if (closestNpc && minNpcDist < 60) {
+            // Hunt NPC in front view
+            this.yetiState = "STALKING_NPCS";
+            this.currentTargetNpcId = (closestNpc as NPCState).id;
+            const target = closestNpc as NPCState;
+            const dx = target.x - this.yetiX;
+            const dz = target.z - this.yetiZ;
+            this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx) * 0.08, 0.4);
+            this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz) * 0.08, 0.5);
+
+            if (minNpcDist < 3.5) {
+              target.isEaten = true;
+              target.eatTimer = 1.4;
+              this.yetiEatingTimer = 1.2;
+              this.yetiState = "EATING_NPC";
+              this.broadcast({
+                type: "YETI_MAUL_NPC",
+                npcId: target.id,
+                x: target.x,
+                z: target.z
+              });
             }
           } else {
-            // Predator Loop: Target closest NPC downhill in view
-            const aliveNPCs = this.npcs.filter(n => !n.isEaten);
-            let closestNpc: NPCState | null = null;
-            let minNpcDist = 9999;
+            // Default Prowl in front of lead skier (18m-35m ahead)
+            this.yetiState = "STALKING_NPCS";
+            const targetZ = leadSkierZ + 25;
+            this.yetiZ += (targetZ - this.yetiZ) * 0.06;
+            this.yetiX += (avgSkierX - this.yetiX) * 0.05 + Math.sin(Date.now() * 0.003) * 0.4;
+          }
 
-            aliveNPCs.forEach(n => {
-              const dist = Math.hypot(this.yetiX - n.x, this.yetiZ - n.z);
-              if (dist < minNpcDist) {
-                minNpcDist = dist;
-                closestNpc = n;
-              }
+          // Keep Yeti in active forward zone
+          if (this.yetiZ < leadSkierZ - 10) {
+            this.yetiZ = leadSkierZ + 25;
+            this.yetiX = avgSkierX + (Math.random() - 0.5) * 14;
+            this.broadcast({
+              type: "YETI_AMBUSH",
+              x: this.yetiX,
+              z: this.yetiZ
             });
-
-            // Check if player is aggressively close (< 8m) or provoking
-            let closestPlayer: SkierState | null = null;
-            let minPlayerDist = 9999;
-            alivePlayers.forEach(p => {
-              const pDist = Math.hypot(p.x - this.yetiX, p.z - this.yetiZ);
-              if (pDist < minPlayerDist) {
-                minPlayerDist = pDist;
-                closestPlayer = p;
-              }
-            });
-
-            if (minPlayerDist < 8.0 && closestPlayer) {
-              // Switch to charging player
-              this.yetiState = "CHARGING";
-              this.currentTargetPlayerId = (closestPlayer as SkierState).id;
-              const dx = (closestPlayer as SkierState).x - this.yetiX;
-              const dz = (closestPlayer as SkierState).z - this.yetiZ;
-              this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx), 0.35);
-              this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz), 0.45);
-
-              if (minPlayerDist < 3.2) {
-                this.broadcast({ type: "YETI_BITE_ATTACK", victimId: (closestPlayer as SkierState).id });
-              }
-            } else if (closestNpc && minNpcDist < 60) {
-              // Hunt NPC in front view
-              this.yetiState = "STALKING_NPCS";
-              this.currentTargetNpcId = (closestNpc as NPCState).id;
-              const target = closestNpc as NPCState;
-              const dx = target.x - this.yetiX;
-              const dz = target.z - this.yetiZ;
-              this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx) * 0.08, 0.4);
-              this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz) * 0.08, 0.5);
-
-              if (minNpcDist < 3.5) {
-                target.isEaten = true;
-                target.eatTimer = 1.4;
-                this.yetiEatingTimer = 1.2;
-                this.yetiState = "EATING_NPC";
-                this.broadcast({
-                  type: "YETI_MAUL_NPC",
-                  npcId: target.id,
-                  x: target.x,
-                  z: target.z
-                });
-              }
-            } else {
-              // Default Prowl in front of lead skier (18m-35m ahead)
-              this.yetiState = "STALKING_NPCS";
-              const targetZ = leadSkierZ + 25;
-              this.yetiZ += (targetZ - this.yetiZ) * 0.06;
-              this.yetiX += (avgSkierX - this.yetiX) * 0.05 + Math.sin(Date.now() * 0.003) * 0.4;
-            }
-
-            // Keep Yeti in active forward zone (between leadSkierZ - 5 and leadSkierZ + 55)
-            if (this.yetiZ < leadSkierZ - 10) {
-              this.yetiZ = leadSkierZ + 25;
-              this.yetiX = avgSkierX + (Math.random() - 0.5) * 14;
-              this.broadcast({
-                type: "YETI_AMBUSH",
-                x: this.yetiX,
-                z: this.yetiZ
-              });
-            } else if (this.yetiZ > leadSkierZ + 65) {
-              this.yetiZ = leadSkierZ + 40;
-            }
+          } else if (this.yetiZ > leadSkierZ + 65) {
+            this.yetiZ = leadSkierZ + 40;
           }
         }
-
-        const skiers = Array.from(this.players.values()).map(p => ({
-          id: p.id,
-          callsign: p.callsign,
-          x: p.x,
-          z: p.z,
-          steer: p.steer,
-          isDead: p.isDead,
-          damageDealt: p.damageDealt,
-          score: p.score
-        }));
-
-        this.broadcast({
-          type: "FRAME",
-          wave: this.currentWave,
-          yeti: {
-            x: this.yetiX,
-            z: this.yetiZ,
-            hp: this.yetiHp,
-            maxHp: this.yetiMaxHp,
-            state: this.yetiState,
-            active: this.yetiActive,
-            targetNpcId: this.currentTargetNpcId
-          },
-          npcs: this.npcs,
-          skiers,
-          boulders: this.boulders,
-          baitItems: this.activeBaitItems
-        });
       }
 
-      setTimeout(tick, this.tickIntervalMs);
-    };
+      const skiers = Array.from(this.players.values()).map(p => ({
+        id: p.id,
+        callsign: p.callsign,
+        x: p.x,
+        z: p.z,
+        steer: p.steer,
+        isDead: p.isDead,
+        score: p.score
+      }));
 
-    tick();
+      this.broadcast({
+        type: "FRAME",
+        wave: this.currentWave,
+        yeti: {
+          x: this.yetiX,
+          z: this.yetiZ,
+          hp: this.yetiHp,
+          maxHp: this.yetiMaxHp,
+          state: this.yetiState,
+          active: this.yetiActive,
+          targetNpcId: this.currentTargetNpcId
+        },
+        npcs: this.npcs,
+        skiers,
+        boulders: this.boulders,
+        baitItems: this.activeBaitItems
+      });
+    }
+
+    // Reschedule next authoritative 20Hz tick
+    this.ctx.storage.setAlarm(Date.now() + this.tickIntervalMs);
   }
 
   private broadcast(msg: any) {

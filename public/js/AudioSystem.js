@@ -95,18 +95,6 @@ export class AudioSystem {
     }
   }
 
-  toggleSound() {
-    this.isSoundOn = !this.isSoundOn;
-    if (this.bgAudio) {
-      if (this.isSoundOn) {
-        this.bgAudio.play().catch(() => {});
-      } else {
-        this.bgAudio.pause();
-      }
-    }
-    return this.isSoundOn;
-  }
-
   playGunshot() {
     if (!this.ctx || !this.isSoundOn) return;
     this.unlockAndStart();
@@ -309,6 +297,13 @@ export class AudioSystem {
         this.ctx.resume();
       } else {
         this.ctx.suspend();
+      }
+    }
+    if (this.bgAudio) {
+      if (this.isSoundOn) {
+        this.bgAudio.play().catch(() => {});
+      } else {
+        this.bgAudio.pause();
       }
     }
     return this.isSoundOn;

@@ -73,7 +73,9 @@ export class TouchControls {
             this.stickThumb.style.top = `${thumbY}px`;
           }
 
-          // Map joystick to steering and tuck/brake
+          // Map joystick to steering:
+          // Drag Left (dx < 0) -> Steer Left (steerVal < 0)
+          // Drag Right (dx > 0) -> Steer Right (steerVal > 0)
           const steerVal = Math.max(-1, Math.min(1, dx / maxRadius));
           this.playerPhysics.steer = steerVal * 0.65;
 

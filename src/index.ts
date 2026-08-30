@@ -5,7 +5,6 @@ export { MountainDO };
 export interface Env {
   MOUNTAIN_DO: DurableObjectNamespace<MountainDO>;
   ASSETS: Fetcher;
-  MEDIA_BUCKET: R2Bucket;
 }
 
 const SECURITY_HEADERS: Record<string, string> = {
@@ -34,33 +33,7 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. High-Performance R2 Video Streaming with native Range slicing
-    if (url.pathname.includes("teaser_trailer.mp4") || url.pathname.includes("intro.mp4")) {
-      if (env.MEDIA_BUCKET) {
-        const object = await env.MEDIA_BUCKET.get("teaser_trailer.mp4", {
-          range: request.headers,
-          onlyIf: request.headers,
-        });
-
-        if (object) {
-          const headers = new Headers();
-          object.writeHttpMetadata(headers);
-          headers.set("etag", object.httpEtag);
-          headers.set("Content-Type", "video/mp4");
-          headers.set("Accept-Ranges", "bytes");
-          headers.set("Cache-Control", "public, max-age=31536000, immutable");
-
-          const status = object.range ? 206 : 200;
-          const body = "body" in object ? object.body : null;
-          return new Response(body, {
-            headers,
-            status
-          });
-        }
-      }
-    }
-
-    // 2. WebSocket upgrade routing to Durable Object Room
+    // 1. WebSocket upgrade routing to Durable Object Room
     if (url.pathname.startsWith("/ws")) {
       const upgradeHeader = request.headers.get("Upgrade");
       if (upgradeHeader && upgradeHeader.toLowerCase() === "websocket") {
@@ -94,7 +67,8 @@ export default {
 
     // 5. Static Assets from public/
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const assetRes = await env.ASSETS.fetch(request);
+      return withSecurityHeaders(assetRes);
     }
 
     return withSecurityHeaders(new Response("SkiFree 2 Edge Server Active", { status: 200 }));

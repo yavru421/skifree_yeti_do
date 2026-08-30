@@ -118,7 +118,9 @@ export class PlayerPhysics {
 
     const diff = this.difficultyPresets[this.currentDifficulty];
 
-    // 1. Steering & Carving Kinematics (Screen-Aligned: Left -> Screen Left, Right -> Screen Right)
+    // 1. Steering & Carving Kinematics:
+    // Left (A / ArrowLeft) -> Steer Left (steer < 0) -> Carve Screen-Left
+    // Right (D / ArrowRight) -> Steer Right (steer > 0) -> Carve Screen-Right
     const steerSpeed = 3.2 * dt;
     if (this.keys.left) {
       this.steer = Math.max(-0.75, this.steer - steerSpeed);
@@ -147,7 +149,7 @@ export class PlayerPhysics {
       this.maxSpeedAchieved = this.speed;
     }
 
-    // 3. Movement Integration (Left is Screen-Left -X, Right is Screen-Right +X)
+    // 3. Movement Integration (Left is -X, Right is +X)
     const forwardStep = this.speed * diff.forwardFactor * dt * 60;
     const lateralStep = Math.sin(this.steer) * (this.speed * diff.lateralFactor * dt * 60);
 
@@ -314,6 +316,8 @@ export class PlayerPhysics {
     this.pitch = 0;
     this.lives = 3;
     this.isDead = false;
+    this.score = 0;
+    this.maxSpeedAchieved = 0;
     this.isAirborne = false;
     this.airY = 0;
     this.airVy = 0;

@@ -4,12 +4,12 @@ const ASSETS = [
   '/index.html',
   '/landing.html',
   '/manifest.json',
+  '/assets/skier.jpg',
   '/assets/yeti_v2.jpg',
   '/assets/npc_skiers.jpg',
   '/assets/pine_tree.png',
   '/assets/snow_texture.jpg',
   '/assets/ice_texture.jpg',
-  '/assets/mountain_horizon.jpg',
   '/assets/media/waltz_on_the_slope.mp3',
   '/assets/media/teaser_trailer.mp4'
 ];

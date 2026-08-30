@@ -4,7 +4,6 @@
 import { AudioSystem } from './AudioSystem.js';
 import { SceneManager } from './SceneManager.js';
 import { PlayerPhysics } from './PlayerPhysics.js';
-import { CombatSystem } from './CombatSystem.js';
 import { YetiPredator } from './YetiPredator.js';
 import { TouchControls } from './TouchControls.js';
 import { HUDManager } from './HUDManager.js';
@@ -16,13 +15,12 @@ class GameApp {
     this.audioSystem = new AudioSystem();
     this.sceneManager = new SceneManager(this.canvas);
     this.playerPhysics = new PlayerPhysics();
-    this.combatSystem = new CombatSystem();
     this.yetiPredator = new YetiPredator(this.sceneManager);
     this.hudManager = new HUDManager();
     this.networkSync = new NetworkSync();
     this.touchControls = new TouchControls(
       this.playerPhysics,
-      this.combatSystem,
+      null,
       this.sceneManager,
       this.audioSystem
     );
@@ -44,6 +42,13 @@ class GameApp {
 
     // Start 60-144 FPS Loop
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  escapeHtml(str) {
+    if (!str) return "";
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   setupUI() {
@@ -328,18 +333,12 @@ class GameApp {
     const overlay = document.getElementById("gondola-overlay");
     const sub = document.getElementById("gondola-sub");
     if (overlay) overlay.classList.remove("hidden");
-    if (sub) sub.textContent = `YETI SLAIN BY ${killerCallsign.toUpperCase()}! REVIVING SQUAD...`;
+    if (sub) sub.textContent = `YETI ESCAPED! SURVIVORS ADVANCING TO NEXT SECTOR...`;
     this.audioSystem.playRescueFanfare();
   }
 
   handleGameEvent(e) {
-    if (e.type === "SHOOT") {
-      if (e.hit) {
-        this.playerPhysics.score += e.damage;
-        this.hudManager.showFloatingDamage(`-${e.damage}${e.isCrit ? ' CRIT!' : ''}`, e.isCrit);
-        this.networkSync.sendShootHit(e.isCrit);
-      }
-    } else if (e.type === "YETI_BITE") {
+    if (e.type === "YETI_BITE") {
       this.hudManager.showDamageFlash();
       const remainingLives = this.playerPhysics.takeDamage(1);
       this.hudManager.addCombatFeedToast("🩸 Yeti Bite! (-1 Heart)", "#ff0033");
@@ -409,7 +408,7 @@ class GameApp {
       huntBody.innerHTML = data.leaderboard.map((row, idx) => `
         <tr style="border-bottom: 1px solid #1a2a44;">
           <td style="padding:4px; font-weight:bold; color:#00f0ff;">#${idx + 1}</td>
-          <td style="padding:4px;">${row.callsign}</td>
+          <td style="padding:4px;">${this.escapeHtml(row.callsign)}</td>
           <td style="padding:4px; color:#ffff00; font-weight:bold;">${row.score.toLocaleString()}</td>
           <td style="padding:4px;">${Math.round(row.max_speed)} MPH</td>
         </tr>
@@ -420,7 +419,7 @@ class GameApp {
       raceBody.innerHTML = data.raceLeaderboard.map((row, idx) => `
         <tr style="border-bottom: 1px solid #1a2a44;">
           <td style="padding:4px; font-weight:bold; color:#39ff14;">#${idx + 1}</td>
-          <td style="padding:4px;">${row.callsign}</td>
+          <td style="padding:4px;">${this.escapeHtml(row.callsign)}</td>
           <td style="padding:4px; color:#00f0ff; font-weight:bold;">${row.clear_time_sec.toFixed(2)}s</td>
           <td style="padding:4px;">${row.gates_hit}/30</td>
         </tr>
@@ -438,10 +437,7 @@ class GameApp {
       // 1. Local Player Physics (60-144 FPS)
       this.playerPhysics.update(dt, this.sceneManager, this.audioSystem, (e) => this.handleGameEvent(e));
 
-      // 2. Combat Reload & Auto-Targeting
-      this.combatSystem.update(dt, (e) => this.handleGameEvent(e));
-
-      // 3. Yeti Predator AI
+      // 2. Yeti Predator AI
       this.yetiPredator.update(
         dt,
         { x: this.playerPhysics.x, z: this.playerPhysics.z },
@@ -449,7 +445,7 @@ class GameApp {
         (e) => this.handleGameEvent(e)
       );
 
-      // 4. Update Third-Person Chase Camera
+      // 3. Update Third-Person Chase Camera
       this.sceneManager.updateCamera(
         { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
         this.playerPhysics.steer,
@@ -458,16 +454,16 @@ class GameApp {
         this.playerPhysics.airRoll
       );
 
-      // 5. Update HUD Overlays
+      // 4. Update HUD Overlays
       this.hudManager.update(
         this.playerPhysics,
-        this.combatSystem,
+        null,
         this.yetiPredator,
         this.gameMode,
         this.raceElapsedSec
       );
 
-      // 6. 15Hz Telemetry to Cloudflare Durable Object
+      // 5. 15Hz Telemetry to Cloudflare Durable Object
       this.telemetryTimer += dt;
       if (this.telemetryTimer >= 0.066) {
         this.telemetryTimer = 0;
