@@ -32,31 +32,118 @@ export class YetiPredator {
   }
 
   initYetiSprite(sceneManager) {
-    const targetGeo = new THREE.BoxGeometry(6.5, 7.5, 3.5);
-    const targetMat = new THREE.MeshBasicMaterial({ visible: false });
-    this.mesh = new THREE.Mesh(targetGeo, targetMat);
-    this.mesh.position.set(this.x, 3.5, this.z);
-    this.mesh.userData = { isYeti: true };
-    sceneManager.scene.add(this.mesh);
+    this.yetiGroup = new THREE.Group();
 
-    this.textureLoader.load('/assets/yeti_v2.jpg', (texture) => {
-      this.yetiTexture = texture;
-      this.yetiTexture.magFilter = THREE.NearestFilter;
-      this.yetiTexture.minFilter = THREE.NearestFilter;
-      // Exact UV crop of active frame 1 from 6x3.4 spritesheet
-      this.yetiTexture.repeat.set(1 / 6, 1 / 3.4);
-      this.yetiTexture.offset.set(0, 0.68);
-
-      const mat = new THREE.SpriteMaterial({
-        map: this.yetiTexture,
-        transparent: true,
-        alphaTest: 0.1
-      });
-      this.yetiSprite = new THREE.Sprite(mat);
-      this.yetiSprite.scale.set(8.5, 8.5, 1);
-      this.yetiSprite.position.set(this.x, 4.0, this.z);
-      sceneManager.scene.add(this.yetiSprite);
+    // 1. Hunched Muscular Silver-White Fur Torso & Traps
+    const torsoGeo = new THREE.CylinderGeometry(1.8, 1.3, 3.2, 10);
+    const furMat = new THREE.MeshStandardMaterial({
+      color: 0xeef4ff,
+      roughness: 0.85,
+      metalness: 0.05
     });
+    const darkSkinMat = new THREE.MeshStandardMaterial({
+      color: 0x8a9bb8,
+      roughness: 0.9
+    });
+
+    const torso = new THREE.Mesh(torsoGeo, furMat);
+    torso.position.set(0, 2.4, -0.2);
+    torso.rotation.x = 0.35; // Aggressive forward beast hunch
+    this.yetiGroup.add(torso);
+
+    // Muscular Chest / Pectoral Fur Plate
+    const chestGeo = new THREE.BoxGeometry(2.4, 1.6, 1.4);
+    const chest = new THREE.Mesh(chestGeo, darkSkinMat);
+    chest.position.set(0, 2.7, 0.45);
+    chest.rotation.x = 0.25;
+    this.yetiGroup.add(chest);
+
+    // 2. Fierce Horned Beast Head & Snarling Fanged Maw
+    const headGroup = new THREE.Group();
+    const headGeo = new THREE.BoxGeometry(1.6, 1.5, 1.8);
+    const head = new THREE.Mesh(headGeo, darkSkinMat);
+    head.position.set(0, 4.1, 0.5);
+    headGroup.add(head);
+
+    // Snarling Jaw & Teeth
+    const jawGeo = new THREE.BoxGeometry(1.3, 0.6, 1.2);
+    const jaw = new THREE.Mesh(jawGeo, darkSkinMat);
+    jaw.position.set(0, 3.5, 1.1);
+    headGroup.add(jaw);
+
+    const fangsMat = new THREE.MeshStandardMaterial({ color: 0xffffee, roughness: 0.2 });
+    for (let f = 0; f < 4; f++) {
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.3, 5), fangsMat);
+      fang.rotation.x = Math.PI;
+      fang.position.set((f - 1.5) * 0.32, 3.8, 1.4);
+      headGroup.add(fang);
+    }
+
+    // Glowing Blood-Red Predatory Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.16, 8, 8);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-0.45, 4.3, 1.35);
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(0.45, 4.3, 1.35);
+    headGroup.add(leftEye);
+    headGroup.add(rightEye);
+
+    // Curved Obsidian Ram Horns
+    const hornMat = new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.3 });
+    const hornGeo = new THREE.ConeGeometry(0.28, 1.4, 8);
+
+    const leftHorn = new THREE.Mesh(hornGeo, hornMat);
+    leftHorn.position.set(-0.9, 4.9, 0.2);
+    leftHorn.rotation.z = 0.8;
+    leftHorn.rotation.x = -0.4;
+    headGroup.add(leftHorn);
+
+    const rightHorn = new THREE.Mesh(hornGeo, hornMat);
+    rightHorn.position.set(0.9, 4.9, 0.2);
+    rightHorn.rotation.z = -0.8;
+    rightHorn.rotation.x = -0.4;
+    headGroup.add(rightHorn);
+
+    this.yetiGroup.add(headGroup);
+
+    // 3. Muscular Ape-Like Arms with Sharp Obsidian Claws
+    const armGeo = new THREE.CylinderGeometry(0.42, 0.35, 3.2, 8);
+    const clawMat = new THREE.MeshStandardMaterial({ color: 0x0a0a14, roughness: 0.1 });
+
+    this.leftArm = new THREE.Group();
+    const lArmMesh = new THREE.Mesh(armGeo, furMat);
+    lArmMesh.position.y = -1.4;
+    const lClaw = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.45, 1.1), clawMat);
+    lClaw.position.set(0, -3.0, 0.2);
+    this.leftArm.add(lArmMesh);
+    this.leftArm.add(lClaw);
+    this.leftArm.position.set(-2.0, 3.4, 0);
+    this.yetiGroup.add(this.leftArm);
+
+    this.rightArm = new THREE.Group();
+    const rArmMesh = new THREE.Mesh(armGeo, furMat);
+    rArmMesh.position.y = -1.4;
+    const rClaw = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.45, 1.1), clawMat);
+    rClaw.position.set(0, -3.0, 0.2);
+    this.rightArm.add(rArmMesh);
+    this.rightArm.add(rClaw);
+    this.rightArm.position.set(2.0, 3.4, 0);
+    this.yetiGroup.add(this.rightArm);
+
+    // 4. Muscular Digitigrade Legs & Paws
+    const legGeo = new THREE.CylinderGeometry(0.55, 0.45, 2.2, 8);
+    const leftLeg = new THREE.Mesh(legGeo, furMat);
+    leftLeg.position.set(-0.95, 1.1, -0.2);
+    const rightLeg = new THREE.Mesh(legGeo, furMat);
+    rightLeg.position.set(0.95, 1.1, -0.2);
+    this.yetiGroup.add(leftLeg);
+    this.yetiGroup.add(rightLeg);
+
+    this.mesh = this.yetiGroup;
+    this.mesh.position.set(this.x, 0, this.z);
+    this.mesh.userData = { isYeti: true };
+    sceneManager.scene.add(this.yetiGroup);
   }
 
   initNpcSwarm(sceneManager) {
@@ -160,34 +247,14 @@ export class YetiPredator {
       }
     });
 
-    // 2. Yeti Animation & Sprite Frame Offset Cycling
-    this.animTimer += dt;
-    if (this.animTimer > 0.14 && this.yetiTexture) {
-      this.animTimer = 0;
-      this.animFrame = (this.animFrame + 1) % 6;
-      // Cycle horizontally across the 6 frames of front run
-      this.yetiTexture.offset.set(this.animFrame * (1 / 6), 0.68);
-    }
-
-    // 3. Yeti State Machine & Predator AI
+    // 2. Yeti State Machine & Predator AI
     if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
       this.state = "STAGGERED";
-      if (this.yetiSprite) {
-        this.yetiSprite.scale.set(9.0, 7.8, 1);
-      }
     } else if (this.distractedTimer > 0) {
       this.distractedTimer -= dt;
       this.state = "DISTRACTED";
-      if (this.yetiSprite) {
-        this.yetiSprite.scale.set(8.5, 8.5, 1);
-      }
     } else {
-      if (this.yetiSprite) {
-        const pulse = Math.sin(Date.now() * 0.008) * 0.3;
-        this.yetiSprite.scale.set(8.5 + pulse, 8.5 - pulse, 1);
-      }
-
       // Find closest alive NPC in front
       let closestNpc = null;
       let minNpcDist = 9999;
@@ -246,11 +313,29 @@ export class YetiPredator {
       this.x = playerPos.x + (Math.random() - 0.5) * 16;
     }
 
+    // Animate 3D Yeti Mesh, Orientation & Arm Swing Cadence
     if (this.mesh) {
-      this.mesh.position.set(this.x, 3.5, this.z);
-    }
-    if (this.yetiSprite) {
-      this.yetiSprite.position.set(this.x, 4.0, this.z);
+      this.mesh.position.set(this.x, 0, this.z);
+
+      // Face towards moving target / player
+      const targetAngle = Math.atan2(playerPos.x - this.x, playerPos.z - this.z);
+      this.mesh.rotation.y = targetAngle;
+
+      // Muscular arm swing running cadence
+      if (this.leftArm && this.rightArm) {
+        const armSpeed = this.state === "CHARGING" ? 0.018 : 0.010;
+        const armSwing = Math.sin(Date.now() * armSpeed) * 0.75;
+        this.leftArm.rotation.x = armSwing;
+        this.rightArm.rotation.x = -armSwing;
+      }
+
+      // Stagger recoil vs breath pulse
+      if (this.staggerTimer > 0) {
+        this.mesh.scale.set(1.2, 0.85, 1.2);
+      } else {
+        const pulse = 1.0 + Math.sin(Date.now() * 0.006) * 0.04;
+        this.mesh.scale.set(pulse, pulse, pulse);
+      }
     }
   }
 
@@ -259,7 +344,6 @@ export class YetiPredator {
     this.maxHp = 8000 * waveNum;
     this.hp = this.maxHp;
     this.state = "STALKING_NPCS";
-    if (this.yetiSprite) this.yetiSprite.visible = true;
     if (this.mesh) this.mesh.visible = true;
   }
 }

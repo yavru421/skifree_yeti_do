@@ -105,51 +105,160 @@ export class SceneManager {
   buildSkierMesh() {
     this.skierGroup = new THREE.Group();
 
-    // 1. Skier Skis (Neon Cyan Edge)
-    const skiGeo = new THREE.BoxGeometry(0.18, 0.05, 2.4);
-    const skiMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, metalness: 0.8, roughness: 0.2 });
-    const leftSki = new THREE.Mesh(skiGeo, skiMat);
-    leftSki.position.set(-0.35, 0.03, 0);
-    const rightSki = new THREE.Mesh(skiGeo, skiMat);
-    rightSki.position.set(0.35, 0.03, 0);
-    this.skierGroup.add(leftSki);
-    this.skierGroup.add(rightSki);
+    // 1. Curved Racing Skis (Steel Edges, Camber & Upturned Tips)
+    const skiBodyGeo = new THREE.BoxGeometry(0.18, 0.04, 2.2);
+    const skiMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      metalness: 0.85,
+      roughness: 0.18
+    });
+    const skiEdgeMat = new THREE.MeshStandardMaterial({
+      color: 0xcccccc,
+      metalness: 0.95,
+      roughness: 0.1
+    });
+    const tipGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.35, 8, 1, false, 0, Math.PI);
 
-    // 2. Skier Boots & Bindings
-    const bootGeo = new THREE.BoxGeometry(0.2, 0.28, 0.45);
-    const bootMat = new THREE.MeshStandardMaterial({ color: 0x111122 });
+    // Left Ski Assembly
+    const leftSkiGroup = new THREE.Group();
+    const lBody = new THREE.Mesh(skiBodyGeo, skiMat);
+    const lTip = new THREE.Mesh(tipGeo, skiEdgeMat);
+    lTip.rotation.z = Math.PI / 2;
+    lTip.rotation.x = -0.6;
+    lTip.position.set(0, 0.12, 1.15);
+    leftSkiGroup.add(lBody);
+    leftSkiGroup.add(lTip);
+    leftSkiGroup.position.set(-0.32, 0.03, 0.1);
+
+    // Right Ski Assembly
+    const rightSkiGroup = new THREE.Group();
+    const rBody = new THREE.Mesh(skiBodyGeo, skiMat);
+    const rTip = new THREE.Mesh(tipGeo, skiEdgeMat);
+    rTip.rotation.z = Math.PI / 2;
+    rTip.rotation.x = -0.6;
+    rTip.position.set(0, 0.12, 1.15);
+    rightSkiGroup.add(rBody);
+    rightSkiGroup.add(rTip);
+    rightSkiGroup.position.set(0.32, 0.03, 0.1);
+
+    this.skierGroup.add(leftSkiGroup);
+    this.skierGroup.add(rightSkiGroup);
+
+    // 2. Molded Alpine Racing Boots & Step-in Bindings
+    const bootGeo = new THREE.BoxGeometry(0.22, 0.32, 0.5);
+    const bootMat = new THREE.MeshStandardMaterial({ color: 0x181828, roughness: 0.4 });
+    const bindingGeo = new THREE.BoxGeometry(0.24, 0.08, 0.65);
+    const bindingMat = new THREE.MeshStandardMaterial({ color: 0x444455, metalness: 0.8 });
+
+    const leftBinding = new THREE.Mesh(bindingGeo, bindingMat);
+    leftBinding.position.set(-0.32, 0.06, 0);
     const leftBoot = new THREE.Mesh(bootGeo, bootMat);
-    leftBoot.position.set(-0.35, 0.15, 0);
-    const rightBoot = new THREE.Mesh(bootGeo, bootMat);
-    rightBoot.position.set(0.35, 0.15, 0);
+    leftBoot.position.set(-0.32, 0.22, -0.02);
+    leftBoot.rotation.x = 0.12; // Forward racing cant
+    this.skierGroup.add(leftBinding);
     this.skierGroup.add(leftBoot);
+
+    const rightBinding = new THREE.Mesh(bindingGeo, bindingMat);
+    rightBinding.position.set(0.32, 0.06, 0);
+    const rightBoot = new THREE.Mesh(bootGeo, bootMat);
+    rightBoot.position.set(0.32, 0.22, -0.02);
+    rightBoot.rotation.x = 0.12;
+    this.skierGroup.add(rightBinding);
     this.skierGroup.add(rightBoot);
 
-    // 3. Skier Torso (Alpine Red Jacket)
-    const torsoGeo = new THREE.BoxGeometry(0.7, 0.85, 0.45);
-    const torsoMat = new THREE.MeshStandardMaterial({ color: 0xff0055, roughness: 0.3 });
-    const torso = new THREE.Mesh(torsoGeo, torsoMat);
-    torso.position.set(0, 0.8, 0);
-    this.skierGroup.add(torso);
+    // 3. Slalom Racing Legs (Bent at Knees in Forward Tuck)
+    const legGeo = new THREE.CylinderGeometry(0.11, 0.13, 0.65, 8);
+    const suitLegMat = new THREE.MeshStandardMaterial({ color: 0x111625, roughness: 0.5 });
+    
+    const leftLeg = new THREE.Mesh(legGeo, suitLegMat);
+    leftLeg.position.set(-0.28, 0.55, -0.06);
+    leftLeg.rotation.x = 0.25;
+    const rightLeg = new THREE.Mesh(legGeo, suitLegMat);
+    rightLeg.position.set(0.28, 0.55, -0.06);
+    rightLeg.rotation.x = 0.25;
+    this.skierGroup.add(leftLeg);
+    this.skierGroup.add(rightLeg);
 
-    // 4. Helmet & Goggles
-    const headGeo = new THREE.SphereGeometry(0.26, 12, 12);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x222233 });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 1.4, 0);
-    this.skierGroup.add(head);
+    // 4. Aerodynamic Racing Torso & Alpine Crimson Jacket
+    const torsoGeo = new THREE.CylinderGeometry(0.32, 0.24, 0.85, 8);
+    const jacketMat = new THREE.MeshStandardMaterial({
+      color: 0xff0055,
+      roughness: 0.35,
+      metalness: 0.1
+    });
+    this.skierTorso = new THREE.Mesh(torsoGeo, jacketMat);
+    this.skierTorso.position.set(0, 1.05, -0.08);
+    this.skierTorso.rotation.x = 0.22; // Forward speed lean
+    this.skierGroup.add(this.skierTorso);
 
-    const goggleGeo = new THREE.BoxGeometry(0.34, 0.12, 0.15);
-    const goggleMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-    const goggles = new THREE.Mesh(goggleGeo, goggleMat);
-    goggles.position.set(0, 1.4, 0.22);
-    this.skierGroup.add(goggles);
+    // Spine Racing Stripe
+    const stripeGeo = new THREE.BoxGeometry(0.08, 0.75, 0.04);
+    const stripeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+    stripe.position.set(0, 1.05, -0.22);
+    stripe.rotation.x = 0.22;
+    this.skierGroup.add(stripe);
 
-    // 5. Hunting Rifle
-    const rifleGeo = new THREE.BoxGeometry(0.12, 0.15, 1.4);
-    const rifleMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 });
+    // 5. High-Altitude Racing Helmet & Iridescent Mirrored Visor
+    const helmetGeo = new THREE.SphereGeometry(0.26, 16, 14);
+    const helmetMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1d2e,
+      metalness: 0.6,
+      roughness: 0.2
+    });
+    this.skierHead = new THREE.Mesh(helmetGeo, helmetMat);
+    this.skierHead.position.set(0, 1.55, 0.05);
+    this.skierGroup.add(this.skierHead);
+
+    const visorGeo = new THREE.SphereGeometry(0.265, 16, 14, 0, Math.PI, 0, Math.PI * 0.55);
+    const visorMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      metalness: 0.95,
+      roughness: 0.05,
+      emissive: 0x004466,
+      emissiveIntensity: 0.3
+    });
+    this.skierGoggles = new THREE.Mesh(visorGeo, visorMat);
+    this.skierGoggles.rotation.x = -Math.PI / 2;
+    this.skierGoggles.rotation.z = Math.PI;
+    this.skierGoggles.position.set(0, 1.56, 0.06);
+    this.skierGroup.add(this.skierGoggles);
+
+    // 6. Carbon Fiber Ski Poles with Grips & Snow Baskets
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85 });
+    const basketMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const poleGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.5, 6);
+    const basketGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.02, 8);
+
+    // Left Pole
+    const leftPoleGroup = new THREE.Group();
+    const lPole = new THREE.Mesh(poleGeo, poleMat);
+    const lBasket = new THREE.Mesh(basketGeo, basketMat);
+    lBasket.position.y = -0.55;
+    leftPoleGroup.add(lPole);
+    leftPoleGroup.add(lBasket);
+    leftPoleGroup.position.set(-0.55, 0.85, 0);
+    leftPoleGroup.rotation.x = -0.4;
+    leftPoleGroup.rotation.z = 0.15;
+    this.skierGroup.add(leftPoleGroup);
+
+    // Right Pole
+    const rightPoleGroup = new THREE.Group();
+    const rPole = new THREE.Mesh(poleGeo, poleMat);
+    const rBasket = new THREE.Mesh(basketGeo, basketMat);
+    rBasket.position.y = -0.55;
+    rightPoleGroup.add(rPole);
+    rightPoleGroup.add(rBasket);
+    rightPoleGroup.position.set(0.55, 0.85, 0);
+    rightPoleGroup.rotation.x = -0.4;
+    rightPoleGroup.rotation.z = -0.15;
+    this.skierGroup.add(rightPoleGroup);
+
+    // 7. Tactical Hunting Rifle
+    const rifleGeo = new THREE.BoxGeometry(0.08, 0.12, 1.3);
+    const rifleMat = new THREE.MeshStandardMaterial({ color: 0x111118, metalness: 0.9, roughness: 0.2 });
     this.rifleMesh = new THREE.Mesh(rifleGeo, rifleMat);
-    this.rifleMesh.position.set(0.42, 0.85, 0.35);
+    this.rifleMesh.position.set(0.42, 1.05, 0.25);
     this.skierGroup.add(this.rifleMesh);
 
     this.scene.add(this.skierGroup);
