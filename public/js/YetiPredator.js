@@ -1,8 +1,11 @@
 // public/js/YetiPredator.js
-// 3D Yeti Boss AI, Stalker State Machine, Kinetic Stagger & Skier Rescue Logic
+// 3D Yeti Boss AI, Retro Sprite Billboards, Stalker State Machine & Skier Rescue
 
 export class YetiPredator {
   constructor(sceneManager) {
+    this.sceneManager = sceneManager;
+    this.textureLoader = new THREE.TextureLoader();
+
     this.x = 0;
     this.y = 0;
     this.z = 35;
@@ -17,86 +20,59 @@ export class YetiPredator {
     this.biteCooldown = 0;
 
     this.mesh = null;
+    this.sprite = null;
     this.npcs = [];
     this.currentTargetNpc = null;
 
-    this.initMesh(sceneManager);
+    this.initSprite(sceneManager);
     this.initNpcSwarm(sceneManager);
   }
 
-  initMesh(sceneManager) {
-    const yetiGroup = new THREE.Group();
+  initSprite(sceneManager) {
+    const yetiTex = this.textureLoader.load('/assets/yeti_v2.jpg');
+    yetiTex.magFilter = THREE.NearestFilter;
+    yetiTex.minFilter = THREE.NearestFilter;
 
-    // Fur Body
-    const bodyGeo = new THREE.BoxGeometry(2.4, 3.2, 1.8);
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0xddeeff });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 1.6;
-    yetiGroup.add(body);
+    const spriteMat = new THREE.SpriteMaterial({
+      map: yetiTex,
+      transparent: true,
+      opacity: 0.98
+    });
 
-    // Head
-    const headGeo = new THREE.BoxGeometry(1.6, 1.4, 1.4);
-    const headMat = new THREE.MeshLambertMaterial({ color: 0xccddee });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 3.6, 0.2);
-    yetiGroup.add(head);
+    this.sprite = new THREE.Sprite(spriteMat);
+    this.sprite.scale.set(6.5, 6.5, 1.0);
+    this.sprite.position.set(this.x, 3.2, this.z);
 
-    // Glowing Red Eyes
-    const eyeGeo = new THREE.BoxGeometry(0.25, 0.15, 0.15);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
-    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(-0.45, 3.7, 0.9);
-    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-    rightEye.position.set(0.45, 3.7, 0.9);
-    yetiGroup.add(leftEye);
-    yetiGroup.add(rightEye);
-
-    // Giant Claws
-    const armGeo = new THREE.BoxGeometry(0.7, 2.6, 0.7);
-    const armMat = new THREE.MeshLambertMaterial({ color: 0xb0ccdd });
-    const leftArm = new THREE.Mesh(armGeo, armMat);
-    leftArm.position.set(-1.6, 1.8, 0.4);
-    leftArm.rotation.x = -0.3;
-    const rightArm = new THREE.Mesh(armGeo, armMat);
-    rightArm.position.set(1.6, 1.8, 0.4);
-    rightArm.rotation.x = -0.3;
-    yetiGroup.add(leftArm);
-    yetiGroup.add(rightArm);
-
-    this.mesh = yetiGroup;
-    this.mesh.position.set(this.x, 0, this.z);
+    this.mesh = this.sprite;
     sceneManager.scene.add(this.mesh);
   }
 
   initNpcSwarm(sceneManager) {
+    const npcTex = this.textureLoader.load('/assets/npc_skiers.jpg');
+    npcTex.magFilter = THREE.NearestFilter;
+
     const colors = [0xff0055, 0x00f0ff, 0x39ff14, 0xffff00, 0xff7700, 0xaa00ff];
-    const npcBodyGeo = new THREE.BoxGeometry(0.6, 0.8, 0.4);
-    const npcSkiGeo = new THREE.BoxGeometry(0.14, 0.04, 1.8);
 
     for (let i = 0; i < 20; i++) {
-      const npcGroup = new THREE.Group();
       const color = colors[i % colors.length];
-      const mat = new THREE.MeshLambertMaterial({ color });
+      const npcMat = new THREE.SpriteMaterial({
+        map: npcTex,
+        color,
+        transparent: true,
+        opacity: 0.95
+      });
 
-      const torso = new THREE.Mesh(npcBodyGeo, mat);
-      torso.position.y = 0.7;
-      npcGroup.add(torso);
-
-      const leftSki = new THREE.Mesh(npcSkiGeo, mat);
-      leftSki.position.set(-0.25, 0.02, 0);
-      const rightSki = new THREE.Mesh(npcSkiGeo, mat);
-      rightSki.position.set(0.25, 0.02, 0);
-      npcGroup.add(leftSki);
-      npcGroup.add(rightSki);
+      const npcSprite = new THREE.Sprite(npcMat);
+      npcSprite.scale.set(2.4, 2.4, 1.0);
 
       const zPos = 25 + i * 18 + Math.random() * 12;
       const xPos = (Math.random() - 0.5) * 55;
-      npcGroup.position.set(xPos, 0, zPos);
-      sceneManager.scene.add(npcGroup);
+      npcSprite.position.set(xPos, 1.2, zPos);
+      sceneManager.scene.add(npcSprite);
 
       this.npcs.push({
         id: i,
-        mesh: npcGroup,
+        mesh: npcSprite,
         x: xPos,
         z: zPos,
         speed: 22 + Math.random() * 8,
@@ -147,8 +123,8 @@ export class YetiPredator {
       if (!npc.isEaten) {
         npc.z += npc.speed * dt * 0.9;
         npc.x += Math.sin(npc.steer) * (npc.speed * 0.04);
-        npc.mesh.position.set(npc.x, 0, npc.z);
-        npc.mesh.rotation.y = npc.steer;
+        npc.mesh.position.set(npc.x, 1.2, npc.z);
+        npc.mesh.material.rotation = -npc.steer * 0.3;
 
         // Recycle NPCs falling behind player
         if (playerPos.z - npc.z > 30) {
@@ -165,10 +141,23 @@ export class YetiPredator {
     if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
       this.state = "STAGGERED";
+      // Visual stagger shake
+      if (this.sprite) {
+        this.sprite.scale.set(6.8, 6.0, 1.0);
+      }
     } else if (this.distractedTimer > 0) {
       this.distractedTimer -= dt;
       this.state = "DISTRACTED";
+      if (this.sprite) {
+        this.sprite.scale.set(6.5, 6.5, 1.0);
+      }
     } else {
+      if (this.sprite) {
+        // Subtle walking pulse
+        const walkPulse = Math.sin(Date.now() * 0.008) * 0.4;
+        this.sprite.scale.set(6.5 + walkPulse, 6.5 - walkPulse, 1.0);
+      }
+
       // Find closest alive NPC in front
       let closestNpc = null;
       let minNpcDist = 9999;
@@ -228,7 +217,7 @@ export class YetiPredator {
     }
 
     if (this.mesh) {
-      this.mesh.position.set(this.x, 0, this.z);
+      this.mesh.position.set(this.x, 3.2, this.z);
     }
   }
 

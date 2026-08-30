@@ -1,5 +1,5 @@
 // public/js/SceneManager.js
-// 3D Three.js WebGL Scene, Terrain Generation, Biomes & Dynamic Chase Cam
+// 3D WebGL Alpine Environment, Retro Sprite Billboards & Textured Biomes
 
 export class SceneManager {
   constructor(canvas) {
@@ -7,27 +7,24 @@ export class SceneManager {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
+    this.textureLoader = new THREE.TextureLoader();
 
-    this.isFPV = false; // Default: Third-Person Chase-Cam (TPV)
-    this.cameraOffset = new THREE.Vector3(0, 3.2, -6.5); // Behind and above skier
-    this.cameraLookOffset = new THREE.Vector3(0, 1.0, 12.0); // Downhill look target
+    this.isFPV = false; // Default: Chase Cam (TPV)
+    this.cameraOffset = new THREE.Vector3(0, 3.2, -6.5);
+    this.cameraLookOffset = new THREE.Vector3(0, 1.0, 12.0);
 
     this.terrainMesh = null;
     this.snowParticles = null;
     this.skierGroup = null;
-    this.leftSki = null;
-    this.rightSki = null;
-    this.skierBody = null;
-    this.rifleMesh = null;
+    this.skierSprite = null;
 
     this.trees = [];
     this.kickers = [];
     this.grindRails = [];
-    this.icePatches = [];
     this.slalomGates = [];
     this.finishLineMesh = null;
 
-    this.currentBiome = "alpine"; // alpine (0-400m) -> glacier (400-800m) -> gorge (800-1200m)
+    this.currentBiome = "alpine";
     this.init();
   }
 
@@ -50,7 +47,6 @@ export class SceneManager {
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = false; // Fast unshadowed mobile rendering
 
     this.setupLighting();
     this.buildSkierMesh();
@@ -62,7 +58,7 @@ export class SceneManager {
   }
 
   setupLighting() {
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334466, 0.85);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x445577, 1.0);
     hemiLight.position.set(0, 50, 0);
     this.scene.add(hemiLight);
 
@@ -74,42 +70,30 @@ export class SceneManager {
   buildSkierMesh() {
     this.skierGroup = new THREE.Group();
 
-    // Skis
-    const skiGeo = new THREE.BoxGeometry(0.18, 0.05, 2.2);
+    // 1. Skier 2D Textured Retro Sprite Billboard
+    const skierTex = this.textureLoader.load('/assets/skier.jpg');
+    skierTex.magFilter = THREE.NearestFilter;
+    skierTex.minFilter = THREE.NearestFilter;
+
+    const spriteMat = new THREE.SpriteMaterial({
+      map: skierTex,
+      transparent: true,
+      opacity: 0.98
+    });
+    this.skierSprite = new THREE.Sprite(spriteMat);
+    this.skierSprite.scale.set(2.4, 2.4, 1.0);
+    this.skierSprite.position.set(0, 1.2, 0);
+    this.skierGroup.add(this.skierSprite);
+
+    // 2. Physical Skis on Ground
+    const skiGeo = new THREE.BoxGeometry(0.18, 0.05, 2.4);
     const skiMat = new THREE.MeshLambertMaterial({ color: 0x00f0ff });
-    this.leftSki = new THREE.Mesh(skiGeo, skiMat);
-    this.leftSki.position.set(-0.35, 0.03, 0);
-    this.rightSki = new THREE.Mesh(skiGeo, skiMat);
-    this.rightSki.position.set(0.35, 0.03, 0);
-    this.skierGroup.add(this.leftSki);
-    this.skierGroup.add(this.rightSki);
-
-    // Skier Torso / Jacket (visible in TPV)
-    const torsoGeo = new THREE.BoxGeometry(0.7, 0.9, 0.45);
-    const torsoMat = new THREE.MeshLambertMaterial({ color: 0xff0055 });
-    this.skierBody = new THREE.Mesh(torsoGeo, torsoMat);
-    this.skierBody.position.set(0, 0.85, 0);
-    this.skierGroup.add(this.skierBody);
-
-    // Helmet & Goggles
-    const headGeo = new THREE.SphereGeometry(0.28, 12, 12);
-    const headMat = new THREE.MeshLambertMaterial({ color: 0x222233 });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 1.45, 0);
-    this.skierGroup.add(head);
-
-    const goggleGeo = new THREE.BoxGeometry(0.35, 0.12, 0.15);
-    const goggleMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-    const goggles = new THREE.Mesh(goggleGeo, goggleMat);
-    goggles.position.set(0, 1.45, 0.22);
-    this.skierGroup.add(goggles);
-
-    // Hunting Rifle slung / aimed forward
-    const rifleGeo = new THREE.BoxGeometry(0.12, 0.15, 1.3);
-    const rifleMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-    this.rifleMesh = new THREE.Mesh(rifleGeo, rifleMat);
-    this.rifleMesh.position.set(0.45, 0.9, 0.35);
-    this.skierGroup.add(this.rifleMesh);
+    const leftSki = new THREE.Mesh(skiGeo, skiMat);
+    leftSki.position.set(-0.4, 0.03, 0);
+    const rightSki = new THREE.Mesh(skiGeo, skiMat);
+    rightSki.position.set(0.4, 0.03, 0);
+    this.skierGroup.add(leftSki);
+    this.skierGroup.add(rightSki);
 
     this.scene.add(this.skierGroup);
   }
@@ -118,7 +102,6 @@ export class SceneManager {
     const terrainGeo = new THREE.PlaneGeometry(160, 2400, 32, 160);
     terrainGeo.rotateX(-Math.PI / 2);
 
-    // Add subtle procedural slope roll
     const pos = terrainGeo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
@@ -128,9 +111,14 @@ export class SceneManager {
     }
     terrainGeo.computeVertexNormals();
 
+    const snowTex = this.textureLoader.load('/assets/snow_texture.jpg');
+    snowTex.wrapS = THREE.RepeatWrapping;
+    snowTex.wrapT = THREE.RepeatWrapping;
+    snowTex.repeat.set(16, 240);
+
     const terrainMat = new THREE.MeshLambertMaterial({
-      color: 0xe8f0ff,
-      wireframe: false
+      map: snowTex,
+      color: 0xedf4ff
     });
     this.terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
     this.terrainMesh.position.set(0, -0.1, 1100);
@@ -138,7 +126,7 @@ export class SceneManager {
   }
 
   buildSnowParticles() {
-    const particleCount = 750;
+    const particleCount = 800;
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);
 
@@ -153,7 +141,7 @@ export class SceneManager {
       color: 0xffffff,
       size: 0.35,
       transparent: true,
-      opacity: 0.75
+      opacity: 0.8
     });
 
     this.snowParticles = new THREE.Points(geometry, material);
@@ -161,24 +149,23 @@ export class SceneManager {
   }
 
   buildObstaclesAndGates() {
-    // 1. Procedural Trees
-    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.8, 6);
-    const foliageGeo = new THREE.ConeGeometry(1.8, 4.5, 6);
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2e18 });
-    const foliageMat = new THREE.MeshLambertMaterial({ color: 0x0f4024 });
+    // 1. Retro Illustrated Pine Tree Sprites
+    const treeTex = this.textureLoader.load('/assets/pine_tree.png');
+    treeTex.magFilter = THREE.NearestFilter;
+    const treeMat = new THREE.SpriteMaterial({
+      map: treeTex,
+      transparent: true,
+      alphaTest: 0.15
+    });
 
     for (let i = 0; i < 90; i++) {
-      const tree = new THREE.Group();
-      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-      trunk.position.y = 0.9;
-      const foliage = new THREE.Mesh(foliageGeo, foliageMat);
-      foliage.position.y = 3.5;
-      tree.add(trunk);
-      tree.add(foliage);
+      const tree = new THREE.Sprite(treeMat);
+      const scale = 4.5 + Math.random() * 2.5;
+      tree.scale.set(scale * 0.8, scale, 1.0);
 
       const zPos = 20 + i * 13 + Math.random() * 8;
       const xPos = (Math.random() - 0.5) * 65;
-      tree.position.set(xPos, 0, zPos);
+      tree.position.set(xPos, scale * 0.45, zPos);
       this.trees.push(tree);
       this.scene.add(tree);
     }
@@ -259,8 +246,8 @@ export class SceneManager {
 
   toggleCameraMode() {
     this.isFPV = !this.isFPV;
-    if (this.skierBody) {
-      this.skierBody.visible = !this.isFPV;
+    if (this.skierSprite) {
+      this.skierSprite.visible = !this.isFPV;
     }
     return this.isFPV ? "FPV" : "TPV (Chase)";
   }
@@ -271,6 +258,11 @@ export class SceneManager {
     this.skierGroup.rotation.y = playerSteer;
     this.skierGroup.rotation.z = -playerSteer * 0.45 + playerAirRoll;
     this.skierGroup.rotation.x = playerPitch;
+
+    // Sprite tilt on carving
+    if (this.skierSprite) {
+      this.skierSprite.material.rotation = -playerSteer * 0.35;
+    }
 
     if (this.isFPV) {
       // First-Person View

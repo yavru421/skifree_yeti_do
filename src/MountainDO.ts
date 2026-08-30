@@ -108,50 +108,57 @@ export class MountainDO extends DurableObject {
   }
 
   private initDatabase() {
-    this.ctx.storage.sql.exec(`
-      CREATE TABLE IF NOT EXISTS hunter_profiles (
-        callsign TEXT PRIMARY KEY,
-        pin_hash TEXT NOT NULL,
-        hunter_id TEXT,
-        created_at INTEGER NOT NULL
-      );
+    try {
+      this.ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS hunter_profiles (
+          callsign TEXT PRIMARY KEY,
+          pin_hash TEXT NOT NULL,
+          hunter_id TEXT,
+          created_at INTEGER NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS global_leaderboard (
-        id TEXT PRIMARY KEY,
-        hunter_id TEXT,
-        callsign TEXT NOT NULL,
-        max_distance INTEGER NOT NULL,
-        max_speed REAL NOT NULL,
-        survival_time REAL NOT NULL,
-        score INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS global_leaderboard (
+          id TEXT PRIMARY KEY,
+          hunter_id TEXT,
+          callsign TEXT NOT NULL,
+          max_distance INTEGER NOT NULL,
+          max_speed REAL NOT NULL,
+          survival_time REAL NOT NULL,
+          score INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS race_leaderboard (
-        id TEXT PRIMARY KEY,
-        hunter_id TEXT,
-        callsign TEXT NOT NULL,
-        clear_time_sec REAL NOT NULL,
-        max_speed REAL NOT NULL,
-        gates_hit INTEGER NOT NULL,
-        score INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS race_leaderboard (
+          id TEXT PRIMARY KEY,
+          hunter_id TEXT,
+          callsign TEXT NOT NULL,
+          clear_time_sec REAL NOT NULL,
+          max_speed REAL NOT NULL,
+          gates_hit INTEGER NOT NULL,
+          score INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS yeti_kills (
-        kill_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        killer_callsign TEXT NOT NULL,
-        wave_number INTEGER NOT NULL,
-        killer_score INTEGER NOT NULL,
-        squad_size INTEGER NOT NULL,
-        timestamp INTEGER NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS yeti_kills (
+          kill_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          killer_callsign TEXT NOT NULL,
+          wave_number INTEGER NOT NULL,
+          killer_score INTEGER NOT NULL,
+          squad_size INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      `);
 
-      CREATE INDEX IF NOT EXISTS idx_global_score ON global_leaderboard(score DESC);
-      CREATE INDEX IF NOT EXISTS idx_race_time ON race_leaderboard(clear_time_sec ASC, score DESC);
-      CREATE INDEX IF NOT EXISTS idx_hunter_callsign ON hunter_profiles(callsign);
-      CREATE INDEX IF NOT EXISTS idx_yeti_kills_ts ON yeti_kills(timestamp DESC);
-    `);
+      try {
+        this.ctx.storage.sql.exec(`
+          CREATE INDEX IF NOT EXISTS idx_global_score ON global_leaderboard(score DESC);
+          CREATE INDEX IF NOT EXISTS idx_race_time ON race_leaderboard(clear_time_sec ASC, score DESC);
+          CREATE INDEX IF NOT EXISTS idx_hunter_callsign ON hunter_profiles(callsign);
+        `);
+      } catch (e) {}
+    } catch (e) {
+      console.warn("SQLite init warning:", e);
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
