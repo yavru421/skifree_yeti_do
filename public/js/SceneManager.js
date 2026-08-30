@@ -397,6 +397,52 @@ export class SceneManager {
     }
   }
 
+  updateGhostSkiers(remotePlayers, localPlayerId) {
+    if (!remotePlayers || !Array.isArray(remotePlayers)) return;
+    const activeIds = new Set();
+
+    remotePlayers.forEach((p) => {
+      if (p.id === localPlayerId) return; // Skip self
+      activeIds.add(p.id);
+
+      let ghost = this.ghostSkiers.get(p.id);
+      if (!ghost) {
+        // Create new ghost skier sprite
+        const group = new THREE.Group();
+        if (this.skierTexture) {
+          const ghostMat = new THREE.SpriteMaterial({
+            map: this.skierTexture.clone(),
+            transparent: true,
+            opacity: 0.55,
+            color: 0x88ddff
+          });
+          const sprite = new THREE.Sprite(ghostMat);
+          sprite.scale.set(3.2, 3.2, 1);
+          sprite.position.set(0, 1.4, 0);
+          group.add(sprite);
+        }
+        group.position.set(p.x, 0, p.z);
+        this.scene.add(group);
+        ghost = { group, x: p.x, z: p.z, steer: p.steer || 0 };
+        this.ghostSkiers.set(p.id, ghost);
+      }
+
+      // Smooth position interpolation
+      ghost.group.position.x += (p.x - ghost.group.position.x) * 0.35;
+      ghost.group.position.z += (p.z - ghost.group.position.z) * 0.35;
+      ghost.group.rotation.y = p.steer || 0;
+      ghost.group.rotation.z = -(p.steer || 0) * 0.45;
+    });
+
+    // Remove disconnected ghost skiers
+    for (const [id, ghost] of this.ghostSkiers.entries()) {
+      if (!activeIds.has(id)) {
+        this.scene.remove(ghost.group);
+        this.ghostSkiers.delete(id);
+      }
+    }
+  }
+
   render() {
     this.renderer.render(this.scene, this.camera);
   }

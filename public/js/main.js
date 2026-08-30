@@ -255,7 +255,22 @@ class GameApp {
   }
 
   handleNetworkMessage(msg) {
-    if (msg.type === "COUNTDOWN_START") {
+    if (msg.type === "FRAME") {
+      // 1. Render & interpolate remote ghost skiers (Option 3 Hybrid Co-Op)
+      if (msg.players && this.sceneManager && this.sceneManager.updateGhostSkiers) {
+        this.sceneManager.updateGhostSkiers(msg.players, this.networkSync.playerId);
+      }
+      // 2. Authoritative Shared Yeti Boss HP & State Sync
+      if (msg.yeti && this.yetiPredator) {
+        if (typeof msg.yeti.hp === "number") {
+          this.yetiPredator.hp = msg.yeti.hp;
+          this.yetiPredator.maxHp = msg.yeti.maxHp || 8000;
+        }
+        if (msg.yeti.wave) {
+          this.yetiPredator.wave = msg.yeti.wave;
+        }
+      }
+    } else if (msg.type === "COUNTDOWN_START") {
       this.triggerCountdown(msg.countdownSeconds || 3);
     } else if (msg.type === "MATCH_LAUNCH") {
       this.launchActiveGame();
