@@ -359,28 +359,29 @@ export class SceneManager {
     this.skierGroup.position.set(playerPos.x, playerPos.y + playerAirY, playerPos.z);
 
     // 2. Real-Time Dynamic UV Sprite State Machine Mapping (6 Rows x 8 Columns)
-    // Row 0: 0.8333 (Glide), Row 1: 0.6667 (Left), Row 2: 0.5000 (Right), Row 3: 0.3333 (Tuck), Row 4: 0.1667 (Air), Row 5: 0.0000 (Crash)
+    // When steering Left (playerSteer < 0): Display Leftward Carving Sprite
+    // When steering Right (playerSteer > 0): Display Rightward Carving Sprite
     if (this.skierTexture && this.skierSprite) {
       if (playerAirY > 0.4) {
         // Row 4: Airborne Spread Eagle trick (Col 2)
         this.skierTexture.offset.set(2 * 0.125, 0.1667);
         this.skierSprite.material.rotation = playerAirRoll;
       } else if (playerSteer < -0.35) {
-        // Row 1: Hard Left Carve (Col 4)
-        this.skierTexture.offset.set(4 * 0.125, 0.6667);
-        this.skierSprite.material.rotation = -0.12;
-      } else if (playerSteer < -0.10) {
-        // Row 1: Gentle Left Carve (Col 1)
-        this.skierTexture.offset.set(1 * 0.125, 0.6667);
-        this.skierSprite.material.rotation = -0.05;
-      } else if (playerSteer > 0.35) {
-        // Row 2: Hard Right Carve (Col 4)
+        // Hard Left Carve (Points Screen-Left)
         this.skierTexture.offset.set(4 * 0.125, 0.5000);
-        this.skierSprite.material.rotation = 0.12;
-      } else if (playerSteer > 0.10) {
-        // Row 2: Gentle Right Carve (Col 1)
+        this.skierSprite.material.rotation = -0.15;
+      } else if (playerSteer < -0.10) {
+        // Gentle Left Carve (Points Screen-Left)
         this.skierTexture.offset.set(1 * 0.125, 0.5000);
-        this.skierSprite.material.rotation = 0.05;
+        this.skierSprite.material.rotation = -0.06;
+      } else if (playerSteer > 0.35) {
+        // Hard Right Carve (Points Screen-Right)
+        this.skierTexture.offset.set(4 * 0.125, 0.6667);
+        this.skierSprite.material.rotation = 0.15;
+      } else if (playerSteer > 0.10) {
+        // Gentle Right Carve (Points Screen-Right)
+        this.skierTexture.offset.set(1 * 0.125, 0.6667);
+        this.skierSprite.material.rotation = 0.06;
       } else if (playerPitch < -0.05) {
         // Row 3: Downhill Speed Tuck (Col 2)
         this.skierTexture.offset.set(2 * 0.125, 0.3333);

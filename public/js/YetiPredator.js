@@ -140,7 +140,7 @@ export class YetiPredator {
       if (!npc.isEaten) {
         npc.z += npc.speed * dt * 0.9;
         npc.x += Math.sin(npc.steer) * (npc.speed * 0.04);
-        npc.mesh.position.set(npc.x, 0, npc.z);
+        npc.mesh.position.set(npc.x, 1.6, npc.z); // Elevated above snow plane
         npc.mesh.rotation.y = npc.steer;
         npc.mesh.rotation.z = -npc.steer * 0.3;
 
@@ -151,6 +151,7 @@ export class YetiPredator {
           npc.isEaten = false;
           npc.isRescued = false;
           npc.mesh.visible = true;
+          npc.mesh.position.set(npc.x, 1.6, npc.z);
         }
       }
     });
