@@ -108,11 +108,12 @@ export class SceneManager {
   buildSkierMesh() {
     this.skierGroup = new THREE.Group();
 
-    // Load Authentic Chroma-Key Skier Sprite with 100% Alpha Transparency
+    // Load Authentic Chroma-Key Skier Sprite (6 Rows x 8 Columns)
     loadChromaKeyTexture('/assets/skier.jpg', 215, (texture) => {
       this.skierTexture = texture;
-      this.skierTexture.repeat.set(1 / 5, 1 / 4);
-      this.skierTexture.offset.set(0, 0.75); // Frame 1: straight downhill tuck
+      // Grid: 8 columns (width: 1/8 = 0.125), 6 rows (height: 1/6 = 0.1667)
+      this.skierTexture.repeat.set(1 / 8, 1 / 6);
+      this.skierTexture.offset.set(0.0, 5 / 6); // Row 0 (offset.y = 0.8333): Downhill glide
 
       const spriteMat = new THREE.SpriteMaterial({
         map: this.skierTexture,
@@ -120,7 +121,7 @@ export class SceneManager {
         alphaTest: 0.05
       });
       this.skierSprite = new THREE.Sprite(spriteMat);
-      this.skierSprite.scale.set(3.4, 3.4, 1);
+      this.skierSprite.scale.set(3.2, 3.2, 1);
       this.skierSprite.position.set(0, 1.4, 0);
       this.skierGroup.add(this.skierSprite);
     });
@@ -354,11 +355,42 @@ export class SceneManager {
   }
 
   updateCamera(playerPos, playerSteer, playerPitch, playerAirY, playerAirRoll) {
-    // Sync skier mesh position & carving roll
+    // 1. Sync skier sprite world position
     this.skierGroup.position.set(playerPos.x, playerPos.y + playerAirY, playerPos.z);
-    this.skierGroup.rotation.y = playerSteer;
-    this.skierGroup.rotation.z = -playerSteer * 0.45 + playerAirRoll;
-    this.skierGroup.rotation.x = playerPitch;
+
+    // 2. Real-Time Dynamic UV Sprite State Machine Mapping (6 Rows x 8 Columns)
+    // Row 0: 0.8333 (Glide), Row 1: 0.6667 (Left), Row 2: 0.5000 (Right), Row 3: 0.3333 (Tuck), Row 4: 0.1667 (Air), Row 5: 0.0000 (Crash)
+    if (this.skierTexture && this.skierSprite) {
+      if (playerAirY > 0.4) {
+        // Row 4: Airborne Spread Eagle trick (Col 2)
+        this.skierTexture.offset.set(2 * 0.125, 0.1667);
+        this.skierSprite.material.rotation = playerAirRoll;
+      } else if (playerSteer < -0.35) {
+        // Row 1: Hard Left Carve (Col 4)
+        this.skierTexture.offset.set(4 * 0.125, 0.6667);
+        this.skierSprite.material.rotation = -0.12;
+      } else if (playerSteer < -0.10) {
+        // Row 1: Gentle Left Carve (Col 1)
+        this.skierTexture.offset.set(1 * 0.125, 0.6667);
+        this.skierSprite.material.rotation = -0.05;
+      } else if (playerSteer > 0.35) {
+        // Row 2: Hard Right Carve (Col 4)
+        this.skierTexture.offset.set(4 * 0.125, 0.5000);
+        this.skierSprite.material.rotation = 0.12;
+      } else if (playerSteer > 0.10) {
+        // Row 2: Gentle Right Carve (Col 1)
+        this.skierTexture.offset.set(1 * 0.125, 0.5000);
+        this.skierSprite.material.rotation = 0.05;
+      } else if (playerPitch < -0.05) {
+        // Row 3: Downhill Speed Tuck (Col 2)
+        this.skierTexture.offset.set(2 * 0.125, 0.3333);
+        this.skierSprite.material.rotation = 0;
+      } else {
+        // Row 0: Downhill Front Glide (Col 0)
+        this.skierTexture.offset.set(0.0, 0.8333);
+        this.skierSprite.material.rotation = 0;
+      }
+    }
 
     if (this.isFPV) {
       // First-Person View: inside skier helmet

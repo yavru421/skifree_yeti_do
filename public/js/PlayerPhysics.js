@@ -118,42 +118,42 @@ export class PlayerPhysics {
 
     const diff = this.difficultyPresets[this.currentDifficulty];
 
-    // 1. Steering & Carving Kinematics
-    const steerSpeed = 2.8 * dt;
+    // 1. Steering & Carving Kinematics (Screen-Aligned: Left -> Screen Left, Right -> Screen Right)
+    const steerSpeed = 3.2 * dt;
     if (this.keys.left) {
-      this.steer = Math.max(-0.65, this.steer - steerSpeed);
+      this.steer = Math.max(-0.75, this.steer - steerSpeed);
     } else if (this.keys.right) {
-      this.steer = Math.min(0.65, this.steer + steerSpeed);
+      this.steer = Math.min(0.75, this.steer + steerSpeed);
     } else {
       // Natural spring back to center
-      this.steer *= Math.pow(0.08, dt);
+      this.steer *= Math.pow(0.06, dt);
     }
 
     // 2. Speed Tuck vs Snowplow Brake
     let targetSpeed = diff.cruiseSpeed;
     if (this.keys.up) {
       targetSpeed = diff.tuckSpeed;
-      this.pitch = -0.12; // Lean forward
+      this.pitch = -0.12; // Forward speed tuck
     } else if (this.keys.down) {
       targetSpeed = diff.brakeSpeed;
-      this.pitch = 0.08; // Lean back
+      this.pitch = 0.08; // Snowplow brake
     } else {
       this.pitch *= 0.85;
     }
 
     // Smooth speed acceleration
-    this.speed += (targetSpeed - this.speed) * (this.keys.down ? 4.5 : 2.0) * dt;
+    this.speed += (targetSpeed - this.speed) * (this.keys.down ? 4.5 : 2.2) * dt;
     if (this.speed > this.maxSpeedAchieved) {
       this.maxSpeedAchieved = this.speed;
     }
 
-    // 3. Movement Integration
+    // 3. Movement Integration (Left is Screen-Left -X, Right is Screen-Right +X)
     const forwardStep = this.speed * diff.forwardFactor * dt * 60;
     const lateralStep = Math.sin(this.steer) * (this.speed * diff.lateralFactor * dt * 60);
 
     this.z += forwardStep;
     this.x += lateralStep;
-    this.x = Math.max(-65, Math.min(65, this.x)); // Mountain edge boundaries
+    this.x = Math.max(-65, Math.min(65, this.x)); // Mountain boundaries
 
     // 4. Air Physics & Tricks
     if (this.isAirborne) {

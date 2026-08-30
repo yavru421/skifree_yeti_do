@@ -124,30 +124,9 @@ export class TouchControls {
       }, { passive: false });
     };
 
-    bindBtn("btn-touch-shoot", () => {
-      this.triggerHaptic("shoot");
-      this.combatSystem.shoot(
-        { x: this.playerPhysics.x, y: 0, z: this.playerPhysics.z },
-        window.__yetiEntity,
-        this.audioSystem,
-        this.sceneManager,
-        window.__onGameEvent
-      );
-    });
-
-    bindBtn("btn-touch-bait", () => {
+    bindBtn("btn-touch-jump", () => {
       this.triggerHaptic("kicker");
-      this.combatSystem.dropBait(
-        { x: this.playerPhysics.x, z: this.playerPhysics.z },
-        window.__yetiEntity,
-        this.audioSystem,
-        window.__onGameEvent
-      );
-    });
-
-    bindBtn("btn-touch-reload", () => {
-      this.triggerHaptic("gate");
-      this.combatSystem.reload(this.audioSystem, window.__onGameEvent);
+      this.playerPhysics.triggerJump();
     });
   }
 
@@ -155,7 +134,6 @@ export class TouchControls {
     if (!navigator.vibrate) return;
     try {
       switch (type) {
-        case 'shoot': navigator.vibrate(15); break;
         case 'gate': navigator.vibrate(20); break;
         case 'rescue': navigator.vibrate([30, 40, 50]); break;
         case 'kicker': navigator.vibrate(35); break;

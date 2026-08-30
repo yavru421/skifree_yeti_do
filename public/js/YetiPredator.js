@@ -41,11 +41,12 @@ export class YetiPredator {
     this.mesh.userData = { isYeti: true };
     sceneManager.scene.add(this.mesh);
 
-    // Load authentic 2.5D Yeti Sprite with Chroma-Key Alpha Transparency
+    // Load authentic 2.5D Yeti Sprite (5 Rows x 6 Columns)
     loadChromaKeyTexture('/assets/yeti_v2.jpg', 215, (texture) => {
       this.yetiTexture = texture;
-      this.yetiTexture.repeat.set(1 / 6, 1 / 3.4);
-      this.yetiTexture.offset.set(0, 0.68);
+      // 6 columns (width: 1/6 = 0.1667), 5 rows (height: 1/5 = 0.2000)
+      this.yetiTexture.repeat.set(1 / 6, 1 / 5);
+      this.yetiTexture.offset.set(0.0, 4 / 5); // Row 0 (offset.y = 0.8000): Running sprint
 
       const mat = new THREE.SpriteMaterial({
         map: this.yetiTexture,
@@ -53,55 +54,49 @@ export class YetiPredator {
         alphaTest: 0.05
       });
       this.yetiSprite = new THREE.Sprite(mat);
-      this.yetiSprite.scale.set(9.0, 9.0, 1);
+      this.yetiSprite.scale.set(8.5, 8.5, 1);
       this.yetiSprite.position.set(this.x, 4.2, this.z);
       sceneManager.scene.add(this.yetiSprite);
     });
   }
 
   initNpcSwarm(sceneManager) {
-    const npcColors = [0xff0055, 0x00f0ff, 0x39ff14, 0xffff00, 0xff7700, 0xaa00ff, 0x0088ff];
-    const torsoGeo = new THREE.BoxGeometry(0.65, 0.8, 0.4);
-    const headGeo = new THREE.SphereGeometry(0.24, 8, 8);
-    const skiGeo = new THREE.BoxGeometry(0.14, 0.04, 2.0);
+    // Load Authentic NPC Skier Spritesheet (7 Rows x 8 Columns)
+    loadChromaKeyTexture('/assets/npc_skiers.jpg', 215, (npcTex) => {
+      npcTex.repeat.set(1 / 8, 1 / 7);
 
-    for (let i = 0; i < 22; i++) {
-      const npcGroup = new THREE.Group();
-      const color = npcColors[i % npcColors.length];
-      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.3 });
-      const darkMat = new THREE.MeshStandardMaterial({ color: 0x111122 });
+      for (let i = 0; i < 22; i++) {
+        const texClone = npcTex.clone();
+        // Distribute across different skier rows and colors
+        const row = i % 4; // Rows 0-3: downhill recreational skiers & racers
+        const col = (i * 2) % 8;
+        texClone.offset.set(col * (1 / 8), (6 - row) / 7);
 
-      const torso = new THREE.Mesh(torsoGeo, mat);
-      torso.position.y = 0.7;
-      npcGroup.add(torso);
+        const mat = new THREE.SpriteMaterial({
+          map: texClone,
+          transparent: true,
+          alphaTest: 0.05
+        });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(2.8, 2.8, 1);
 
-      const head = new THREE.Mesh(headGeo, darkMat);
-      head.position.y = 1.3;
-      npcGroup.add(head);
+        const zPos = 60 + i * 42 + Math.random() * 15;
+        const xPos = (Math.random() - 0.5) * 55;
+        sprite.position.set(xPos, 1.4, zPos);
+        sceneManager.scene.add(sprite);
 
-      const leftSki = new THREE.Mesh(skiGeo, mat);
-      leftSki.position.set(-0.3, 0.02, 0);
-      const rightSki = new THREE.Mesh(skiGeo, mat);
-      rightSki.position.set(0.3, 0.02, 0);
-      npcGroup.add(leftSki);
-      npcGroup.add(rightSki);
-
-      const zPos = 30 + i * 20 + Math.random() * 10;
-      const xPos = (Math.random() - 0.5) * 60;
-      npcGroup.position.set(xPos, 0, zPos);
-      sceneManager.scene.add(npcGroup);
-
-      this.npcs.push({
-        id: i,
-        mesh: npcGroup,
-        x: xPos,
-        z: zPos,
-        speed: 22 + Math.random() * 8,
-        steer: (Math.random() - 0.5) * 0.3,
-        isEaten: false,
-        isRescued: false
-      });
-    }
+        this.npcs.push({
+          id: i,
+          mesh: sprite,
+          x: xPos,
+          z: zPos,
+          speed: 22 + Math.random() * 8,
+          steer: (Math.random() - 0.5) * 0.25,
+          isEaten: false,
+          isRescued: false
+        });
+      }
+    });
   }
 
   applyDamage(amount, isCrit = false) {
@@ -242,12 +237,12 @@ export class YetiPredator {
         this.x += (playerPos.x - this.x) * 1.2 * dt + Math.sin(Date.now() * 0.003) * 0.3;
       }
 
-      // Sprite Sprint Run Cycle Animation
+      // Sprite Sprint Run Cycle Animation (5 Rows x 6 Cols: Row 0 offset.y = 0.80)
       this.animTimer += dt;
       if (this.animTimer > 0.12 && this.yetiTexture) {
         this.animTimer = 0;
         this.animFrame = (this.animFrame + 1) % 6;
-        this.yetiTexture.offset.set(this.animFrame * (1 / 6), 0.68);
+        this.yetiTexture.offset.set(this.animFrame * (1 / 6), 0.80);
       }
     }
 
