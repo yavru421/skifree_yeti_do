@@ -1,5 +1,5 @@
 // public/js/YetiPredator.js
-// 3D Yeti Boss AI, Retro Sprite Billboards, Stalker State Machine & Skier Rescue
+// 3D Yeti Boss AI with UV-Cropped Sprite Animation & Multi-Color NPC Skier Swarm
 
 export class YetiPredator {
   constructor(sceneManager) {
@@ -20,59 +20,80 @@ export class YetiPredator {
     this.biteCooldown = 0;
 
     this.mesh = null;
-    this.sprite = null;
+    this.yetiSprite = null;
+    this.yetiTexture = null;
     this.npcs = [];
     this.currentTargetNpc = null;
+    this.animFrame = 0;
+    this.animTimer = 0;
 
-    this.initSprite(sceneManager);
+    this.initYetiSprite(sceneManager);
     this.initNpcSwarm(sceneManager);
   }
 
-  initSprite(sceneManager) {
-    const yetiTex = this.textureLoader.load('/assets/yeti_v2.jpg');
-    yetiTex.magFilter = THREE.NearestFilter;
-    yetiTex.minFilter = THREE.NearestFilter;
-
-    const spriteMat = new THREE.SpriteMaterial({
-      map: yetiTex,
-      transparent: true,
-      opacity: 0.98
-    });
-
-    this.sprite = new THREE.Sprite(spriteMat);
-    this.sprite.scale.set(6.5, 6.5, 1.0);
-    this.sprite.position.set(this.x, 3.2, this.z);
-
-    this.mesh = this.sprite;
+  initYetiSprite(sceneManager) {
+    const targetGeo = new THREE.BoxGeometry(6.5, 7.5, 3.5);
+    const targetMat = new THREE.MeshBasicMaterial({ visible: false });
+    this.mesh = new THREE.Mesh(targetGeo, targetMat);
+    this.mesh.position.set(this.x, 3.5, this.z);
+    this.mesh.userData = { isYeti: true };
     sceneManager.scene.add(this.mesh);
+
+    this.textureLoader.load('/assets/yeti_v2.jpg', (texture) => {
+      this.yetiTexture = texture;
+      this.yetiTexture.magFilter = THREE.NearestFilter;
+      this.yetiTexture.minFilter = THREE.NearestFilter;
+      // Exact UV crop of active frame 1 from 6x3.4 spritesheet
+      this.yetiTexture.repeat.set(1 / 6, 1 / 3.4);
+      this.yetiTexture.offset.set(0, 0.68);
+
+      const mat = new THREE.SpriteMaterial({
+        map: this.yetiTexture,
+        transparent: true,
+        alphaTest: 0.1
+      });
+      this.yetiSprite = new THREE.Sprite(mat);
+      this.yetiSprite.scale.set(8.5, 8.5, 1);
+      this.yetiSprite.position.set(this.x, 4.0, this.z);
+      sceneManager.scene.add(this.yetiSprite);
+    });
   }
 
   initNpcSwarm(sceneManager) {
-    const npcTex = this.textureLoader.load('/assets/npc_skiers.jpg');
-    npcTex.magFilter = THREE.NearestFilter;
+    const npcColors = [0xff0055, 0x00f0ff, 0x39ff14, 0xffff00, 0xff7700, 0xaa00ff, 0x0088ff];
+    const torsoGeo = new THREE.BoxGeometry(0.65, 0.8, 0.4);
+    const headGeo = new THREE.SphereGeometry(0.24, 8, 8);
+    const skiGeo = new THREE.BoxGeometry(0.14, 0.04, 2.0);
 
-    const colors = [0xff0055, 0x00f0ff, 0x39ff14, 0xffff00, 0xff7700, 0xaa00ff];
+    for (let i = 0; i < 22; i++) {
+      const npcGroup = new THREE.Group();
+      const color = npcColors[i % npcColors.length];
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.3 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: 0x111122 });
 
-    for (let i = 0; i < 20; i++) {
-      const color = colors[i % colors.length];
-      const npcMat = new THREE.SpriteMaterial({
-        map: npcTex,
-        color,
-        transparent: true,
-        opacity: 0.95
-      });
+      const torso = new THREE.Mesh(torsoGeo, mat);
+      torso.position.y = 0.7;
+      npcGroup.add(torso);
 
-      const npcSprite = new THREE.Sprite(npcMat);
-      npcSprite.scale.set(2.4, 2.4, 1.0);
+      const head = new THREE.Mesh(headGeo, darkMat);
+      head.position.y = 1.3;
+      npcGroup.add(head);
 
-      const zPos = 25 + i * 18 + Math.random() * 12;
-      const xPos = (Math.random() - 0.5) * 55;
-      npcSprite.position.set(xPos, 1.2, zPos);
-      sceneManager.scene.add(npcSprite);
+      const leftSki = new THREE.Mesh(skiGeo, mat);
+      leftSki.position.set(-0.3, 0.02, 0);
+      const rightSki = new THREE.Mesh(skiGeo, mat);
+      rightSki.position.set(0.3, 0.02, 0);
+      npcGroup.add(leftSki);
+      npcGroup.add(rightSki);
+
+      const zPos = 30 + i * 20 + Math.random() * 10;
+      const xPos = (Math.random() - 0.5) * 60;
+      npcGroup.position.set(xPos, 0, zPos);
+      sceneManager.scene.add(npcGroup);
 
       this.npcs.push({
         id: i,
-        mesh: npcSprite,
+        mesh: npcGroup,
         x: xPos,
         z: zPos,
         speed: 22 + Math.random() * 8,
@@ -110,6 +131,7 @@ export class YetiPredator {
   update(dt, playerPos, audioSystem, onEvent) {
     if (this.hp <= 0) {
       this.state = "DEAD";
+      if (this.yetiSprite) this.yetiSprite.visible = false;
       if (this.mesh) this.mesh.visible = false;
       return;
     }
@@ -123,13 +145,14 @@ export class YetiPredator {
       if (!npc.isEaten) {
         npc.z += npc.speed * dt * 0.9;
         npc.x += Math.sin(npc.steer) * (npc.speed * 0.04);
-        npc.mesh.position.set(npc.x, 1.2, npc.z);
-        npc.mesh.material.rotation = -npc.steer * 0.3;
+        npc.mesh.position.set(npc.x, 0, npc.z);
+        npc.mesh.rotation.y = npc.steer;
+        npc.mesh.rotation.z = -npc.steer * 0.3;
 
         // Recycle NPCs falling behind player
         if (playerPos.z - npc.z > 30) {
           npc.z = playerPos.z + 70 + Math.random() * 80;
-          npc.x = (Math.random() - 0.5) * 55;
+          npc.x = (Math.random() - 0.5) * 60;
           npc.isEaten = false;
           npc.isRescued = false;
           npc.mesh.visible = true;
@@ -137,25 +160,32 @@ export class YetiPredator {
       }
     });
 
-    // 2. Yeti State Machine
+    // 2. Yeti Animation & Sprite Frame Offset Cycling
+    this.animTimer += dt;
+    if (this.animTimer > 0.14 && this.yetiTexture) {
+      this.animTimer = 0;
+      this.animFrame = (this.animFrame + 1) % 6;
+      // Cycle horizontally across the 6 frames of front run
+      this.yetiTexture.offset.set(this.animFrame * (1 / 6), 0.68);
+    }
+
+    // 3. Yeti State Machine & Predator AI
     if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
       this.state = "STAGGERED";
-      // Visual stagger shake
-      if (this.sprite) {
-        this.sprite.scale.set(6.8, 6.0, 1.0);
+      if (this.yetiSprite) {
+        this.yetiSprite.scale.set(9.0, 7.8, 1);
       }
     } else if (this.distractedTimer > 0) {
       this.distractedTimer -= dt;
       this.state = "DISTRACTED";
-      if (this.sprite) {
-        this.sprite.scale.set(6.5, 6.5, 1.0);
+      if (this.yetiSprite) {
+        this.yetiSprite.scale.set(8.5, 8.5, 1);
       }
     } else {
-      if (this.sprite) {
-        // Subtle walking pulse
-        const walkPulse = Math.sin(Date.now() * 0.008) * 0.4;
-        this.sprite.scale.set(6.5 + walkPulse, 6.5 - walkPulse, 1.0);
+      if (this.yetiSprite) {
+        const pulse = Math.sin(Date.now() * 0.008) * 0.3;
+        this.yetiSprite.scale.set(8.5 + pulse, 8.5 - pulse, 1);
       }
 
       // Find closest alive NPC in front
@@ -202,7 +232,7 @@ export class YetiPredator {
           if (onEvent) onEvent({ type: "NPC_MAULED", npcId: closestNpc.id });
         }
       } else {
-        // Default Prowl 25m ahead of player
+        // Default Prowl 28m ahead of player
         this.state = "STALKING_NPCS";
         const targetZ = playerPos.z + 28;
         this.z += (targetZ - this.z) * 1.5 * dt;
@@ -217,7 +247,10 @@ export class YetiPredator {
     }
 
     if (this.mesh) {
-      this.mesh.position.set(this.x, 3.2, this.z);
+      this.mesh.position.set(this.x, 3.5, this.z);
+    }
+    if (this.yetiSprite) {
+      this.yetiSprite.position.set(this.x, 4.0, this.z);
     }
   }
 
@@ -226,6 +259,7 @@ export class YetiPredator {
     this.maxHp = 8000 * waveNum;
     this.hp = this.maxHp;
     this.state = "STALKING_NPCS";
+    if (this.yetiSprite) this.yetiSprite.visible = true;
     if (this.mesh) this.mesh.visible = true;
   }
 }
