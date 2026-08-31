@@ -110,7 +110,7 @@ export class SceneManager {
     this.skierGroup = new THREE.Group();
 
     // Load Authentic Chroma-Key Skier Sprite (6 Rows x 8 Columns)
-    loadChromaKeyTexture('/assets/skier.jpg', 215, (texture) => {
+    loadChromaKeyTexture('/assets/skier.jpg?v=' + Date.now(), 215, (texture) => {
       this.skierTexture = texture;
       // Grid: 8 columns (width: 1/8 = 0.125), 6 rows (height: 1/6 = 0.1667)
       this.skierTexture.repeat.set(1 / 8, 1 / 6);

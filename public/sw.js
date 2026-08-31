@@ -1,10 +1,10 @@
-const CACHE_NAME = 'skifree-v2-cache-v8';
+const CACHE_NAME = 'skifree-v2-cache-v10';
 const ASSETS = [
   '/',
   '/index.html',
   '/landing.html',
   '/manifest.json',
-  '/assets/skier.jpg',
+  '/assets/skier.jpg?v=10',
   '/assets/yeti_v2.jpg',
   '/assets/npc_skiers.jpg',
   '/assets/pine_tree.png',
