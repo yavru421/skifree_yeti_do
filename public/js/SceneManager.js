@@ -384,16 +384,16 @@ export class SceneManager {
           this.skierSprite.material.rotation = playerAirRoll;
         } else if (playerSteer < -0.35) {
           this.skierTexture.offset.set(3 * 0.125, 0.6667); // Sharp Left Carve (seen from behind)
-          this.skierSprite.material.rotation = -0.15;
-        } else if (playerSteer < -0.10) {
+          this.skierSprite.material.rotation = -0.08;
+        } else if (playerSteer < -0.08) {
           this.skierTexture.offset.set(1 * 0.125, 0.6667); // Gentle Left Carve (seen from behind)
-          this.skierSprite.material.rotation = -0.06;
+          this.skierSprite.material.rotation = -0.04;
         } else if (playerSteer > 0.35) {
           this.skierTexture.offset.set(3 * 0.125, 0.5000); // Sharp Right Carve (seen from behind)
-          this.skierSprite.material.rotation = 0.15;
-        } else if (playerSteer > 0.10) {
+          this.skierSprite.material.rotation = 0.08;
+        } else if (playerSteer > 0.08) {
           this.skierTexture.offset.set(1 * 0.125, 0.5000); // Gentle Right Carve (seen from behind)
-          this.skierSprite.material.rotation = 0.06;
+          this.skierSprite.material.rotation = 0.04;
         } else if (playerPitch < -0.05) {
           this.skierTexture.offset.set(2 * 0.125, 0.3333); // Speed Tuck (seen from behind)
           this.skierSprite.material.rotation = 0;
@@ -403,16 +403,18 @@ export class SceneManager {
         }
       }
 
+      // Camera position: strictly aligned behind player in X, elevated in Y, chase offset in Z
       const targetCamPos = new THREE.Vector3(
-        playerPos.x - Math.sin(playerSteer * 0.25) * 1.2,
-        playerPos.y + playerAirY + this.cameraOffset.y,
+        playerPos.x,
+        playerPos.y + playerAirY * 0.5 + this.cameraOffset.y,
         playerPos.z + this.cameraOffset.z
       );
-      this.camera.position.lerp(targetCamPos, 0.22);
+      this.camera.position.lerp(targetCamPos, 0.25);
 
+      // Camera lookTarget: looks forward down the slope directly in front of the skier
       const lookTarget = new THREE.Vector3(
-        playerPos.x + Math.sin(playerSteer) * 3.0,
-        playerPos.y + playerAirY + this.cameraLookOffset.y,
+        playerPos.x + Math.sin(playerSteer) * 1.5,
+        playerPos.y + playerAirY * 0.3 + this.cameraLookOffset.y,
         playerPos.z + this.cameraLookOffset.z
       );
       this.camera.lookAt(lookTarget);
