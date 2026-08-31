@@ -11,9 +11,9 @@ export class SceneManager {
     this.renderer = null;
     this.textureLoader = new THREE.TextureLoader();
 
-    this.isFPV = true; // Default: First-Person View (FPV)
-    this.cameraOffset = new THREE.Vector3(0, 2.8, -5.5);
-    this.cameraLookOffset = new THREE.Vector3(0, 1.2, 14.0);
+    this.isFPV = false; // Default: Third-Person View (TPV Chase Cam)
+    this.cameraOffset = new THREE.Vector3(0, 6.0, -9.2);
+    this.cameraLookOffset = new THREE.Vector3(0, 1.0, 9.5);
 
     this.terrainMesh = null;
     this.snowParticles = null;
@@ -367,34 +367,38 @@ export class SceneManager {
     }
 
     if (this.isFPV) {
-      // First-Person View (FPV): Inside the Skier Goggles / Helmet
+      // First-Person View (FPV): Inside the Skier Goggles / Helmet looking down the mountain (+Z)
       this.camera.position.set(playerPos.x, playerPos.y + playerAirY + 1.40, playerPos.z + 0.2);
-      this.camera.rotation.y = -playerSteer * 0.45; // Smooth head turn into carve
-      this.camera.rotation.x = playerPitch - 0.04;   // Tuck downhill / brake
-      this.camera.rotation.z = -playerSteer * 0.18;  // Natural body roll bank into turn
+      const fpvLookTarget = new THREE.Vector3(
+        playerPos.x + Math.sin(playerSteer) * 8.0,
+        playerPos.y + playerAirY + 1.30 + playerPitch * 2.0,
+        playerPos.z + 20.0
+      );
+      this.camera.lookAt(fpvLookTarget);
+      this.camera.rotation.z = -playerSteer * 0.18; // Natural body roll bank into turn
     } else {
       // Third-Person View (TPV Chase Cam)
       if (this.skierTexture && this.skierSprite) {
         if (playerAirY > 0.4) {
-          this.skierTexture.offset.set(2 * 0.125, 0.1667);
+          this.skierTexture.offset.set(2 * 0.125, 0.1667); // Jump tricks row
           this.skierSprite.material.rotation = playerAirRoll;
         } else if (playerSteer < -0.35) {
-          this.skierTexture.offset.set(4 * 0.125, 0.5000);
+          this.skierTexture.offset.set(3 * 0.125, 0.6667); // Sharp Left Carve (seen from behind)
           this.skierSprite.material.rotation = -0.15;
         } else if (playerSteer < -0.10) {
-          this.skierTexture.offset.set(1 * 0.125, 0.5000);
+          this.skierTexture.offset.set(1 * 0.125, 0.6667); // Gentle Left Carve (seen from behind)
           this.skierSprite.material.rotation = -0.06;
         } else if (playerSteer > 0.35) {
-          this.skierTexture.offset.set(4 * 0.125, 0.6667);
+          this.skierTexture.offset.set(3 * 0.125, 0.5000); // Sharp Right Carve (seen from behind)
           this.skierSprite.material.rotation = 0.15;
         } else if (playerSteer > 0.10) {
-          this.skierTexture.offset.set(1 * 0.125, 0.6667);
+          this.skierTexture.offset.set(1 * 0.125, 0.5000); // Gentle Right Carve (seen from behind)
           this.skierSprite.material.rotation = 0.06;
         } else if (playerPitch < -0.05) {
-          this.skierTexture.offset.set(2 * 0.125, 0.3333);
+          this.skierTexture.offset.set(2 * 0.125, 0.3333); // Speed Tuck (seen from behind)
           this.skierSprite.material.rotation = 0;
         } else {
-          this.skierTexture.offset.set(0.0, 0.8333);
+          this.skierTexture.offset.set(0.0, 0.8333); // Straight Downhill Glide (seen from behind)
           this.skierSprite.material.rotation = 0;
         }
       }
