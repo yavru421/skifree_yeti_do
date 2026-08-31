@@ -11,7 +11,7 @@ export class SceneManager {
     this.renderer = null;
     this.textureLoader = new THREE.TextureLoader();
 
-    this.isFPV = false; // Default: Third-Person View (TPV Chase Cam)
+    this.isFPV = true; // Default: First-Person View (FPV Goggles)
     this.cameraOffset = new THREE.Vector3(0, 6.0, -9.2);
     this.cameraLookOffset = new THREE.Vector3(0, 1.0, 9.5);
 
