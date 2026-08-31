@@ -36,15 +36,20 @@ export class HUDManager {
   }
 
   update(playerPhysics, combatSystem, yetiPredator, gameMode, raceElapsedSec) {
-    // 1. Speedometer & Score
+    // 1. Speedometer, Score & Ammo
     if (this.speedEl) {
       this.speedEl.innerHTML = `${Math.round(playerPhysics.speed)} <span style="font-size:10px;">MPH</span>`;
     }
     if (this.scoreEl) {
       this.scoreEl.innerHTML = `${playerPhysics.score.toLocaleString()} <span style="font-size:10px;">PTS</span>`;
     }
-    if (this.ammoEl) {
-      this.ammoEl.style.display = 'none';
+    if (this.ammoEl && combatSystem) {
+      this.ammoEl.style.display = 'block';
+      if (combatSystem.isReloading) {
+        this.ammoEl.innerHTML = `<span style="color:#ff0033; font-weight:bold;">RELOADING...</span>`;
+      } else {
+        this.ammoEl.innerHTML = `AMMO: <span style="color:#ffff00; font-weight:bold;">${combatSystem.ammo}/${combatSystem.maxAmmo}</span>`;
+      }
     }
 
     // 2. Lives Hearts

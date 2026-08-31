@@ -1,10 +1,8 @@
-// public/js/main.js
-// SkiFree 2: Modular Game Orchestrator & Animation Loop
-
 import { AudioSystem } from './AudioSystem.js';
 import { SceneManager } from './SceneManager.js';
 import { PlayerPhysics } from './PlayerPhysics.js';
 import { YetiPredator } from './YetiPredator.js';
+import { CombatSystem } from './CombatSystem.js';
 import { TouchControls } from './TouchControls.js';
 import { HUDManager } from './HUDManager.js';
 import { NetworkSync } from './NetworkSync.js';
@@ -16,17 +14,22 @@ class GameApp {
     this.sceneManager = new SceneManager(this.canvas);
     this.playerPhysics = new PlayerPhysics();
     this.yetiPredator = new YetiPredator(this.sceneManager);
+    this.combatSystem = new CombatSystem();
     this.hudManager = new HUDManager();
     this.networkSync = new NetworkSync();
     this.touchControls = new TouchControls(
       this.playerPhysics,
-      null,
+      this.combatSystem,
       this.sceneManager,
       this.audioSystem
     );
 
-    // Global pointers for touch event delegates
+    // Global pointers for event delegates
     window.__yetiEntity = this.yetiPredator;
+    window.__playerPhysics = this.playerPhysics;
+    window.__combatSystem = this.combatSystem;
+    window.__sceneManager = this.sceneManager;
+    window.__audioSystem = this.audioSystem;
     window.__onGameEvent = (e) => this.handleGameEvent(e);
 
     this.gameState = "INTRO"; // INTRO, LOBBY, COUNTDOWN, ACTIVE, GONDOLA_REST, DEAD, RACE_COMPLETE
@@ -338,7 +341,17 @@ class GameApp {
   }
 
   handleGameEvent(e) {
-    if (e.type === "YETI_BITE") {
+    if (e.type === "SHOOT") {
+      if (e.hit) {
+        this.playerPhysics.score += e.damage;
+        this.hudManager.showFloatingDamage(e.isCrit ? `+${e.damage} HEADSHOT!` : `+${e.damage}`, e.isCrit, e.isCrit ? "dmg-crit" : "dmg-normal");
+        this.hudManager.addCombatFeedToast(e.isCrit ? `🎯 Critical Hit! (+${e.damage} PTS)` : `💥 Hit Yeti! (+${e.damage} PTS)`, e.isCrit ? "#ffff00" : "#00f0ff");
+      }
+    } else if (e.type === "RELOAD_START") {
+      this.hudManager.addCombatFeedToast("🔄 Reloading Magazine...", "#88a0c0");
+    } else if (e.type === "RELOAD_COMPLETE") {
+      this.hudManager.addCombatFeedToast("⚡ Magazine Loaded (8/8)", "#39ff14");
+    } else if (e.type === "YETI_BITE") {
       this.hudManager.showDamageFlash();
       const remainingLives = this.playerPhysics.takeDamage(1);
       this.hudManager.addCombatFeedToast("🩸 Yeti Bite! (-1 Heart)", "#ff0033");
@@ -437,7 +450,10 @@ class GameApp {
       // 1. Local Player Physics (60-144 FPS)
       this.playerPhysics.update(dt, this.sceneManager, this.audioSystem, (e) => this.handleGameEvent(e));
 
-      // 2. Yeti Predator AI
+      // 2. Combat System & Reload Timers
+      this.combatSystem.update(dt, (e) => this.handleGameEvent(e));
+
+      // 3. Yeti Predator AI
       this.yetiPredator.update(
         dt,
         { x: this.playerPhysics.x, z: this.playerPhysics.z },
@@ -445,7 +461,7 @@ class GameApp {
         (e) => this.handleGameEvent(e)
       );
 
-      // 3. Update Third-Person Chase Camera
+      // 4. Update Third-Person Chase Camera
       this.sceneManager.updateCamera(
         { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
         this.playerPhysics.steer,
@@ -454,16 +470,16 @@ class GameApp {
         this.playerPhysics.airRoll
       );
 
-      // 4. Update HUD Overlays
+      // 5. Update HUD Overlays
       this.hudManager.update(
         this.playerPhysics,
-        null,
+        this.combatSystem,
         this.yetiPredator,
         this.gameMode,
         this.raceElapsedSec
       );
 
-      // 5. 15Hz Telemetry to Cloudflare Durable Object
+      // 6. 15Hz Telemetry to Cloudflare Durable Object
       this.telemetryTimer += dt;
       if (this.telemetryTimer >= 0.066) {
         this.telemetryTimer = 0;

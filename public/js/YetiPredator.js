@@ -10,11 +10,11 @@ export class YetiPredator {
 
     this.x = 0;
     this.y = 0;
-    this.z = 950; // Backcountry wilderness spawn (peaceful groomer runway 0 - 650m)
+    this.z = 80; // Spawns immediately in sight for high-intensity SkiFree hunt!
     this.hp = 8000;
     this.maxHp = 8000;
     this.wave = 1;
-    this.state = "DORMANT"; // DORMANT on beginner groomers, STALKING_NPCS in backcountry
+    this.state = "STALKING_NPCS"; // Immediately active!
 
     this.staggerTimer = 0;
     this.distractedTimer = 0;
@@ -156,20 +156,12 @@ export class YetiPredator {
       }
     });
 
-    // 2. Yeti State Machine & Predator AI (Backcountry Activation Zone)
-    // On the safe Granby Colorado groomer runway (Z < 650m), Yeti remains dormant in the backcountry
-    if (playerPos.z < 650) {
-      this.state = "DORMANT";
-      this.z = 950;
-      this.x = 0;
-      if (this.yetiSprite) this.yetiSprite.position.set(this.x, 4.2, this.z);
-      if (this.mesh) this.mesh.position.set(this.x, 4.0, this.z);
-      return;
-    }
-
-    // Active Backcountry Hunt Zone (Z >= 650m)
+    // 2. Yeti State Machine & Predator AI (Active Alpine Predator)
+    // Yeti awakens immediately once player drops in (Z >= 100m in Slalom, Z >= 0 in Hunt mode)
     if (this.state === "DORMANT") {
       this.state = "STALKING_NPCS";
+      this.z = Math.max(playerPos.z + 40, 120);
+      this.x = (Math.random() - 0.5) * 30;
       if (audioSystem) audioSystem.playYetiRoar();
       if (onEvent) onEvent({ type: "YETI_SPAWNED" });
     }
@@ -202,16 +194,16 @@ export class YetiPredator {
 
       const distToPlayer = Math.hypot(this.x - playerPos.x, this.z - playerPos.z);
 
-      if (distToPlayer < 8.5) {
-        // Charge directly at player!
+      if (distToPlayer < 75.0) {
+        // Charge directly at player at high speed!
         this.state = "CHARGING";
         const dx = playerPos.x - this.x;
         const dz = playerPos.z - this.z;
-        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 4.2 * dt);
-        this.z += Math.sign(dz) * Math.min(Math.abs(dz), 5.5 * dt);
+        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 6.5 * dt);
+        this.z += Math.sign(dz) * Math.min(Math.abs(dz), 8.5 * dt);
 
-        if (distToPlayer < 3.5 && this.biteCooldown <= 0) {
-          this.biteCooldown = 2.0;
+        if (distToPlayer < 4.5 && this.biteCooldown <= 0) {
+          this.biteCooldown = 1.6;
           if (audioSystem) audioSystem.playBiteChomp();
           if (onEvent) onEvent({ type: "YETI_BITE", damage: 1 });
         }
