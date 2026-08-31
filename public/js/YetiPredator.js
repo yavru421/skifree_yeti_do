@@ -123,7 +123,7 @@ export class YetiPredator {
     this.z = baitZ;
   }
 
-  update(dt, playerPos, audioSystem, onEvent) {
+  update(dt, playerInfo, audioSystem, onEvent) {
     if (this.hp <= 0) {
       this.state = "DEAD";
       if (this.yetiSprite) this.yetiSprite.visible = false;
@@ -135,18 +135,23 @@ export class YetiPredator {
       this.biteCooldown -= dt;
     }
 
+    const playerX = (playerInfo && typeof playerInfo.x === 'number') ? playerInfo.x : 0;
+    const playerZ = (playerInfo && typeof playerInfo.z === 'number') ? playerInfo.z : 0;
+    const playerSpeed = (playerInfo && typeof playerInfo.speed === 'number') ? playerInfo.speed : 28;
+    const forwardRate = playerSpeed * 0.038 * 60; // Downhill speed matching skier (~64 m/s)
+
     // 1. Update Downhill NPCs
     this.npcs.forEach((npc) => {
       if (!npc.isEaten) {
-        npc.z += npc.speed * dt * 0.9;
-        npc.x += Math.sin(npc.steer) * (npc.speed * 0.04);
+        npc.z += forwardRate * 0.85 * dt;
+        npc.x += Math.sin(npc.steer) * (forwardRate * 0.25 * dt);
         npc.mesh.position.set(npc.x, 1.6, npc.z); // Elevated above snow plane
         npc.mesh.rotation.y = npc.steer;
         npc.mesh.rotation.z = -npc.steer * 0.3;
 
         // Recycle NPCs falling behind player
-        if (playerPos.z - npc.z > 30) {
-          npc.z = playerPos.z + 70 + Math.random() * 80;
+        if (playerZ - npc.z > 40) {
+          npc.z = playerZ + 80 + Math.random() * 80;
           npc.x = (Math.random() - 0.5) * 60;
           npc.isEaten = false;
           npc.isRescued = false;
@@ -156,34 +161,29 @@ export class YetiPredator {
       }
     });
 
-    // 2. Yeti State Machine & Predator AI (Active Alpine Predator)
-    // Yeti awakens immediately once player drops in (Z >= 100m in Slalom, Z >= 0 in Hunt mode)
-    if (this.state === "DORMANT") {
-      this.state = "STALKING_NPCS";
-      this.z = Math.max(playerPos.z + 40, 120);
-      this.x = (Math.random() - 0.5) * 30;
-      if (audioSystem) audioSystem.playYetiRoar();
-      if (onEvent) onEvent({ type: "YETI_SPAWNED" });
-    }
-
+    // 2. Yeti State Machine & Kinematics
     if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
       this.state = "STAGGERED";
+      this.z += forwardRate * 0.45 * dt; // Slowed down from gunshot impact
       if (this.yetiSprite) {
-        this.yetiSprite.scale.set(9.8, 8.2, 1);
+        this.yetiSprite.scale.set(7.5, 6.0, 1);
       }
     } else if (this.distractedTimer > 0) {
       this.distractedTimer -= dt;
       this.state = "DISTRACTED";
+      this.z += forwardRate * 0.2 * dt; // Paused eating bait
       if (this.yetiSprite) {
-        this.yetiSprite.scale.set(9.0, 9.0, 1);
+        this.yetiSprite.scale.set(6.5, 6.5, 1);
       }
     } else {
-      // Find closest alive NPC in front
+      const distToPlayer = Math.hypot(this.x - playerX, this.z - playerZ);
+
+      // Closest NPC
       let closestNpc = null;
       let minNpcDist = 9999;
       this.npcs.forEach((npc) => {
-        if (!npc.isEaten && npc.z > playerPos.z - 10) {
+        if (!npc.isEaten && npc.z > playerZ - 10) {
           const dist = Math.hypot(this.x - npc.x, this.z - npc.z);
           if (dist < minNpcDist) {
             minNpcDist = dist;
@@ -192,47 +192,57 @@ export class YetiPredator {
         }
       });
 
-      const distToPlayer = Math.hypot(this.x - playerPos.x, this.z - playerPos.z);
-
-      if (distToPlayer < 75.0) {
-        // Charge directly at player at high speed!
+      if (distToPlayer < 35.0 && this.z > playerZ) {
+        // CHARGING HEAD-ON: When player gets close behind, Yeti turns and charges uphill at player!
         this.state = "CHARGING";
-        const dx = playerPos.x - this.x;
-        const dz = playerPos.z - this.z;
-        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 6.5 * dt);
-        this.z += Math.sign(dz) * Math.min(Math.abs(dz), 8.5 * dt);
+        const dx = playerX - this.x;
+        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 18.0 * dt);
+        this.z -= 25.0 * dt; // Charge uphill towards oncoming skier
 
         if (distToPlayer < 4.5 && this.biteCooldown <= 0) {
-          this.biteCooldown = 1.6;
+          this.biteCooldown = 1.8;
           if (audioSystem) audioSystem.playBiteChomp();
           if (onEvent) onEvent({ type: "YETI_BITE", damage: 1 });
         }
-      } else if (closestNpc && minNpcDist < 50) {
-        // Hunt NPC
+      } else if (this.z < playerZ - 5) {
+        // CHASING FROM BEHIND: If skier passed Yeti, Yeti sprints downhill faster to chase from behind!
+        this.state = "CHARGING";
+        const dx = playerX - this.x;
+        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 24.0 * dt);
+        this.z += forwardRate * 1.35 * dt; // Sprint faster than skier downhill!
+
+        if (distToPlayer < 4.5 && this.biteCooldown <= 0) {
+          this.biteCooldown = 1.8;
+          if (audioSystem) audioSystem.playBiteChomp();
+          if (onEvent) onEvent({ type: "YETI_BITE", damage: 1 });
+        }
+      } else if (closestNpc && minNpcDist < 45) {
+        // HUNT NPC AHEAD
         this.state = "STALKING_NPCS";
         this.currentTargetNpc = closestNpc;
         const dx = closestNpc.x - this.x;
         const dz = closestNpc.z - this.z;
-        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 3.0 * dt);
-        this.z += Math.sign(dz) * Math.min(Math.abs(dz), 4.0 * dt);
+        this.x += Math.sign(dx) * Math.min(Math.abs(dx), 20.0 * dt);
+        this.z += forwardRate * 0.98 * dt + Math.sign(dz) * 12.0 * dt;
 
-        if (minNpcDist < 3.0 && !closestNpc.isEaten) {
+        if (minNpcDist < 3.2 && !closestNpc.isEaten) {
           closestNpc.isEaten = true;
           closestNpc.mesh.visible = false;
           if (audioSystem) audioSystem.playSkierScream();
           if (onEvent) onEvent({ type: "NPC_MAULED", npcId: closestNpc.id });
         }
       } else {
-        // Default Prowl 32m ahead of player
+        // DEFAULT DOWNHILL SPRINT 30m ahead of player
         this.state = "STALKING_NPCS";
-        const targetZ = playerPos.z + 32;
-        this.z += (targetZ - this.z) * 1.5 * dt;
-        this.x += (playerPos.x - this.x) * 1.2 * dt + Math.sin(Date.now() * 0.003) * 0.3;
+        const targetLeadZ = playerZ + 32;
+        const speedDelta = (targetLeadZ - this.z) * 2.5;
+        this.z += (forwardRate + speedDelta) * dt;
+        this.x += (playerX - this.x) * 1.5 * dt + Math.sin(Date.now() * 0.003) * 0.8;
       }
 
       // Sprite Sprint / Attack Cycle Animation (4 Rows x 4 Cols: Row 0=Sprint, Row 1=Claws, Row 2=Stomp, Row 3=Stagger)
       this.animTimer += dt;
-      if (this.animTimer > 0.12 && this.yetiTexture) {
+      if (this.animTimer > 0.09 && this.yetiTexture) {
         this.animTimer = 0;
         this.animFrame = (this.animFrame + 1) % 4;
         let rowOffsetY = 0.75; // Row 0: Sprint running
@@ -247,18 +257,13 @@ export class YetiPredator {
       }
     }
 
-    // Keep Yeti in active backcountry zone
-    if (this.z < playerPos.z - 15) {
-      this.z = playerPos.z + 35;
-      this.x = playerPos.x + (Math.random() - 0.5) * 18;
-    }
-
     if (this.mesh) {
-      this.mesh.position.set(this.x, 4.0, this.z);
+      this.mesh.position.set(this.x, 3.2, this.z);
     }
     if (this.yetiSprite) {
-      this.yetiSprite.position.set(this.x, 4.2, this.z);
+      this.yetiSprite.position.set(this.x, 3.2, this.z);
     }
+  }
   }
 
   setWave(waveNum) {

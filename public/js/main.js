@@ -456,7 +456,7 @@ class GameApp {
       // 3. Yeti Predator AI
       this.yetiPredator.update(
         dt,
-        { x: this.playerPhysics.x, z: this.playerPhysics.z },
+        this.playerPhysics,
         this.audioSystem,
         (e) => this.handleGameEvent(e)
       );

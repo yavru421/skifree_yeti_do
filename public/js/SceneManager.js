@@ -383,16 +383,16 @@ export class SceneManager {
           this.skierTexture.offset.set(2 * 0.125, 0.1667); // Jump tricks row
           this.skierSprite.material.rotation = playerAirRoll;
         } else if (playerSteer < -0.35) {
-          this.skierTexture.offset.set(3 * 0.125, 0.6667); // Sharp Left Carve (seen from behind)
+          this.skierTexture.offset.set(3 * 0.125, 0.5000); // Sharp Left Carve (Row 2 = Left Carve)
           this.skierSprite.material.rotation = -0.08;
         } else if (playerSteer < -0.08) {
-          this.skierTexture.offset.set(1 * 0.125, 0.6667); // Gentle Left Carve (seen from behind)
+          this.skierTexture.offset.set(1 * 0.125, 0.5000); // Gentle Left Carve (Row 2 = Left Carve)
           this.skierSprite.material.rotation = -0.04;
         } else if (playerSteer > 0.35) {
-          this.skierTexture.offset.set(3 * 0.125, 0.5000); // Sharp Right Carve (seen from behind)
+          this.skierTexture.offset.set(3 * 0.125, 0.6667); // Sharp Right Carve (Row 1 = Right Carve)
           this.skierSprite.material.rotation = 0.08;
         } else if (playerSteer > 0.08) {
-          this.skierTexture.offset.set(1 * 0.125, 0.5000); // Gentle Right Carve (seen from behind)
+          this.skierTexture.offset.set(1 * 0.125, 0.6667); // Gentle Right Carve (Row 1 = Right Carve)
           this.skierSprite.material.rotation = 0.04;
         } else if (playerPitch < -0.05) {
           this.skierTexture.offset.set(2 * 0.125, 0.3333); // Speed Tuck (seen from behind)
