@@ -41,12 +41,12 @@ export class YetiPredator {
     this.mesh.userData = { isYeti: true };
     sceneManager.scene.add(this.mesh);
 
-    // Load authentic 2.5D Yeti Sprite (5 Rows x 6 Columns)
-    loadChromaKeyTexture('/assets/yeti_v2.jpg', 215, (texture) => {
+    // Load authentic 2.5D Yeti Sprite (4 Rows x 4 Columns, pure pixel art)
+    loadChromaKeyTexture('/assets/yeti_v2.jpg?v=' + Date.now(), 215, (texture) => {
       this.yetiTexture = texture;
-      // 6 columns (width: 1/6 = 0.1667), 5 rows (height: 1/5 = 0.2000)
-      this.yetiTexture.repeat.set(1 / 6, 1 / 5);
-      this.yetiTexture.offset.set(0.0, 4 / 5); // Row 0 (offset.y = 0.8000): Running sprint
+      // 4 columns (width: 1/4 = 0.2500), 4 rows (height: 1/4 = 0.2500)
+      this.yetiTexture.repeat.set(1 / 4, 1 / 4);
+      this.yetiTexture.offset.set(0.0, 3 / 4); // Row 0 (offset.y = 0.7500): Running sprint
 
       const mat = new THREE.SpriteMaterial({
         map: this.yetiTexture,
@@ -54,8 +54,8 @@ export class YetiPredator {
         alphaTest: 0.05
       });
       this.yetiSprite = new THREE.Sprite(mat);
-      this.yetiSprite.scale.set(8.5, 8.5, 1);
-      this.yetiSprite.position.set(this.x, 4.2, this.z);
+      this.yetiSprite.scale.set(6.5, 6.5, 1);
+      this.yetiSprite.position.set(this.x, 3.2, this.z);
       sceneManager.scene.add(this.yetiSprite);
     });
   }
@@ -230,12 +230,20 @@ export class YetiPredator {
         this.x += (playerPos.x - this.x) * 1.2 * dt + Math.sin(Date.now() * 0.003) * 0.3;
       }
 
-      // Sprite Sprint Run Cycle Animation (5 Rows x 6 Cols: Row 0 offset.y = 0.80)
+      // Sprite Sprint / Attack Cycle Animation (4 Rows x 4 Cols: Row 0=Sprint, Row 1=Claws, Row 2=Stomp, Row 3=Stagger)
       this.animTimer += dt;
       if (this.animTimer > 0.12 && this.yetiTexture) {
         this.animTimer = 0;
-        this.animFrame = (this.animFrame + 1) % 6;
-        this.yetiTexture.offset.set(this.animFrame * (1 / 6), 0.80);
+        this.animFrame = (this.animFrame + 1) % 4;
+        let rowOffsetY = 0.75; // Row 0: Sprint running
+        if (this.state === "CHARGING") {
+          rowOffsetY = 0.50; // Row 1: Lunging claw attack
+        } else if (this.state === "STAGGERED") {
+          rowOffsetY = 0.00; // Row 3: Hit stagger
+        } else if (this.state === "DISTRACTED") {
+          rowOffsetY = 0.25; // Row 2: Stomping bait
+        }
+        this.yetiTexture.offset.set(this.animFrame * 0.25, rowOffsetY);
       }
     }
 
