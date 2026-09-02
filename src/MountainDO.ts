@@ -590,9 +590,9 @@ export class MountainDO extends DurableObject {
     if (this.matchState === "ACTIVE_HUNT") {
       const dt = this.tickIntervalMs / 1000;
       const alivePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
+      const leadSkierZ = alivePlayers.length > 0 ? Math.max(...alivePlayers.map(p => p.z)) : 0;
       
       if (alivePlayers.length > 0) {
-        const leadSkierZ = Math.max(...alivePlayers.map(p => p.z));
         const avgSkierX = alivePlayers.reduce((acc, p) => acc + p.x, 0) / alivePlayers.length;
 
         // 1. Update NPC Downhill Movement & Recycle Swarm
@@ -733,6 +733,11 @@ export class MountainDO extends DurableObject {
         score: p.score
       }));
 
+      // Spatial Interest Culling: Only broadcast NPCs in active vicinity (-35m to +120m)
+      const visibleNpcs = this.npcs.filter(npc => {
+        return (npc.z >= leadSkierZ - 35 && npc.z <= leadSkierZ + 120);
+      });
+
       this.broadcast({
         type: "FRAME",
         wave: this.currentWave,
@@ -745,7 +750,7 @@ export class MountainDO extends DurableObject {
           active: this.yetiActive,
           targetNpcId: this.currentTargetNpcId
         },
-        npcs: this.npcs,
+        npcs: visibleNpcs,
         skiers,
         boulders: this.boulders,
         baitItems: this.activeBaitItems

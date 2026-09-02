@@ -116,6 +116,9 @@ export class PlayerPhysics {
   update(dt, sceneManager, audioSystem, onEvent) {
     if (this.isDead) return;
 
+    // Fixed Sub-Step Clamp: Prevent tunneling through obstacles during frame rate variance
+    dt = Math.min(0.033, Math.max(0.005, dt));
+
     const diff = this.difficultyPresets[this.currentDifficulty];
 
     // 1. Steering & Carving Kinematics:
