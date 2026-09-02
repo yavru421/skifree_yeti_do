@@ -45,9 +45,9 @@ export default {
       }
     }
 
-    // 3. API Scores / Leaderboard endpoint
+    // 3. API Scores / Leaderboard endpoint (Global Cross-Shard Singleton)
     if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
-      const roomId = url.searchParams.get("room") || "main-alps";
+      const roomId = url.searchParams.get("room") || "GLOBAL_LEADERBOARD";
       const doId = env.MOUNTAIN_DO.idFromName(roomId);
       const colo = (request.cf as any)?.colo?.toLowerCase();
       const doStub = env.MOUNTAIN_DO.get(doId, { locationHint: colo || "wnam" } as any);
