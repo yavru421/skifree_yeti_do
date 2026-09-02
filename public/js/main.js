@@ -1,3 +1,6 @@
+// public/js/main.js
+// SkiFree 2 Master Game Loop, Modular Multi-Track, Stunt Tricks & Edge Telemetry
+
 import { AudioSystem } from './AudioSystem.js';
 import { SceneManager } from './SceneManager.js';
 import { PlayerPhysics } from './PlayerPhysics.js';
@@ -6,11 +9,13 @@ import { CombatSystem } from './CombatSystem.js';
 import { TouchControls } from './TouchControls.js';
 import { HUDManager } from './HUDManager.js';
 import { NetworkSync } from './NetworkSync.js';
+import { TrackManager } from './TrackManager.js';
 
 class GameApp {
   constructor() {
     this.canvas = document.getElementById("game-canvas");
     this.audioSystem = new AudioSystem();
+    this.trackManager = new TrackManager();
     this.sceneManager = new SceneManager(this.canvas);
     this.playerPhysics = new PlayerPhysics();
     this.yetiPredator = new YetiPredator(this.sceneManager);
@@ -32,12 +37,15 @@ class GameApp {
     window.__audioSystem = this.audioSystem;
     window.__onGameEvent = (e) => this.handleGameEvent(e);
 
-    this.gameState = "INTRO"; // INTRO, LOBBY, COUNTDOWN, ACTIVE, GONDOLA_REST, DEAD, RACE_COMPLETE
-    this.gameMode = "hunt"; // hunt, slalom
+    this.gameState = "INTRO";
+    this.gameMode = "hunt";
     this.lastTime = performance.now();
     this.raceStartTime = 0;
     this.raceElapsedSec = 0;
     this.telemetryTimer = 0;
+
+    // Apply Default Alpine Track
+    this.sceneManager.applyTrack(this.trackManager.getTrack());
 
     this.setupUI();
     this.setupIntro();
@@ -85,7 +93,38 @@ class GameApp {
       });
     }
 
-    // 3. Ready & Start Buttons
+    // 3. Track Selection Buttons
+    document.querySelectorAll(".track-select-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        document.querySelectorAll(".track-select-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const trackId = btn.getAttribute("data-track");
+        const newTrack = this.trackManager.setTrack(trackId);
+        this.sceneManager.applyTrack(newTrack);
+        this.hudManager.addCombatLog(`Track Loaded: ${newTrack.name}`, "#00f0ff");
+      });
+    });
+
+    // 4. Rider Class Toggle (Skier vs Snowboarder)
+    const btnSkier = document.getElementById("btn-class-skier");
+    const btnBoarder = document.getElementById("btn-class-boarder");
+    if (btnSkier && btnBoarder) {
+      btnSkier.addEventListener("click", () => {
+        btnSkier.classList.add("active");
+        btnBoarder.classList.remove("active");
+        this.playerPhysics.setRiderClass("skier");
+        this.hudManager.addCombatLog("Rider Class: SKIER (Speed & Slalom)", "#39ff14");
+      });
+      btnBoarder.addEventListener("click", () => {
+        btnBoarder.classList.add("active");
+        btnSkier.classList.remove("active");
+        this.playerPhysics.setRiderClass("snowboarder");
+        this.hudManager.addCombatLog("Rider Class: SNOWBOARDER (Air Pop & Tricks)", "#00f0ff");
+      });
+    }
+
+    // 5. Ready & Start Buttons
     const btnReady = document.getElementById("btn-ready");
     if (btnReady) {
       btnReady.addEventListener("click", () => {
@@ -104,7 +143,7 @@ class GameApp {
       });
     }
 
-    // 4. Sound Toggle
+    // 6. Sound Toggle
     const btnSound = document.getElementById("btn-sound-toggle");
     if (btnSound) {
       btnSound.addEventListener("click", () => {
@@ -115,15 +154,15 @@ class GameApp {
       });
     }
 
-    // 5. Camera Toggle Key (V)
+    // 7. Camera Toggle Key (V)
     window.addEventListener("keydown", (e) => {
       if (e.code === "KeyV") {
         const mode = this.sceneManager.toggleCameraMode();
-        this.hudManager.addCombatFeedToast(`Camera: ${mode}`, "#00f0ff");
+        this.hudManager.addCombatLog(`Camera: ${mode}`, "#00f0ff");
       }
     });
 
-    // 6. Menu / Pause
+    // 8. Menu / Pause
     const btnMenuOpen = document.getElementById("btn-menu-open");
     const btnMenuClose = document.getElementById("btn-menu-close");
     const btnResume = document.getElementById("btn-resume-game");
@@ -145,7 +184,7 @@ class GameApp {
     if (btnMenuClose) btnMenuClose.addEventListener("click", closeMenu);
     if (btnResume) btnResume.addEventListener("click", closeMenu);
 
-    // 7. Fullscreen Toggle
+    // 9. Fullscreen Toggle
     const btnFs = document.getElementById("btn-toggle-fullscreen");
     if (btnFs) {
       btnFs.addEventListener("click", () => {
@@ -157,7 +196,7 @@ class GameApp {
       });
     }
 
-    // 8. Respawn & Race Again
+    // 10. Respawn & Race Again
     const btnRespawn = document.getElementById("btn-respawn");
     if (btnRespawn) {
       btnRespawn.addEventListener("click", () => {
@@ -176,7 +215,7 @@ class GameApp {
       });
     }
 
-    // 9. PIN High Score Claim
+    // 11. PIN High Score Claim
     const btnSubmitClaim = document.getElementById("btn-submit-claim");
     const btnSkipClaim = document.getElementById("btn-skip-claim");
     if (btnSubmitClaim) {
@@ -190,6 +229,8 @@ class GameApp {
         if (feedbackEl) feedbackEl.textContent = "Publishing to Edge SQLite...";
         const res = await this.networkSync.publishScore(callsign, pin, {
           mode: this.gameMode,
+          trackId: this.trackManager.currentTrackId,
+          riderClass: this.playerPhysics.riderClass,
           score: this.playerPhysics.score,
           maxSpeed: Math.round(this.playerPhysics.maxSpeedAchieved),
           maxDistance: Math.round(this.playerPhysics.z),
@@ -264,18 +305,16 @@ class GameApp {
 
   handleNetworkMessage(msg) {
     if (msg.type === "FRAME") {
-      // 1. Render & interpolate remote ghost skiers (Option 3 Hybrid Co-Op)
-      if (msg.players && this.sceneManager && this.sceneManager.updateGhostSkiers) {
-        this.sceneManager.updateGhostSkiers(msg.players, this.networkSync.playerId);
+      if (msg.skiers && this.sceneManager && this.sceneManager.updateGhostSkiers) {
+        this.sceneManager.updateGhostSkiers(msg.skiers, this.networkSync.playerId);
       }
-      // 2. Authoritative Shared Yeti Boss HP & State Sync
       if (msg.yeti && this.yetiPredator) {
         if (typeof msg.yeti.hp === "number") {
           this.yetiPredator.hp = msg.yeti.hp;
           this.yetiPredator.maxHp = msg.yeti.maxHp || 8000;
         }
-        if (msg.yeti.wave) {
-          this.yetiPredator.wave = msg.yeti.wave;
+        if (msg.wave) {
+          this.yetiPredator.wave = msg.wave;
         }
       }
     } else if (msg.type === "COUNTDOWN_START") {
@@ -285,7 +324,9 @@ class GameApp {
     } else if (msg.type === "YETI_DEFEATED") {
       this.triggerGondolaRest(msg.killer);
     } else if (msg.type === "NEXT_WAVE") {
-      this.yetiPredator.setWave(msg.wave);
+      this.yetiPredator.wave = msg.wave;
+      this.yetiPredator.hp = msg.yetiHp;
+      this.yetiPredator.maxHp = msg.yetiMaxHp;
       this.gameState = "ACTIVE";
       const gondolaOverlay = document.getElementById("gondola-overlay");
       if (gondolaOverlay) gondolaOverlay.classList.add("hidden");
@@ -321,7 +362,7 @@ class GameApp {
     if (hudOverlay) hudOverlay.classList.remove("hidden");
 
     this.playerPhysics.respawn();
-    this.yetiPredator.setWave(1);
+    this.yetiPredator.hp = this.yetiPredator.maxHp;
     this.raceStartTime = performance.now();
     this.raceElapsedSec = 0;
     this.gameState = "ACTIVE";
@@ -336,7 +377,7 @@ class GameApp {
     const overlay = document.getElementById("gondola-overlay");
     const sub = document.getElementById("gondola-sub");
     if (overlay) overlay.classList.remove("hidden");
-    if (sub) sub.textContent = `YETI ESCAPED! SURVIVORS ADVANCING TO NEXT SECTOR...`;
+    if (sub) sub.textContent = `YETI RETREATING! ADVANCING TO NEXT BIOME SECTOR...`;
     this.audioSystem.playRescueFanfare();
   }
 
@@ -344,30 +385,41 @@ class GameApp {
     if (e.type === "SHOOT") {
       if (e.hit) {
         this.playerPhysics.score += e.damage;
-        this.hudManager.showFloatingDamage(e.isCrit ? `+${e.damage} HEADSHOT!` : `+${e.damage}`, e.isCrit, e.isCrit ? "dmg-crit" : "dmg-normal");
-        this.hudManager.addCombatFeedToast(e.isCrit ? `🎯 Critical Hit! (+${e.damage} PTS)` : `💥 Hit Yeti! (+${e.damage} PTS)`, e.isCrit ? "#ffff00" : "#00f0ff");
+        this.hudManager.showFloatingDamage(window.innerWidth / 2, window.innerHeight / 2 - 40, e.damage, e.isCrit);
+        this.hudManager.addCombatLog(e.isCrit ? `🎯 Critical Hit! (+${e.damage} PTS)` : `💥 Hit Yeti! (+${e.damage} PTS)`, e.isCrit ? "#ffff00" : "#00f0ff");
       }
     } else if (e.type === "RELOAD_START") {
-      this.hudManager.addCombatFeedToast("🔄 Reloading Magazine...", "#88a0c0");
+      this.hudManager.addCombatLog("🔄 Reloading Magazine...", "#88a0c0");
     } else if (e.type === "RELOAD_COMPLETE") {
-      this.hudManager.addCombatFeedToast("⚡ Magazine Loaded (8/8)", "#39ff14");
+      this.hudManager.addCombatLog("⚡ Magazine Loaded (8/8)", "#39ff14");
+    } else if (e.type === "FLARE_FIRED") {
+      this.hudManager.addCombatLog(e.message, e.hit ? "#ff5500" : "#ffaa00");
     } else if (e.type === "YETI_BITE") {
-      this.hudManager.showDamageFlash();
+      this.hudManager.triggerDamageClawFlash();
       const remainingLives = this.playerPhysics.takeDamage(1);
-      this.hudManager.addCombatFeedToast("🩸 Yeti Bite! (-1 Heart)", "#ff0033");
+      this.hudManager.addCombatLog("🩸 Yeti Bite! (-1 Heart)", "#ff0033");
       if (remainingLives <= 0) {
         this.handlePlayerDeath();
       }
     } else if (e.type === "TRICK_LANDED") {
-      this.hudManager.showFloatingDamage(`+${e.score} TRICK!`, true, "dmg-trick");
-      this.hudManager.addCombatFeedToast(`🚀 ${e.rotations * 360}° Spin Clean Landing! (+${e.score} PTS)`, "#ffff00");
+      this.hudManager.showTrickBanner(e.trickName, "#ffff00");
+      this.hudManager.addCombatLog(`🚀 ${e.trickName} (+${e.score} PTS)`, "#ffff00");
+    } else if (e.type === "TRICK_WIPEOUT") {
+      this.hudManager.showTrickBanner(e.message, "#ff0033");
+      this.hudManager.addCombatLog(e.message, "#ff0033");
+    } else if (e.type === "NITRO_ACTIVATED") {
+      this.hudManager.addCombatLog("⚡ NITRO BOOST ENGAGED (+26 MPH)!", "#00ffff");
+    } else if (e.type === "NPC_RESCUED") {
+      this.hudManager.addCombatLog(`⛷️ Skier Rescued! Squad: ${e.squadSize} (x${e.multiplier.toFixed(2)})`, "#39ff14");
     } else if (e.type === "GATE_CLEARED") {
-      this.hudManager.showFloatingDamage(`+${e.points} GATE!`, false, "dmg-gate");
+      this.hudManager.showFloatingDamage(window.innerWidth / 2, window.innerHeight / 2 - 80, e.points, false);
     } else if (e.type === "RACE_FINISHED") {
       this.handleRaceFinished();
     } else if (e.type === "BAIT_DROPPED") {
       this.networkSync.sendDropBait();
-      this.hudManager.addCombatFeedToast("🥩 Meat Bait Dropped! Yeti Distracted.", "#ff007f");
+      this.hudManager.addCombatLog("🥩 Meat Bait Dropped! Yeti Distracted.", "#ff007f");
+    } else if (e.type === "AVALANCHE_ENGULFED") {
+      this.handlePlayerDeath();
     }
   }
 
@@ -380,7 +432,7 @@ class GameApp {
     if (backdrop) backdrop.classList.remove("hidden");
     if (deathModal) deathModal.classList.remove("hidden");
     if (deathStat) {
-      deathStat.textContent = `Distance: ${Math.round(this.playerPhysics.z)}m • Score: ${this.playerPhysics.score.toLocaleString()} PTS • Top Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
+      deathStat.textContent = `Track: ${this.trackManager.getTrack().name} • Distance: ${Math.round(this.playerPhysics.z)}m • Score: ${this.playerPhysics.score.toLocaleString()} PTS • Top Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
     }
 
     this.promptScoreClaim();
@@ -396,7 +448,7 @@ class GameApp {
 
     if (raceOverlay) raceOverlay.classList.remove("hidden");
     if (finishTime) finishTime.textContent = `${this.raceElapsedSec.toFixed(2)}s`;
-    if (finishGates) finishGates.textContent = `${this.playerPhysics.gatesHit} / 30`;
+    if (finishGates) finishGates.textContent = `${this.playerPhysics.gatesHit} Gates`;
     if (finishSpeed) finishSpeed.textContent = `${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
     if (finishScore) finishScore.textContent = `${this.playerPhysics.score.toLocaleString()} PTS`;
 
@@ -408,7 +460,7 @@ class GameApp {
     const claimModal = document.getElementById("claim-score-modal");
     const summary = document.getElementById("claim-stat-summary");
     if (claimModal && summary) {
-      summary.textContent = `Score: ${this.playerPhysics.score.toLocaleString()} PTS • Max Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
+      summary.textContent = `Score: ${this.playerPhysics.score.toLocaleString()} PTS • Max Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH • Class: ${this.playerPhysics.riderClass.toUpperCase()}`;
       claimModal.classList.remove("hidden");
     }
   }
@@ -443,31 +495,49 @@ class GameApp {
   loop(currentTime) {
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
+    const currentTrack = this.trackManager.getTrack();
 
     if (this.gameState === "ACTIVE") {
       this.raceElapsedSec += dt;
 
-      // 1. Local Player Physics (60-144 FPS)
-      this.playerPhysics.update(dt, this.sceneManager, this.audioSystem, (e) => this.handleGameEvent(e));
+      // 1. Local Player Physics (Kinematics, 3D Air Tricks, Nitro)
+      this.playerPhysics.update(
+        dt,
+        this.sceneManager,
+        this.audioSystem,
+        (e) => this.handleGameEvent(e),
+        currentTrack
+      );
 
-      // 2. Combat System & Reload Timers
-      this.combatSystem.update(dt, (e) => this.handleGameEvent(e));
+      // 2. Combat System, Flare Gun & NPC Squad Rescue
+      this.combatSystem.update(
+        dt,
+        (e) => this.handleGameEvent(e),
+        { x: this.playerPhysics.x, z: this.playerPhysics.z },
+        this.yetiPredator.npcs,
+        this.audioSystem
+      );
 
-      // 3. Yeti Predator AI
+      // 3. Yeti Predator AI (with Flare Burn Panic & Avalanche Awareness)
       this.yetiPredator.update(
         dt,
         this.playerPhysics,
         this.audioSystem,
-        (e) => this.handleGameEvent(e)
+        (e) => this.handleGameEvent(e),
+        currentTrack
       );
 
-      // 4. Update Third-Person Chase Camera
+      // 4. Update Third-Person Chase Camera with 3D Aerial Rotation & Nitro Effects
       this.sceneManager.updateCamera(
         { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
         this.playerPhysics.steer,
         this.playerPhysics.pitch,
         this.playerPhysics.airY,
-        this.playerPhysics.airRoll
+        this.playerPhysics.airRoll,
+        this.playerPhysics.airYaw,
+        this.playerPhysics.isAirborne,
+        this.playerPhysics.isNitroActive,
+        this.playerPhysics.avalancheDist
       );
 
       // 5. Update HUD Overlays
@@ -476,7 +546,8 @@ class GameApp {
         this.combatSystem,
         this.yetiPredator,
         this.gameMode,
-        this.raceElapsedSec
+        this.raceElapsedSec,
+        currentTrack
       );
 
       // 6. 15Hz Telemetry to Cloudflare Durable Object
@@ -493,14 +564,13 @@ class GameApp {
       }
     }
 
-    // Single-Pass High Performance 3D Render
+    // Single-Pass High Performance 3D WebGL Render
     this.sceneManager.render();
 
     requestAnimationFrame((t) => this.loop(t));
   }
 }
 
-// Boot application when DOM is ready
 window.addEventListener("DOMContentLoaded", () => {
   new GameApp();
 });

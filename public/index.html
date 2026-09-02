@@ -475,7 +475,7 @@
       gap: 6px;
       margin: 4px 0;
     }
-    .mode-btn, .diff-btn {
+    .mode-btn, .diff-btn, .track-select-btn, .class-btn {
       flex: 1;
       padding: clamp(6px, 1.5vh, 10px) 4px;
       border: 2px solid #556688;
@@ -489,7 +489,7 @@
       touch-action: manipulation;
       transition: 0.15s;
     }
-    .mode-btn.active, .diff-btn.active {
+    .mode-btn.active, .diff-btn.active, .track-select-btn.active, .class-btn.active {
       border-color: #00f0ff;
       color: #00f0ff;
       background: rgba(0, 240, 255, 0.2);
@@ -664,7 +664,23 @@
     <div id="start-modal">
       <div class="modal-title">🎿 SKIFREE 2: ALPINE ARENA</div>
       
-      <div class="modal-grid-2col">
+      <!-- Mountain Course / Biome Select -->
+      <div style="font-size:10px; color:#88a0c0; font-weight:bold; margin-top:2px;">SELECT MOUNTAIN COURSE:</div>
+      <div class="track-select-group" style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:4px 0;">
+        <button class="track-select-btn active" data-track="alpine" type="button">🏔️ ALPS 1991</button>
+        <button class="track-select-btn" data-track="avalanche" type="button">⚠️ AVALANCHE</button>
+        <button class="track-select-btn" data-track="neon_glacier" type="button">🌌 NEON GLACIER</button>
+        <button class="track-select-btn" data-track="terrain_park" type="button">🛹 TERRAIN PARK</button>
+      </div>
+
+      <!-- Rider Class Select -->
+      <div style="font-size:10px; color:#88a0c0; font-weight:bold; margin-top:4px;">RIDER CLASS:</div>
+      <div class="class-select-group" style="display:flex; gap:6px; margin:4px 0;">
+        <button class="class-btn active" id="btn-class-skier" type="button">⛷️ SKIER (Speed & Slalom)</button>
+        <button class="class-btn" id="btn-class-boarder" type="button">🏂 BOARDER (Pop & Tricks)</button>
+      </div>
+
+      <div class="modal-grid-2col" style="margin-top:6px;">
         <!-- Column 1: Mode & Callsign -->
         <div>
           <div style="font-size:10px; color:#88a0c0; font-weight:bold;">GAME MODE:</div>
@@ -690,7 +706,13 @@
         </div>
       </div>
 
-      <div style="text-align:center; margin-top:3px;">
+      <!-- Quick Arcade Controls Guide -->
+      <div style="font-size:9px; color:#88a0c0; text-align:center; margin-top:6px; line-height:1.4;">
+        <span style="color:#00f0ff;">A/D</span> Carve & Air Spins • <span style="color:#00f0ff;">W/S</span> Tuck / Flips • <span style="color:#00f0ff;">SPACE</span> Jump • <span style="color:#00f0ff;">SHIFT/N</span> Nitro<br>
+        <span style="color:#ffaa00;">E</span> Flare Gun • <span style="color:#ffff00;">F/CLICK</span> Shoot Rifle • <span style="color:#ff007f;">B</span> Drop Bait
+      </div>
+
+      <div style="text-align:center; margin-top:4px;">
         <button id="btn-toggle-fullscreen" style="background:none; border:1px solid #00f0ff; color:#00f0ff; font-size:9px; padding:3px 8px; border-radius:4px; cursor:pointer; touch-action:manipulation;" type="button">⛶ FULLSCREEN</button>
       </div>
     </div>

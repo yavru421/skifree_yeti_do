@@ -39,23 +39,35 @@ export default {
       if (upgradeHeader && upgradeHeader.toLowerCase() === "websocket") {
         const roomId = url.searchParams.get("room") || "main-alps";
         const doId = env.MOUNTAIN_DO.idFromName(roomId);
-        const colo = (request.cf as any)?.colo?.toLowerCase();
-        const doStub = env.MOUNTAIN_DO.get(doId, { locationHint: colo || "wnam" } as any);
+        const doStub = env.MOUNTAIN_DO.get(doId);
         return doStub.fetch(request);
       }
     }
 
-    // 3. API Scores / Leaderboard endpoint (Global Cross-Shard Singleton)
-    if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
-      const roomId = url.searchParams.get("room") || "GLOBAL_LEADERBOARD";
-      const doId = env.MOUNTAIN_DO.idFromName(roomId);
-      const colo = (request.cf as any)?.colo?.toLowerCase();
-      const doStub = env.MOUNTAIN_DO.get(doId, { locationHint: colo || "wnam" } as any);
-      const res = await doStub.fetch(request);
-      return withSecurityHeaders(res);
+    // 2. API Scores / Leaderboard / Score Publishing endpoint (Global Cross-Shard Singleton)
+    if (
+      url.pathname === "/api/scores" ||
+      url.pathname === "/scores" ||
+      url.pathname === "/api/leaderboard" ||
+      url.pathname === "/api/publish-score"
+    ) {
+      try {
+        const roomId = url.searchParams.get("room") || "GLOBAL_LEADERBOARD";
+        const doId = env.MOUNTAIN_DO.idFromName(roomId);
+        const doStub = env.MOUNTAIN_DO.get(doId);
+        const res = await doStub.fetch(request);
+        return withSecurityHeaders(res);
+      } catch (err: any) {
+        return withSecurityHeaders(
+          new Response(JSON.stringify({ success: false, error: err?.message || String(err) }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" }
+          })
+        );
+      }
     }
 
-    // 4. Landing page & Game shortcuts
+    // 3. Landing page & Game shortcuts
     if (url.pathname === "/" || url.pathname === "/landing") {
       const landingReq = new Request(new URL("/landing.html", request.url), request);
       const res = await env.ASSETS.fetch(landingReq);
@@ -67,7 +79,7 @@ export default {
       return withSecurityHeaders(res);
     }
 
-    // 5. Static Assets from public/
+    // 4. Static Assets from public/
     if (env.ASSETS) {
       const assetRes = await env.ASSETS.fetch(request);
       return withSecurityHeaders(assetRes);

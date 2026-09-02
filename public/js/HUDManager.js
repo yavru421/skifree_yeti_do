@@ -1,5 +1,5 @@
 // public/js/HUDManager.js
-// DOM HUD Overlays, Health, Speedometer, Minimap & Arcade Popups
+// DOM HUD Overlays, Health, Nitro, Stunt Tricks, Squad Multipliers & Avalanche Alerts
 
 export class HUDManager {
   constructor() {
@@ -33,16 +33,64 @@ export class HUDManager {
       document.getElementById("h2"),
       document.getElementById("h3")
     ];
+
+    this.ensureExtendedHudElements();
   }
 
-  update(playerPhysics, combatSystem, yetiPredator, gameMode, raceElapsedSec) {
-    // 1. Speedometer, Score & Ammo
-    if (this.speedEl) {
-      this.speedEl.innerHTML = `${Math.round(playerPhysics.speed)} <span style="font-size:10px;">MPH</span>`;
+  ensureExtendedHudElements() {
+    // 1. Nitro Gauge Bar
+    if (!document.getElementById("nitro-hud-panel")) {
+      const panel = document.createElement("div");
+      panel.id = "nitro-hud-panel";
+      panel.style.cssText = "position:absolute; bottom:24px; left:24px; display:flex; flex-direction:column; gap:4px; z-index:100; font-family:'Courier New', monospace; font-size:11px; font-weight:bold; color:#00ffff; text-shadow:0 0 6px #00ffff; pointer-events:none;";
+      panel.innerHTML = `
+        <div style="display:flex; justify-content:space-between; width:160px;">
+          <span>⚡ NITRO [SHIFT]</span>
+          <span id="nitro-val">100%</span>
+        </div>
+        <div style="width:160px; height:8px; background:rgba(0,0,0,0.6); border:1px solid #00f0ff; border-radius:3px; overflow:hidden;">
+          <div id="nitro-fill" style="width:100%; height:100%; background:#00f0ff; transition:width 0.1s linear;"></div>
+        </div>
+        <div id="flare-hud" style="color:#ffaa00; margin-top:2px;">🔥 FLARES: <span id="flare-val">2/3</span> [E]</div>
+        <div id="squad-hud" style="color:#39ff14; display:none;">⛷️ SQUAD: <span id="squad-val">0 (x1.0)</span></div>
+        <div id="avalanche-hud" style="color:#ff0055; display:none; animation:pulse 0.8s infinite alternate;">⚠️ AVALANCHE: <span id="avalanche-val">120M</span></div>
+      `;
+      document.body.appendChild(panel);
     }
-    if (this.scoreEl) {
+
+    // 2. Stunt Trick Combo Banner
+    if (!document.getElementById("trick-banner")) {
+      const trick = document.createElement("div");
+      trick.id = "trick-banner";
+      trick.style.cssText = "position:absolute; top:35%; left:50%; transform:translate(-50%, -50%); font-family:'Impact', 'Arial Black', sans-serif; font-size:32px; font-weight:900; letter-spacing:2px; color:#ffff00; text-shadow:0 0 14px #ff5500, 2px 2px 0 #000; pointer-events:none; opacity:0; transition:opacity 0.25s, transform 0.25s; z-index:150;";
+      document.body.appendChild(trick);
+    }
+  }
+
+  showTrickBanner(text, color = "#ffff00") {
+    const el = document.getElementById("trick-banner");
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = color;
+    el.style.opacity = "1";
+    el.style.transform = "translate(-50%, -50%) scale(1.15)";
+    setTimeout(() => {
+      el.style.opacity = "0";
+      el.style.transform = "translate(-50%, -50%) scale(0.9)";
+    }, 1400);
+  }
+
+  update(playerPhysics, combatSystem, yetiPredator, gameMode, raceElapsedSec, currentTrack) {
+    // 1. Speedometer & Score
+    if (this.speedEl && playerPhysics) {
+      const isNitro = playerPhysics.isNitroActive;
+      this.speedEl.innerHTML = `${Math.round(playerPhysics.speed)} <span style="font-size:10px;">MPH</span> ${isNitro ? '<span style="color:#00ffff; font-size:11px;">[NITRO]</span>' : ''}`;
+    }
+    if (this.scoreEl && playerPhysics) {
       this.scoreEl.innerHTML = `${playerPhysics.score.toLocaleString()} <span style="font-size:10px;">PTS</span>`;
     }
+
+    // 2. Ammo & Flares
     if (this.ammoEl && combatSystem) {
       this.ammoEl.style.display = 'block';
       if (combatSystem.isReloading) {
@@ -52,34 +100,88 @@ export class HUDManager {
       }
     }
 
-    // 2. Lives Hearts
-    this.hearts.forEach((heart, idx) => {
-      if (heart) {
-        if (idx < playerPhysics.lives) {
-          heart.classList.remove("heart-lost");
-        } else {
-          heart.classList.add("heart-lost");
-        }
-      }
-    });
+    const flareVal = document.getElementById("flare-val");
+    if (flareVal && combatSystem) {
+      flareVal.textContent = `${combatSystem.flareAmmo}/${combatSystem.maxFlareAmmo}`;
+    }
 
-    if (this.limbStatus) {
-      if (playerPhysics.lives === 3) {
-        this.limbStatus.textContent = "INTACT";
-        this.limbStatus.style.color = "#39ff14";
-      } else if (playerPhysics.lives === 2) {
-        this.limbStatus.textContent = "BRUISED";
-        this.limbStatus.style.color = "#ffff00";
-      } else if (playerPhysics.lives === 1) {
-        this.limbStatus.textContent = "CRITICAL";
-        this.limbStatus.style.color = "#ff0033";
+    // 3. Nitro Fuel Gauge
+    const nitroFill = document.getElementById("nitro-fill");
+    const nitroVal = document.getElementById("nitro-val");
+    if (nitroFill && playerPhysics) {
+      const fuel = Math.round(playerPhysics.nitroFuel);
+      nitroFill.style.width = `${fuel}%`;
+      if (playerPhysics.isNitroActive) {
+        nitroFill.style.background = "#ffff00";
       } else {
-        this.limbStatus.textContent = "WIPEOUT";
-        this.limbStatus.style.color = "#ff0033";
+        nitroFill.style.background = fuel >= 25 ? "#00f0ff" : "#ff0055";
+      }
+      if (nitroVal) nitroVal.textContent = `${fuel}%`;
+    }
+
+    // 4. Rescued Squad Status
+    const squadHud = document.getElementById("squad-hud");
+    const squadVal = document.getElementById("squad-val");
+    if (squadHud && combatSystem) {
+      if (combatSystem.rescuedSquad.length > 0) {
+        squadHud.style.display = "block";
+        if (squadVal) {
+          squadVal.textContent = `${combatSystem.rescuedSquad.length} (x${combatSystem.rescueMultiplier.toFixed(2)})`;
+        }
+      } else {
+        squadHud.style.display = "none";
       }
     }
 
-    // 3. Boss Health & Radar
+    // 5. Avalanche Hazard Proximity
+    const avaHud = document.getElementById("avalanche-hud");
+    const avaVal = document.getElementById("avalanche-val");
+    if (avaHud && currentTrack?.id === "avalanche" && playerPhysics) {
+      avaHud.style.display = "block";
+      if (avaVal) {
+        const dist = Math.round(playerPhysics.avalancheDist);
+        avaVal.textContent = `${dist}M`;
+        if (dist < 40) {
+          avaVal.style.color = "#ff0000";
+          avaVal.textContent += " [DANGER!]";
+        } else {
+          avaVal.style.color = "#ffaa00";
+        }
+      }
+    } else if (avaHud) {
+      avaHud.style.display = "none";
+    }
+
+    // 6. Lives Hearts
+    if (playerPhysics) {
+      this.hearts.forEach((heart, idx) => {
+        if (heart) {
+          if (idx < playerPhysics.lives) {
+            heart.classList.remove("heart-lost");
+          } else {
+            heart.classList.add("heart-lost");
+          }
+        }
+      });
+
+      if (this.limbStatus) {
+        if (playerPhysics.lives === 3) {
+          this.limbStatus.textContent = "INTACT";
+          this.limbStatus.style.color = "#39ff14";
+        } else if (playerPhysics.lives === 2) {
+          this.limbStatus.textContent = "BRUISED";
+          this.limbStatus.style.color = "#ffff00";
+        } else if (playerPhysics.lives === 1) {
+          this.limbStatus.textContent = "CRITICAL";
+          this.limbStatus.style.color = "#ff0033";
+        } else {
+          this.limbStatus.textContent = "WIPEOUT";
+          this.limbStatus.style.color = "#ff0033";
+        }
+      }
+    }
+
+    // 7. Boss Health & Radar
     if (yetiPredator) {
       if (this.bossHpFill) {
         const hpPercent = Math.max(0, (yetiPredator.hp / yetiPredator.maxHp) * 100);
@@ -89,10 +191,16 @@ export class HUDManager {
         this.bossHpText.textContent = `${yetiPredator.hp.toLocaleString()} / ${yetiPredator.maxHp.toLocaleString()} HP`;
       }
       if (this.bossWaveTitle) {
-        this.bossWaveTitle.textContent = `👹 ALPINE YETI (W${yetiPredator.wave})`;
+        let stateTag = "";
+        if (yetiPredator.state === "BURNING_PANIC") {
+          stateTag = " [🔥 BURNING PANIC]";
+        } else if (yetiPredator.state === "STAGGERED") {
+          stateTag = " [⚡ STAGGERED]";
+        }
+        this.bossWaveTitle.textContent = `👹 ALPINE YETI (W${yetiPredator.wave})${stateTag}`;
       }
 
-      if (this.radarEl) {
+      if (this.radarEl && playerPhysics) {
         const dist = Math.hypot(yetiPredator.x - playerPhysics.x, yetiPredator.z - playerPhysics.z);
         if (dist < 45 && yetiPredator.hp > 0) {
           this.radarEl.style.opacity = "1";
@@ -103,74 +211,78 @@ export class HUDManager {
       }
     }
 
-    // 4. Slalom Race HUD
-    if (gameMode === "slalom" && this.raceHud) {
-      this.raceHud.classList.remove("hidden");
+    // 8. Slalom Race Mode HUD
+    if (gameMode === "slalom" && this.raceHud && playerPhysics) {
+      this.raceHud.style.display = "block";
       if (this.raceTimeVal) {
-        this.raceTimeVal.textContent = `${raceElapsedSec.toFixed(1)}s`;
+        this.raceTimeVal.textContent = (raceElapsedSec || 0).toFixed(1) + "s";
       }
       if (this.raceGatesVal) {
-        this.raceGatesVal.textContent = `${playerPhysics.gatesHit}/30`;
+        this.raceGatesVal.textContent = `${playerPhysics.gatesHit}`;
       }
       if (this.raceStreakVal) {
-        this.raceStreakVal.textContent = `${playerPhysics.gateStreak}x`;
+        this.raceStreakVal.textContent = `x${playerPhysics.gateStreak}`;
       }
     } else if (this.raceHud) {
-      this.raceHud.classList.add("hidden");
+      this.raceHud.style.display = "none";
     }
 
-    // 5. Minimap Progression (0 - 1200m)
-    if (this.minimapPlayer) {
-      const pRatio = Math.min(1.0, Math.max(0, playerPhysics.z / 1200));
-      this.minimapPlayer.style.top = `${pRatio * 85}%`;
+    // 9. Minimap
+    if (this.minimapPlayer && playerPhysics) {
+      const normX = Math.max(0, Math.min(100, (playerPhysics.x + 65) / 130 * 100));
+      const normZ = Math.max(0, Math.min(100, (playerPhysics.z % 1200) / 1200 * 100));
+      this.minimapPlayer.style.left = `${normX}%`;
+      this.minimapPlayer.style.top = `${normZ}%`;
     }
-    if (this.minimapYeti && yetiPredator) {
-      const yRatio = Math.min(1.0, Math.max(0, yetiPredator.z / 1200));
-      this.minimapYeti.style.top = `${yRatio * 85}%`;
-    }
-  }
-
-  showDamageFlash() {
-    if (!this.damageFlash) return;
-    this.damageFlash.style.opacity = "1";
-    setTimeout(() => {
-      this.damageFlash.style.opacity = "0";
-    }, 180);
-
-    if (this.clawOverlay) {
-      this.clawOverlay.style.display = "block";
-      this.clawOverlay.classList.add("slash-active");
-      setTimeout(() => {
-        this.clawOverlay.style.display = "none";
-        this.clawOverlay.classList.remove("slash-active");
-      }, 450);
+    if (this.minimapYeti && yetiPredator && playerPhysics) {
+      if (yetiPredator.hp > 0) {
+        this.minimapYeti.style.display = "block";
+        const normYetiX = Math.max(0, Math.min(100, (yetiPredator.x + 65) / 130 * 100));
+        const normYetiZ = Math.max(0, Math.min(100, (yetiPredator.z % 1200) / 1200 * 100));
+        this.minimapYeti.style.left = `${normYetiX}%`;
+        this.minimapYeti.style.top = `${normYetiZ}%`;
+      } else {
+        this.minimapYeti.style.display = "none";
+      }
     }
   }
 
-  showFloatingDamage(text, isCrit = false, customClass = "") {
+  showFloatingDamage(x, y, damage, isCrit = false) {
     if (!this.floatingDmgContainer) return;
     const el = document.createElement("div");
-    el.className = `dmg-popup ${customClass ? customClass : (isCrit ? "dmg-crit" : "dmg-normal")}`;
-    el.textContent = text;
-    el.style.left = `${window.innerWidth / 2 + (Math.random() - 0.5) * 60}px`;
-    el.style.top = `${window.innerHeight / 2 - 20 + (Math.random() - 0.5) * 40}px`;
-
+    el.className = isCrit ? "floating-crit" : "floating-dmg";
+    el.textContent = `-${damage}`;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
     this.floatingDmgContainer.appendChild(el);
+
     setTimeout(() => {
       if (el.parentNode) el.parentNode.removeChild(el);
-    }, 850);
+    }, 900);
   }
 
-  addCombatFeedToast(message, color = "#00f0ff") {
-    if (!this.combatFeed) return;
-    const toast = document.createElement("div");
-    toast.className = "feed-toast";
-    toast.style.borderLeftColor = color;
-    toast.textContent = message;
-    this.combatFeed.appendChild(toast);
+  triggerDamageClawFlash() {
+    if (this.damageFlash) {
+      this.damageFlash.style.opacity = "0.7";
+      setTimeout(() => { this.damageFlash.style.opacity = "0"; }, 200);
+    }
+    if (this.clawOverlay) {
+      this.clawOverlay.style.opacity = "0.9";
+      setTimeout(() => { this.clawOverlay.style.opacity = "0"; }, 350);
+    }
+  }
 
-    setTimeout(() => {
-      if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 3500);
+  addCombatLog(msg, color = "#00f0ff") {
+    if (!this.combatFeed) return;
+    const line = document.createElement("div");
+    line.style.color = color;
+    line.style.fontSize = "11px";
+    line.style.marginBottom = "3px";
+    line.textContent = `> ${msg}`;
+    this.combatFeed.appendChild(line);
+
+    if (this.combatFeed.children.length > 5) {
+      this.combatFeed.removeChild(this.combatFeed.firstChild);
+    }
   }
 }

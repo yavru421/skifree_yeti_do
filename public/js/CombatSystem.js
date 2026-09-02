@@ -1,5 +1,5 @@
 // public/js/CombatSystem.js
-// Directional Auto-Target Hip-Fire, Recoil, Tracers & Floating Arcade Damage
+// Directional Auto-Target Hip-Fire, Magnesium Flare Gun, NPC Squad Rescue & Stagger Logic
 
 export class CombatSystem {
   constructor() {
@@ -11,6 +11,15 @@ export class CombatSystem {
 
     this.baitCount = 2;
     this.maxBait = 3;
+
+    // Magnesium Flare Gun (Alt-Fire: KeyE)
+    this.flareAmmo = 2;
+    this.maxFlareAmmo = 3;
+    this.flareCooldown = 0;
+
+    // NPC Squad Rescue Mechanics
+    this.rescuedSquad = []; // Array of rescued NPC entities trailing player
+    this.rescueMultiplier = 1.0;
 
     this.setupControls();
   }
@@ -26,7 +35,17 @@ export class CombatSystem {
           window.__audioSystem,
           window.__onGameEvent
         );
-      } else if (e.code === "KeyF" || e.code === "KeyE") {
+      } else if (e.code === "KeyE") {
+        // Fire Magnesium Flare Gun
+        this.fireFlareGun(
+          { x: window.__playerPhysics?.x || 0, y: 0, z: window.__playerPhysics?.z || 0 },
+          window.__yetiEntity,
+          window.__audioSystem,
+          window.__sceneManager,
+          window.__onGameEvent
+        );
+      } else if (e.code === "KeyF") {
+        // Hip-fire Rifle
         this.shoot(
           { x: window.__playerPhysics?.x || 0, y: 0, z: window.__playerPhysics?.z || 0 },
           window.__yetiEntity,
@@ -70,7 +89,7 @@ export class CombatSystem {
     if (onEvent) onEvent({ type: "RELOAD_START" });
   }
 
-  update(dt, onEvent) {
+  update(dt, onEvent, playerPos, npcs, audioSystem) {
     if (this.isReloading) {
       this.reloadTimer -= dt;
       if (this.reloadTimer <= 0) {
@@ -78,6 +97,79 @@ export class CombatSystem {
         this.ammo = this.maxAmmo;
         if (onEvent) onEvent({ type: "RELOAD_COMPLETE", ammo: this.ammo });
       }
+    }
+
+    if (this.flareCooldown > 0) {
+      this.flareCooldown -= dt;
+    }
+
+    // NPC Squad Rescue Check: Detect nearby unrescued NPCs
+    if (playerPos && npcs && npcs.length > 0) {
+      npcs.forEach(npc => {
+        if (!npc.isRescued && !npc.isEaten) {
+          const dx = npc.x - playerPos.x;
+          const dz = npc.z - playerPos.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < 4.8) {
+            // Recruited to Squad!
+            npc.isRescued = true;
+            this.rescuedSquad.push(npc);
+            this.rescueMultiplier = 1.0 + (this.rescuedSquad.length * 0.15);
+            if (audioSystem && audioSystem.playRescueFanfare) audioSystem.playRescueFanfare();
+            if (onEvent) {
+              onEvent({
+                type: "NPC_RESCUED",
+                npcId: npc.id,
+                squadSize: this.rescuedSquad.length,
+                multiplier: this.rescueMultiplier
+              });
+            }
+          }
+        }
+      });
+
+      // Update trailing squad positions (snake formation behind player)
+      this.rescuedSquad.forEach((member, idx) => {
+        if (!member.mesh) return;
+        const targetZ = playerPos.z - (4.0 + idx * 3.2);
+        const targetX = playerPos.x + Math.sin(idx + Date.now() * 0.003) * 1.8;
+        member.x += (targetX - member.x) * 8.0 * dt;
+        member.z += (targetZ - member.z) * 8.0 * dt;
+        member.mesh.position.set(member.x, 1.2, member.z);
+        member.mesh.visible = true;
+      });
+    }
+  }
+
+  fireFlareGun(playerPos, yetiEntity, audioSystem, sceneManager, onEvent) {
+    if (this.flareAmmo <= 0 || this.flareCooldown > 0) return;
+    this.flareAmmo--;
+    this.flareCooldown = 4.0;
+
+    if (audioSystem && audioSystem.playBigAirWhoosh) audioSystem.playBigAirWhoosh();
+    if (sceneManager && sceneManager.addTrauma) sceneManager.addTrauma(0.25);
+
+    // Check hit on Yeti
+    let hit = false;
+    if (yetiEntity && yetiEntity.hp > 0) {
+      const dx = yetiEntity.x - playerPos.x;
+      const dz = yetiEntity.z - playerPos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 75 && dz > -5) {
+        hit = true;
+        // Trigger 3.5s burning panic on Yeti
+        yetiEntity.igniteFlareBurn(3.5);
+        if (audioSystem && audioSystem.playSkierScream) audioSystem.playSkierScream();
+      }
+    }
+
+    if (onEvent) {
+      onEvent({
+        type: "FLARE_FIRED",
+        hit,
+        remainingFlares: this.flareAmmo,
+        message: hit ? "🔥 YETI IGNITED! BURNING PANIC TRIGGERED!" : "FLARE FIRED INTO SKY!"
+      });
     }
   }
 
@@ -132,7 +224,7 @@ export class CombatSystem {
 
     if (target && target.type === "YETI") {
       hit = true;
-      damage = target.damage;
+      damage = Math.round(target.damage * this.rescueMultiplier); // Squad bonus damage!
       isCrit = target.isCrit;
 
       if (audioSystem && audioSystem.playHitFlesh) audioSystem.playHitFlesh();

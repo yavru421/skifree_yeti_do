@@ -1,5 +1,5 @@
 // public/js/YetiPredator.js
-// Authentic 2.5D Animated Yeti Boss AI with Chroma-Key Transparency & Backcountry Zone Stalking
+// Authentic 2.5D Animated Yeti Boss AI with Chroma-Key Transparency, Flare Ignition Panic & Avalanche Flee
 
 import { loadChromaKeyTexture } from './SpriteUtils.js';
 
@@ -18,6 +18,7 @@ export class YetiPredator {
 
     this.staggerTimer = 0;
     this.distractedTimer = 0;
+    this.flareBurnTimer = 0;
     this.eatingTimer = 0;
     this.biteCooldown = 0;
 
@@ -42,11 +43,10 @@ export class YetiPredator {
     sceneManager.scene.add(this.mesh);
 
     // Load authentic 2.5D Yeti Sprite (4 Rows x 4 Columns, pure pixel art)
-    loadChromaKeyTexture('/assets/yeti_v2.jpg?v=' + Date.now(), 215, (texture) => {
-      this.yetiTexture = texture;
-      // 4 columns (width: 1/4 = 0.2500), 4 rows (height: 1/4 = 0.2500)
+    loadChromaKeyTexture('/assets/yeti_v2.jpg?v=' + Date.now(), 210, (tex) => {
+      this.yetiTexture = tex;
       this.yetiTexture.repeat.set(1 / 4, 1 / 4);
-      this.yetiTexture.offset.set(0.0, 3 / 4); // Row 0 (offset.y = 0.7500): Running sprint
+      this.yetiTexture.offset.set(0, 3 / 4);
 
       const mat = new THREE.SpriteMaterial({
         map: this.yetiTexture,
@@ -67,8 +67,7 @@ export class YetiPredator {
 
       for (let i = 0; i < 22; i++) {
         const texClone = npcTex.clone();
-        // Distribute across different skier rows and colors
-        const row = i % 4; // Rows 0-3: downhill recreational skiers & racers
+        const row = i % 4;
         const col = (i * 2) % 8;
         texClone.offset.set(col * (1 / 8), (6 - row) / 7);
 
@@ -108,11 +107,19 @@ export class YetiPredator {
     this.staggerTimer = 0.8;
     this.state = "STAGGERED";
 
-    // Hunter Rescue Check: If Yeti was stalking or eating an NPC
     if (this.currentTargetNpc && !this.currentTargetNpc.isRescued) {
       this.currentTargetNpc.isRescued = true;
       this.currentTargetNpc.isEaten = false;
       this.currentTargetNpc = null;
+    }
+  }
+
+  igniteFlareBurn(duration = 3.5) {
+    this.flareBurnTimer = duration;
+    this.state = "BURNING_PANIC";
+    this.z += 14.0; // Pushed back down-slope
+    if (this.yetiSprite) {
+      this.yetiSprite.material.color.setHex(0xff5500); // Glowing orange burn
     }
   }
 
@@ -123,7 +130,7 @@ export class YetiPredator {
     this.z = baitZ;
   }
 
-  update(dt, playerInfo, audioSystem, onEvent) {
+  update(dt, playerInfo, audioSystem, onEvent, currentTrack) {
     if (this.hp <= 0) {
       this.state = "DEAD";
       if (this.yetiSprite) this.yetiSprite.visible = false;
@@ -138,16 +145,18 @@ export class YetiPredator {
     const playerX = (playerInfo && typeof playerInfo.x === 'number') ? playerInfo.x : 0;
     const playerZ = (playerInfo && typeof playerInfo.z === 'number') ? playerInfo.z : 0;
     const playerSpeed = (playerInfo && typeof playerInfo.speed === 'number') ? playerInfo.speed : 28;
-    const forwardRate = playerSpeed * 0.038 * 60; // Downhill speed matching skier (~64 m/s)
+    const forwardRate = playerSpeed * 0.038 * 60;
 
     // 1. Update Downhill NPCs
     this.npcs.forEach((npc) => {
-      if (!npc.isEaten) {
+      if (!npc.isEaten && !npc.isRescued) {
         npc.z += forwardRate * 0.85 * dt;
         npc.x += Math.sin(npc.steer) * (forwardRate * 0.25 * dt);
-        npc.mesh.position.set(npc.x, 1.6, npc.z); // Elevated above snow plane
-        npc.mesh.rotation.y = npc.steer;
-        npc.mesh.rotation.z = -npc.steer * 0.3;
+        if (npc.mesh) {
+          npc.mesh.position.set(npc.x, 1.6, npc.z);
+          npc.mesh.rotation.y = npc.steer;
+          npc.mesh.rotation.z = -npc.steer * 0.3;
+        }
 
         // Recycle NPCs falling behind player
         if (playerZ - npc.z > 40) {
@@ -155,27 +164,43 @@ export class YetiPredator {
           npc.x = (Math.random() - 0.5) * 60;
           npc.isEaten = false;
           npc.isRescued = false;
-          npc.mesh.visible = true;
-          npc.mesh.position.set(npc.x, 1.6, npc.z);
+          if (npc.mesh) {
+            npc.mesh.visible = true;
+            npc.mesh.position.set(npc.x, 1.6, npc.z);
+          }
         }
       }
     });
 
     // 2. Yeti State Machine & Kinematics
-    if (this.staggerTimer > 0) {
+    if (this.flareBurnTimer > 0) {
+      // BURNING PANIC: Yeti runs away erratically flailing arms
+      this.flareBurnTimer -= dt;
+      this.state = "BURNING_PANIC";
+      this.z += forwardRate * 1.4 * dt; // Sprinting forward ahead in terror
+      this.x += Math.sin(Date.now() * 0.01) * 22.0 * dt;
+      if (this.flareBurnTimer <= 0 && this.yetiSprite) {
+        this.yetiSprite.material.color.setHex(0xffffff); // Return to normal color
+      }
+    } else if (this.staggerTimer > 0) {
       this.staggerTimer -= dt;
       this.state = "STAGGERED";
-      this.z += forwardRate * 0.45 * dt; // Slowed down from gunshot impact
+      this.z += forwardRate * 0.45 * dt;
       if (this.yetiSprite) {
         this.yetiSprite.scale.set(7.5, 6.0, 1);
       }
     } else if (this.distractedTimer > 0) {
       this.distractedTimer -= dt;
       this.state = "DISTRACTED";
-      this.z += forwardRate * 0.2 * dt; // Paused eating bait
+      this.z += forwardRate * 0.2 * dt;
       if (this.yetiSprite) {
         this.yetiSprite.scale.set(6.5, 6.5, 1);
       }
+    } else if (currentTrack?.id === "avalanche" && playerInfo?.avalancheDist < 50) {
+      // AVALANCHE FLEE: Yeti panics and sprints downhill away from the avalanche
+      this.state = "CHARGING";
+      this.z += forwardRate * 1.25 * dt;
+      this.x += (playerX - this.x) * 0.5 * dt;
     } else {
       const distToPlayer = Math.hypot(this.x - playerX, this.z - playerZ);
 
@@ -183,7 +208,7 @@ export class YetiPredator {
       let closestNpc = null;
       let minNpcDist = 9999;
       this.npcs.forEach((npc) => {
-        if (!npc.isEaten && npc.z > playerZ - 10) {
+        if (!npc.isEaten && !npc.isRescued && npc.z > playerZ - 10) {
           const dist = Math.hypot(this.x - npc.x, this.z - npc.z);
           if (dist < minNpcDist) {
             minNpcDist = dist;
@@ -193,11 +218,11 @@ export class YetiPredator {
       });
 
       if (distToPlayer < 35.0 && this.z > playerZ) {
-        // CHARGING HEAD-ON: When player gets close behind, Yeti turns and charges uphill at player!
+        // CHARGING HEAD-ON
         this.state = "CHARGING";
         const dx = playerX - this.x;
         this.x += Math.sign(dx) * Math.min(Math.abs(dx), 18.0 * dt);
-        this.z -= 25.0 * dt; // Charge uphill towards oncoming skier
+        this.z -= 25.0 * dt;
 
         if (distToPlayer < 4.5 && this.biteCooldown <= 0) {
           this.biteCooldown = 1.8;
@@ -205,11 +230,11 @@ export class YetiPredator {
           if (onEvent) onEvent({ type: "YETI_BITE", damage: 1 });
         }
       } else if (this.z < playerZ - 5) {
-        // CHASING FROM BEHIND: If skier passed Yeti, Yeti sprints downhill faster to chase from behind!
+        // CHASING FROM BEHIND
         this.state = "CHARGING";
         const dx = playerX - this.x;
         this.x += Math.sign(dx) * Math.min(Math.abs(dx), 24.0 * dt);
-        this.z += forwardRate * 1.35 * dt; // Sprint faster than skier downhill!
+        this.z += forwardRate * 1.35 * dt;
 
         if (distToPlayer < 4.5 && this.biteCooldown <= 0) {
           this.biteCooldown = 1.8;
@@ -227,7 +252,7 @@ export class YetiPredator {
 
         if (minNpcDist < 3.2 && !closestNpc.isEaten) {
           closestNpc.isEaten = true;
-          closestNpc.mesh.visible = false;
+          if (closestNpc.mesh) closestNpc.mesh.visible = false;
           if (audioSystem) audioSystem.playSkierScream();
           if (onEvent) onEvent({ type: "NPC_MAULED", npcId: closestNpc.id });
         }
@@ -241,37 +266,31 @@ export class YetiPredator {
         this.x += (playerX - this.x) * 1.5 * dt + Math.sin(this._swayT * 1.13) * 0.8 * dt * 60;
       }
 
-      // Sprite Sprint / Attack Cycle Animation (4 Rows x 4 Cols: Row 0=Sprint, Row 1=Claws, Row 2=Stomp, Row 3=Stagger)
+      // Sprite Sprint / Attack Cycle Animation
       this.animTimer += dt;
       if (this.animTimer > 0.09 && this.yetiTexture) {
         this.animTimer = 0;
         this.animFrame = (this.animFrame + 1) % 4;
-        let rowOffsetY = 0.75; // Row 0: Sprint running
-        if (this.state === "CHARGING") {
-          rowOffsetY = 0.50; // Row 1: Lunging claw attack
+        let rowOffsetY = 0.75;
+        if (this.state === "BURNING_PANIC") {
+          rowOffsetY = 0.25; // Flailing panic
+        } else if (this.state === "CHARGING") {
+          rowOffsetY = 0.50; // Claws forward attack
         } else if (this.state === "STAGGERED") {
-          rowOffsetY = 0.00; // Row 3: Hit stagger
-        } else if (this.state === "DISTRACTED") {
-          rowOffsetY = 0.25; // Row 2: Stomping bait
+          rowOffsetY = 0.0; // Stagger hurt
         }
         this.yetiTexture.offset.set(this.animFrame * 0.25, rowOffsetY);
       }
     }
 
+    // Keep Yeti in bounds
+    this.x = Math.max(-60, Math.min(60, this.x));
+
     if (this.mesh) {
-      this.mesh.position.set(this.x, 3.2, this.z);
+      this.mesh.position.set(this.x, 3.8, this.z);
     }
     if (this.yetiSprite) {
       this.yetiSprite.position.set(this.x, 3.2, this.z);
     }
-  }
-
-  setWave(waveNum) {
-    this.wave = waveNum;
-    this.maxHp = 8000 * waveNum;
-    this.hp = this.maxHp;
-    this.state = "STALKING_NPCS";
-    if (this.yetiSprite) this.yetiSprite.visible = true;
-    if (this.mesh) this.mesh.visible = true;
   }
 }

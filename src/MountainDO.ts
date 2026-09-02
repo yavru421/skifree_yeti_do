@@ -154,6 +154,8 @@ export class MountainDO extends DurableObject {
           max_speed REAL NOT NULL,
           survival_time REAL NOT NULL,
           score INTEGER NOT NULL,
+          track_id TEXT DEFAULT 'alpine',
+          rider_class TEXT DEFAULT 'skier',
           created_at INTEGER NOT NULL
         );
 
@@ -165,6 +167,8 @@ export class MountainDO extends DurableObject {
           max_speed REAL NOT NULL,
           gates_hit INTEGER NOT NULL,
           score INTEGER NOT NULL,
+          track_id TEXT DEFAULT 'alpine',
+          rider_class TEXT DEFAULT 'skier',
           created_at INTEGER NOT NULL
         );
 
@@ -177,6 +181,19 @@ export class MountainDO extends DurableObject {
           created_at INTEGER NOT NULL
         );
       `);
+
+      try {
+        this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN track_id TEXT DEFAULT 'alpine';");
+      } catch (e) {}
+      try {
+        this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN rider_class TEXT DEFAULT 'skier';");
+      } catch (e) {}
+      try {
+        this.ctx.storage.sql.exec("ALTER TABLE race_leaderboard ADD COLUMN track_id TEXT DEFAULT 'alpine';");
+      } catch (e) {}
+      try {
+        this.ctx.storage.sql.exec("ALTER TABLE race_leaderboard ADD COLUMN rider_class TEXT DEFAULT 'skier';");
+      } catch (e) {}
 
       try {
         this.ctx.storage.sql.exec(`
@@ -195,12 +212,16 @@ export class MountainDO extends DurableObject {
 
     // 1. Leaderboard Scores API endpoint
     if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
-      const huntBoard = [...this.ctx.storage.sql.exec(
-        "SELECT callsign, score, max_speed, created_at FROM global_leaderboard ORDER BY score DESC LIMIT 10"
-      )];
-      const raceBoard = [...this.ctx.storage.sql.exec(
-        "SELECT callsign, clear_time_sec, gates_hit, max_speed, score, created_at FROM race_leaderboard ORDER BY clear_time_sec ASC, score DESC LIMIT 10"
-      )];
+      const trackFilter = url.searchParams.get("track") || "";
+      const huntSql = trackFilter 
+        ? "SELECT callsign, score, max_speed, track_id, rider_class, created_at FROM global_leaderboard WHERE track_id = ? ORDER BY score DESC LIMIT 10"
+        : "SELECT callsign, score, max_speed, track_id, rider_class, created_at FROM global_leaderboard ORDER BY score DESC LIMIT 10";
+      const huntBoard = [...(trackFilter ? this.ctx.storage.sql.exec(huntSql, trackFilter) : this.ctx.storage.sql.exec(huntSql))];
+
+      const raceSql = trackFilter
+        ? "SELECT callsign, clear_time_sec, gates_hit, max_speed, score, track_id, rider_class, created_at FROM race_leaderboard WHERE track_id = ? ORDER BY clear_time_sec ASC, score DESC LIMIT 10"
+        : "SELECT callsign, clear_time_sec, gates_hit, max_speed, score, track_id, rider_class, created_at FROM race_leaderboard ORDER BY clear_time_sec ASC, score DESC LIMIT 10";
+      const raceBoard = [...(trackFilter ? this.ctx.storage.sql.exec(raceSql, trackFilter) : this.ctx.storage.sql.exec(raceSql))];
 
       return new Response(JSON.stringify({
         leaderboard: huntBoard,
@@ -221,9 +242,11 @@ export class MountainDO extends DurableObject {
         const mode = body.mode || "hunt";
         const score = Number(body.score) || 0;
         const maxSpeed = Number(body.maxSpeed) || 0;
+        const trackId = String(body.trackId || "alpine");
+        const riderClass = String(body.riderClass || "skier");
 
         const existing = [...this.ctx.storage.sql.exec(
-          "SELECT callsign, pin_hash FROM hunter_profiles WHERE callsign = ?",
+          "SELECT callsign, pin_hash FROM hunter_profiles WHERE callsign = ? ",
           callsign
         )];
 
@@ -247,15 +270,15 @@ export class MountainDO extends DurableObject {
           const clearTimeSec = Number(body.clearTimeSec) || 0;
           const gatesHit = Number(body.gatesHit) || 0;
           this.ctx.storage.sql.exec(
-            "INSERT INTO race_leaderboard (id, hunter_id, callsign, clear_time_sec, max_speed, gates_hit, score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            recordId, hunterId, callsign, clearTimeSec, maxSpeed, gatesHit, score, Date.now()
+            "INSERT INTO race_leaderboard (id, hunter_id, callsign, clear_time_sec, max_speed, gates_hit, score, track_id, rider_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            recordId, hunterId, callsign, clearTimeSec, maxSpeed, gatesHit, score, trackId, riderClass, Date.now()
           );
         } else {
           const maxDist = Number(body.maxDistance) || 0;
           const survivalTime = Number(body.survivalTime) || 0;
           this.ctx.storage.sql.exec(
-            "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            recordId, hunterId, callsign, maxDist, maxSpeed, survivalTime, score, Date.now()
+            "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, track_id, rider_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            recordId, hunterId, callsign, maxDist, maxSpeed, survivalTime, score, trackId, riderClass, Date.now()
           );
         }
 
