@@ -290,6 +290,63 @@ export class AudioSystem {
     }
   }
 
+  playShotgunBlast() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+
+    // 1. Heavy low-frequency punch (160Hz -> 35Hz drop)
+    const kickOsc = this.ctx.createOscillator();
+    const kickGain = this.ctx.createGain();
+    kickOsc.type = "sine";
+    kickOsc.frequency.setValueAtTime(160, t);
+    kickOsc.frequency.exponentialRampToValueAtTime(32, t + 0.18);
+    kickGain.gain.setValueAtTime(1.0, t);
+    kickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
+    kickOsc.connect(kickGain);
+    kickGain.connect(this.ctx.destination);
+    kickOsc.start(t);
+    kickOsc.stop(t + 0.22);
+
+    // 2. High noise crack
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.15);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.03));
+    }
+    const noiseSource = this.ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = "highpass";
+    noiseFilter.frequency.setValueAtTime(1200, t);
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.85, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noiseSource.start(t);
+  }
+
+  playYetiRoar() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(65, t);
+    osc.frequency.linearRampToValueAtTime(120, t + 0.3);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.85);
+    gain.gain.setValueAtTime(0.95, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.9);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.9);
+  }
+
   toggleSound() {
     this.isSoundOn = !this.isSoundOn;
     if (this.ctx) {

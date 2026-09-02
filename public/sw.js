@@ -1,4 +1,4 @@
-const CACHE_NAME = 'skifree-v2-cache-v20260902';
+const CACHE_NAME = 'skifree-v2-cache-v20260902b';
 const ASSETS = [
   '/',
   '/index.html',

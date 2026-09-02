@@ -30,6 +30,7 @@ export class SceneManager {
     this.mountainPeaks = [];
     this.finishLineMesh = null;
     this.ghostSkiers = new Map();
+    this.trauma = 0;
 
     this.currentBiome = "alpine";
     this.init();
@@ -66,6 +67,7 @@ export class SceneManager {
     this.buildIcePatches();
     this.buildSlalomGates();
     this.buildSnowParticles();
+    this.buildCarveSpraySystem();
 
     window.addEventListener("resize", () => this.onWindowResize());
   }
@@ -423,7 +425,18 @@ export class SceneManager {
       this.camera.lookAt(lookTarget);
     }
 
-    // Snow particle loop centered around camera / player
+    // Camera Trauma Screen Shake decay
+    if (this.trauma > 0) {
+      const shake = this.trauma * this.trauma;
+      this.camera.position.x += (Math.random() - 0.5) * shake * 1.6;
+      this.camera.position.y += (Math.random() - 0.5) * shake * 1.0;
+      this.trauma = Math.max(0, this.trauma - 0.04);
+    }
+
+    // Dynamic ski carving spray emission
+    if (Math.abs(playerSteer) > 0.08) {
+      this.emitCarveSpray(playerPos, playerSteer);
+    }
     if (this.snowParticles) {
       const pos = this.snowParticles.geometry.attributes.position.array;
       for (let i = 0; i < pos.length; i += 3) {
@@ -481,6 +494,60 @@ export class SceneManager {
         this.ghostSkiers.delete(id);
       }
     }
+  }
+
+  addTrauma(amount) {
+    this.trauma = Math.min(1.0, this.trauma + amount);
+  }
+
+  buildCarveSpraySystem() {
+    const count = 60;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(count * 3);
+    const velocities = new Float32Array(count * 3);
+    const opacities = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = 0;
+      positions[i * 3 + 1] = -100;
+      positions[i * 3 + 2] = 0;
+      velocities[i * 3] = 0;
+      velocities[i * 3 + 1] = 0;
+      velocities[i * 3 + 2] = 0;
+      opacities[i] = 0;
+    }
+
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
+    geometry.setAttribute("opacity", new THREE.BufferAttribute(opacities, 1));
+
+    const material = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.45,
+      transparent: true,
+      opacity: 0.85
+    });
+
+    this.carveParticlesMesh = new THREE.Points(geometry, material);
+    this.scene.add(this.carveParticlesMesh);
+    this.carveSprayIndex = 0;
+  }
+
+  emitCarveSpray(playerPos, steer) {
+    if (!this.carveParticlesMesh) return;
+    const pos = this.carveParticlesMesh.geometry.attributes.position.array;
+    const count = pos.length / 3;
+
+    // Emit spray opposite to steer direction
+    const sprayDir = steer > 0 ? -1.0 : 1.0;
+    const idx = (this.carveSprayIndex % count) * 3;
+
+    pos[idx] = playerPos.x + (Math.random() - 0.5) * 0.4;
+    pos[idx + 1] = playerPos.y + 0.1 + Math.random() * 0.25;
+    pos[idx + 2] = playerPos.z - 0.4 - Math.random() * 0.8;
+
+    this.carveSprayIndex++;
+    this.carveParticlesMesh.geometry.attributes.position.needsUpdate = true;
   }
 
   render() {

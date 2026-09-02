@@ -112,7 +112,14 @@ export class CombatSystem {
     }
 
     this.ammo--;
-    if (audioSystem && audioSystem.playGunshot) audioSystem.playGunshot();
+    if (audioSystem && audioSystem.playShotgunBlast) {
+      audioSystem.playShotgunBlast();
+    } else if (audioSystem && audioSystem.playGunshot) {
+      audioSystem.playGunshot();
+    }
+    if (sceneManager && sceneManager.addTrauma) {
+      sceneManager.addTrauma(0.32);
+    }
 
     const target = this.findAutoTarget(
       playerPos,
@@ -129,6 +136,7 @@ export class CombatSystem {
       isCrit = target.isCrit;
 
       if (audioSystem && audioSystem.playHitFlesh) audioSystem.playHitFlesh();
+      if (sceneManager && sceneManager.addTrauma) sceneManager.addTrauma(0.18);
       if (yetiEntity) {
         yetiEntity.applyDamage(damage, isCrit);
       }
