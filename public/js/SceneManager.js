@@ -421,7 +421,6 @@ export class SceneManager {
         playerPos.z + this.cameraLookOffset.z
       );
       this.camera.lookAt(lookTarget);
-      this.camera.rotation.z = 0;
     }
 
     // Snow particle loop centered around camera / player
