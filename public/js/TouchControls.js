@@ -74,10 +74,10 @@ export class TouchControls {
           }
 
           // Map joystick to steering:
-          // Drag Left (dx < 0) -> Steer Left (steerVal < 0)
-          // Drag Right (dx > 0) -> Steer Right (steerVal > 0)
+          // Inverted for slope coordinates: Drag Left (dx < 0) -> Steer Left (+steer, Screen-Left)
+          // Drag Right (dx > 0) -> Steer Right (-steer, Screen-Right)
           const steerVal = Math.max(-1, Math.min(1, dx / maxRadius));
-          this.playerPhysics.steer = steerVal * 0.65;
+          this.playerPhysics.steer = -steerVal * 0.65;
 
           const pitchVal = dy / maxRadius;
           if (pitchVal < -0.3) {

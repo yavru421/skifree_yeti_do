@@ -39,7 +39,8 @@ export default {
       if (upgradeHeader && upgradeHeader.toLowerCase() === "websocket") {
         const roomId = url.searchParams.get("room") || "main-alps";
         const doId = env.MOUNTAIN_DO.idFromName(roomId);
-        const doStub = env.MOUNTAIN_DO.get(doId);
+        const colo = (request.cf as any)?.colo?.toLowerCase();
+        const doStub = env.MOUNTAIN_DO.get(doId, { locationHint: colo || "wnam" } as any);
         return doStub.fetch(request);
       }
     }
@@ -48,7 +49,8 @@ export default {
     if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
       const roomId = url.searchParams.get("room") || "main-alps";
       const doId = env.MOUNTAIN_DO.idFromName(roomId);
-      const doStub = env.MOUNTAIN_DO.get(doId);
+      const colo = (request.cf as any)?.colo?.toLowerCase();
+      const doStub = env.MOUNTAIN_DO.get(doId, { locationHint: colo || "wnam" } as any);
       const res = await doStub.fetch(request);
       return withSecurityHeaders(res);
     }

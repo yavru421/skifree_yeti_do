@@ -11,7 +11,7 @@ export class SceneManager {
     this.renderer = null;
     this.textureLoader = new THREE.TextureLoader();
 
-    this.isFPV = true; // Default: First-Person View (FPV Goggles)
+    this.isFPV = false; // Default: Third-Person Chase View (Skier Sprite seen from behind)
     this.cameraOffset = new THREE.Vector3(0, 6.0, -9.2);
     this.cameraLookOffset = new THREE.Vector3(0, 1.0, 9.5);
 
@@ -360,6 +360,9 @@ export class SceneManager {
   }
 
   updateCamera(playerPos, playerSteer, playerPitch, playerAirY, playerAirRoll) {
+    // Ensure camera up vector is always positive Y
+    this.camera.up.set(0, 1, 0);
+
     // 1. Sync skier sprite world position
     this.skierGroup.position.set(playerPos.x, playerPos.y + playerAirY, playerPos.z);
     if (this.skierSprite) {
@@ -368,30 +371,30 @@ export class SceneManager {
 
     if (this.isFPV) {
       // First-Person View (FPV): Inside the Skier Goggles / Helmet looking down the mountain (+Z)
-      this.camera.position.set(playerPos.x, playerPos.y + playerAirY + 1.40, playerPos.z + 0.2);
+      this.camera.position.set(playerPos.x, playerPos.y + playerAirY + 1.75, playerPos.z + 0.2);
       const fpvLookTarget = new THREE.Vector3(
-        playerPos.x + Math.sin(playerSteer) * 8.0,
-        playerPos.y + playerAirY + 1.30 + playerPitch * 2.0,
-        playerPos.z + 20.0
+        playerPos.x + Math.sin(playerSteer) * 12.0,
+        playerPos.y + playerAirY - 1.8 + playerPitch * 3.5,
+        playerPos.z + 50.0
       );
       this.camera.lookAt(fpvLookTarget);
-      this.camera.rotation.z = -playerSteer * 0.18; // Natural body roll bank into turn
+      this.camera.rotation.z = playerSteer * 0.22; // Bank into turn: Left (+steer) banks view counter-clockwise
     } else {
       // Third-Person View (TPV Chase Cam)
       if (this.skierTexture && this.skierSprite) {
         if (playerAirY > 0.4) {
           this.skierTexture.offset.set(2 * 0.125, 0.1667); // Jump tricks row
           this.skierSprite.material.rotation = playerAirRoll;
-        } else if (playerSteer < -0.35) {
+        } else if (playerSteer > 0.35) {
           this.skierTexture.offset.set(3 * 0.125, 0.5000); // Sharp Left Carve (Row 2 = Left Carve)
           this.skierSprite.material.rotation = -0.08;
-        } else if (playerSteer < -0.08) {
+        } else if (playerSteer > 0.08) {
           this.skierTexture.offset.set(1 * 0.125, 0.5000); // Gentle Left Carve (Row 2 = Left Carve)
           this.skierSprite.material.rotation = -0.04;
-        } else if (playerSteer > 0.35) {
+        } else if (playerSteer < -0.35) {
           this.skierTexture.offset.set(3 * 0.125, 0.6667); // Sharp Right Carve (Row 1 = Right Carve)
           this.skierSprite.material.rotation = 0.08;
-        } else if (playerSteer > 0.08) {
+        } else if (playerSteer < -0.08) {
           this.skierTexture.offset.set(1 * 0.125, 0.6667); // Gentle Right Carve (Row 1 = Right Carve)
           this.skierSprite.material.rotation = 0.04;
         } else if (playerPitch < -0.05) {
@@ -418,6 +421,7 @@ export class SceneManager {
         playerPos.z + this.cameraLookOffset.z
       );
       this.camera.lookAt(lookTarget);
+      this.camera.rotation.z = 0;
     }
 
     // Snow particle loop centered around camera / player

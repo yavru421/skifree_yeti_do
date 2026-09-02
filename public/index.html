@@ -749,7 +749,28 @@
   <!-- Master Soundtrack Audio Stream Player -->
   <audio id="bg-music-player" loop preload="auto" src="/assets/media/waltz_on_the_slope.mp3" style="display:none;"></audio>
 
-  <!-- Boot Modular Game Application -->
-  <script type="module" src="/js/main.js"></script>
+  <!-- Intro Cinematic Overlay (autoplay muted, skips to lobby on any interaction) -->
+  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:9998; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+    <video id="intro-video" autoplay muted playsinline loop
+      style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;"
+      src="/assets/media/teaser_trailer.mp4">
+    </video>
+    <div style="position:relative; z-index:1; text-align:center; pointer-events:none;">
+      <div style="font-size:clamp(28px,6vw,56px); font-weight:900; color:#00f0ff; text-shadow:0 0 30px #00f0ff; letter-spacing:4px;">SKIFREE 2</div>
+      <div style="font-size:clamp(12px,2.4vw,18px); color:#ffff00; font-weight:bold; margin-top:8px; text-shadow:0 0 12px #ff7700;">ALPINE YETI HUNT</div>
+    </div>
+    <div style="position:relative; z-index:1; margin-top:32px; display:flex; gap:14px;">
+      <button id="btn-skip-intro" style="background:rgba(10,20,35,0.92); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 24px; border-radius:8px; cursor:pointer; box-shadow:0 0 14px rgba(0,240,255,0.5); touch-action:manipulation;" type="button">
+        ▶ ENTER THE MOUNTAIN
+      </button>
+      <button id="btn-unmute-intro" style="background:rgba(10,20,35,0.92); border:2px solid #ffff00; color:#ffff00; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 18px; border-radius:8px; cursor:pointer; touch-action:manipulation;" type="button">
+        🔊 UNMUTE
+      </button>
+    </div>
+    <div style="position:relative; z-index:1; margin-top:14px; font-size:11px; color:rgba(255,255,255,0.45);">Press SPACE or click to skip</div>
+  </div>
+
+  <!-- Boot Modular Game Application (cache-busted) -->
+  <script type="module" src="/js/main.js?v=20260902_canonical_sync"></script>
 </body>
 </html>

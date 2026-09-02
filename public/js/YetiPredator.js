@@ -237,7 +237,8 @@ export class YetiPredator {
         const targetLeadZ = playerZ + 32;
         const speedDelta = (targetLeadZ - this.z) * 2.5;
         this.z += (forwardRate + speedDelta) * dt;
-        this.x += (playerX - this.x) * 1.5 * dt + Math.sin(Date.now() * 0.003) * 0.8;
+        this._swayT = (this._swayT || 0) + dt;
+        this.x += (playerX - this.x) * 1.5 * dt + Math.sin(this._swayT * 1.13) * 0.8 * dt * 60;
       }
 
       // Sprite Sprint / Attack Cycle Animation (4 Rows x 4 Cols: Row 0=Sprint, Row 1=Claws, Row 2=Stomp, Row 3=Stagger)
@@ -263,7 +264,6 @@ export class YetiPredator {
     if (this.yetiSprite) {
       this.yetiSprite.position.set(this.x, 3.2, this.z);
     }
-  }
   }
 
   setWave(waveNum) {

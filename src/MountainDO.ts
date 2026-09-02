@@ -97,10 +97,43 @@ export class MountainDO extends DurableObject {
   
   private matchStartTime = 0;
   private tickIntervalMs = 50; // 20Hz tick
+  private gameLoopTimer: any = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.initDatabase();
+    this.restoreHibernatedSockets();
+  }
+
+  private restoreHibernatedSockets() {
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        const att = ws.deserializeAttachment() as {
+          playerId: string;
+          hunterId: string;
+          callsign: string;
+          mode: "hunt" | "slalom";
+        } | null;
+        if (att && !this.players.has(att.playerId)) {
+          this.players.set(att.playerId, {
+            id: att.playerId,
+            hunterId: att.hunterId,
+            callsign: att.callsign,
+            x: 0,
+            z: 0,
+            speed: 24,
+            steer: 0,
+            state: 0,
+            pitch: 0,
+            score: 0,
+            isDead: false,
+            isReady: false,
+            gameMode: att.mode,
+            lastActive: Date.now()
+          });
+        }
+      } catch (e) {}
+    }
   }
 
   private initDatabase() {
@@ -250,6 +283,15 @@ export class MountainDO extends DurableObject {
 
       const playerId = crypto.randomUUID();
       this.ctx.acceptWebSocket(serverWs, [playerId]);
+      try {
+        (serverWs as any).serializeAttachment({
+          playerId,
+          hunterId,
+          callsign: validatedCallsign,
+          mode,
+          joinedAt: Date.now()
+        });
+      } catch (e) {}
 
       const newSkier: SkierState = {
         id: playerId,
@@ -295,7 +337,31 @@ export class MountainDO extends DurableObject {
       const data = JSON.parse(message);
       const tags = this.ctx.getTags(ws);
       const playerId = tags[0];
-      const player = this.players.get(playerId);
+      let player = this.players.get(playerId);
+      if (!player) {
+        try {
+          const att = (ws as any).deserializeAttachment() as any;
+          if (att && att.playerId === playerId) {
+            player = {
+              id: att.playerId,
+              hunterId: att.hunterId,
+              callsign: att.callsign,
+              x: 0,
+              z: 0,
+              speed: 24,
+              steer: 0,
+              state: 0,
+              pitch: 0,
+              score: 0,
+              isDead: false,
+              isReady: false,
+              gameMode: att.mode || "hunt",
+              lastActive: Date.now()
+            };
+            this.players.set(playerId, player);
+          }
+        } catch (e) {}
+      }
       if (!player) return;
 
       player.lastActive = Date.now();
@@ -475,13 +541,51 @@ export class MountainDO extends DurableObject {
     }, 5000);
   }
 
+  private startGameLoop() {
+    if (this.gameLoopTimer) return;
+    this.gameLoopTimer = setInterval(() => {
+      this.gameTick();
+    }, this.tickIntervalMs);
+  }
+
+  private stopGameLoop() {
+    if (this.gameLoopTimer) {
+      clearInterval(this.gameLoopTimer);
+      this.gameLoopTimer = null;
+    }
+  }
+
   private ensureGameLoop() {
-    // Trigger authoritative alarm tick
-    this.ctx.storage.setAlarm(Date.now() + this.tickIntervalMs);
+    if (this.matchState === "ACTIVE_HUNT" && this.players.size > 0) {
+      this.startGameLoop();
+    }
+    // Schedule 5-minute inactivity dormancy watchdog alarm
+    this.ctx.storage.setAlarm(Date.now() + 300_000);
   }
 
   async alarm() {
-    if (this.players.size === 0) return;
+    // 5-minute inactivity dormancy watchdog
+    const now = Date.now();
+    let hasRecentActivity = false;
+    for (const player of this.players.values()) {
+      if (now - player.lastActive < 300_000) {
+        hasRecentActivity = true;
+        break;
+      }
+    }
+    if (!hasRecentActivity || this.players.size === 0) {
+      this.stopGameLoop();
+      this.matchState = "LOBBY_WAITING";
+    } else {
+      this.ctx.storage.setAlarm(Date.now() + 300_000);
+    }
+  }
+
+  private gameTick() {
+    if (this.players.size === 0 || this.matchState !== "ACTIVE_HUNT") {
+      this.stopGameLoop();
+      return;
+    }
 
     if (this.matchState === "ACTIVE_HUNT") {
       const dt = this.tickIntervalMs / 1000;
@@ -647,9 +751,6 @@ export class MountainDO extends DurableObject {
         baitItems: this.activeBaitItems
       });
     }
-
-    // Reschedule next authoritative 20Hz tick
-    this.ctx.storage.setAlarm(Date.now() + this.tickIntervalMs);
   }
 
   private broadcast(msg: any) {

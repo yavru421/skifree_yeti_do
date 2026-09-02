@@ -119,13 +119,14 @@ export class PlayerPhysics {
     const diff = this.difficultyPresets[this.currentDifficulty];
 
     // 1. Steering & Carving Kinematics:
-    // Left (A / ArrowLeft) -> Steer Left (steer < 0) -> Carve Screen-Left
-    // Right (D / ArrowRight) -> Steer Right (steer > 0) -> Carve Screen-Right
+    // When looking down the slope (+Z), +X is Screen-Left and -X is Screen-Right
+    // Left (A / ArrowLeft) -> Steer Left (+steer) -> Carve Screen-Left (+X)
+    // Right (D / ArrowRight) -> Steer Right (-steer) -> Carve Screen-Right (-X)
     const steerSpeed = 3.2 * dt;
     if (this.keys.left) {
-      this.steer = Math.max(-0.75, this.steer - steerSpeed);
-    } else if (this.keys.right) {
       this.steer = Math.min(0.75, this.steer + steerSpeed);
+    } else if (this.keys.right) {
+      this.steer = Math.max(-0.75, this.steer - steerSpeed);
     } else {
       // Natural spring back to center
       this.steer *= Math.pow(0.06, dt);
