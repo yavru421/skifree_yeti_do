@@ -124,7 +124,7 @@ export class YetiAI {
     this.setTier(tierIndex);
     this.x = 0;
     this.y = 0;
-    this.z = 60;
+    this.z = 150; // Requirement 2: Distant spawn (120m-180m down the mountain)
     this.speed = 0;
     this.active = true;
     this.state = "RUNNING_DOWNHILL";
@@ -174,6 +174,10 @@ export class YetiAI {
     this.hp = 0;
     this.speed = 0;
     this.staggerTimer = 5.0;
+    const sceneManager = window.__sceneManager;
+    if (sceneManager && sceneManager.getTerrainHeight) {
+      this.y = sceneManager.getTerrainHeight(this.x, this.z);
+    }
   }
 
   respawnAtTier(playerX, playerZ) {
@@ -181,7 +185,8 @@ export class YetiAI {
     this.hp = tier.hp;
     this.maxHp = tier.hp;
     this.x = playerX;
-    this.z = playerZ + tier.leadDistMax;
+    // Requirement 2: Distant Yeti Spotting (spawns 140m-170m down the mountain)
+    this.z = playerZ + 150;
     this.state = "RUNNING_DOWNHILL";
     this.active = true;
     this.staggerTimer = 0;
@@ -228,8 +233,6 @@ export class YetiAI {
       this.x += Math.sin(t * 12) * 0.8 * dt;
 
       if (this.staggerTimer <= 0) {
-        // Stagger ends — transition depends on combat system state
-        // CombatSystem will transition to TOWED_THRASHING
         if (this.state === "STAGGERED") {
           this.state = "RUNNING_DOWNHILL"; // fallback
         }
@@ -260,16 +263,20 @@ export class YetiAI {
       return;
     }
 
-    // ─── STATE: TOWED_THRASHING (SKI BOAT TOW ACCELERATION) ───
+    // ─── STATE: TOWED_THRASHING (SKI BOAT TOW ACCELERATION & RODEO BUCKING) ───
     if (this.state === "TOWED_THRASHING") {
       // Beast panics and bolts downhill at breakneck speed like a roaring ski boat!
-      const boatTowSpeed = Math.max(58, (tier.maxSpeed || 50) * 1.35);
-      this.speed = boatTowSpeed;
-      // High-frequency, violent wake oscillations like a boat cutting water
+      // But if player carves sideways, their dug-in skis apply heavy braking drag:
+      const braking = this.towBrakingForce || 0;
+      const baseBoatSpeed = Math.max(56, (tier.maxSpeed || 50) * 1.35);
+      const targetBoatSpeed = Math.max(34, baseBoatSpeed - braking);
+      this.speed += (targetBoatSpeed - this.speed) * Math.min(1.0, 4.0 * dt);
+
+      // High-frequency, violent wake oscillations like a bucking rodeo beast
       const thrash = tier.thrashIntensity || 0.6;
-      this.x += Math.sin(t * 12) * (thrash * 20) * dt;
+      this.x += Math.sin(t * 14) * (thrash * 22) * dt;
       // Pull forward downhill with massive forward momentum
-      this.z += boatTowSpeed * 0.045 * dt * 60;
+      this.z += this.speed * 0.045 * dt * 60;
 
       // Ensure beast stays taut on the rope ahead of player based on combat cableLength
       const combat = window.__combatSystem;
@@ -280,6 +287,13 @@ export class YetiAI {
       if (this.z < playerPhysics.z + minDistance) {
         this.z = playerPhysics.z + minDistance;
       }
+
+      // Vertical rodeo bucking motion
+      const sceneManager = window.__sceneManager;
+      const groundY = sceneManager && sceneManager.getTerrainHeight
+        ? sceneManager.getTerrainHeight(this.x, this.z)
+        : 0;
+      this.y = groundY + Math.max(0, Math.sin(t * 16)) * (1.2 * thrash);
       return;
     }
 
@@ -288,6 +302,10 @@ export class YetiAI {
       this.staggerTimer -= dt;
       this.speed = Math.max(0, this.speed - 24 * dt);
       this.z += this.speed * 0.02 * dt * 60;
+      const sceneManager = window.__sceneManager;
+      if (sceneManager && sceneManager.getTerrainHeight) {
+        this.y = sceneManager.getTerrainHeight(this.x, this.z);
+      }
       return;
     }
 
@@ -299,23 +317,29 @@ export class YetiAI {
       this._noise(t * 0.3) * tierSpeedRange * 0.5;
     this.speed = Math.max(tier.minSpeed, Math.min(tier.maxSpeed, baseYetiSpeed));
 
-    // Forward movement — maintain lead distance
-    const targetLeadDist = (tier.leadDistMin + tier.leadDistMax) / 2;
+    // Distance to player
     const currentLead = this.z - playerPhysics.z;
-    const leadError = targetLeadDist - currentLead;
 
-    // Accelerate/decelerate to maintain target lead
-    let fwdStep = playerSpeed * 0.045 * dt * 60;
-    if (leadError > 2) {
-      fwdStep *= 1.15; // Speed up if too close to player
-    } else if (leadError < -2) {
-      fwdStep *= 0.85; // Slow down if too far ahead
-    }
-    this.z += fwdStep;
-
-    // Clamp minimum lead distance
-    if (this.z < playerPhysics.z + tier.leadDistMin) {
-      this.z = playerPhysics.z + tier.leadDistMin;
+    // Requirement 2: Distant Yeti Spotting
+    // If the Yeti is far ahead (> 45m), it cruises at base speed so the player ripping downhill at 50-65 MPH
+    // can catch up, carving around turns and spotting the beast down the mountain!
+    if (currentLead > 45) {
+      // Cruising speed down the mountain
+      this.z += this.speed * 0.038 * dt * 60;
+    } else {
+      // Close range engagement: maintain 24-34m lead distance and evasive slalom
+      const targetLeadDist = (tier.leadDistMin + tier.leadDistMax) / 2;
+      const leadError = targetLeadDist - currentLead;
+      let fwdStep = playerSpeed * 0.045 * dt * 60;
+      if (leadError > 2) {
+        fwdStep *= 1.15;
+      } else if (leadError < -2) {
+        fwdStep *= 0.85;
+      }
+      this.z += fwdStep;
+      if (this.z < playerPhysics.z + tier.leadDistMin) {
+        this.z = playerPhysics.z + tier.leadDistMin;
+      }
     }
 
     // ─── LATERAL SLALOM KINEMATICS ────────────────────────────

@@ -265,7 +265,7 @@ export class PlayerPhysics {
       targetSpeed += 26.0;
     }
 
-    // Frost Leviathan Towed Physics (Keeps player towed behind Yeti, never past it)
+    // 8-Second Bull Rider Towed Physics (Keeps player towed behind Yeti, never past it)
     if (this.isTowed) {
       const yeti = window.__yetiAI || window.__yetiPredator;
       const combat = window.__combatSystem;
@@ -280,9 +280,33 @@ export class PlayerPhysics {
         }
       }
 
-      // Maintain cable tether positioning behind the Yeti during retraction
-      if (yeti && combat && combat.isTethered && combat.towPhase === "RETRACTING") {
-        const desiredZ = yeti.z - combat.cableLength;
+      // 8-Second Bull Rider: If player carves sideways, skis dig hard into snow, applying heavy braking drag!
+      const steerMag = Math.abs(this.steer);
+      const isDigging = steerMag > 0.12;
+      this.isDiggingIn = isDigging;
+      this.digFactor = isDigging ? Math.min(1.0, (steerMag - 0.12) / 0.45) : 0;
+
+      if (isDigging && yeti) {
+        // Slow down Yeti by up to 24 MPH
+        yeti.towBrakingForce = this.digFactor * 24.0;
+        // Heavy snow drag resistance to player speed
+        targetSpeed = Math.max(diff.brakeSpeed, targetSpeed - this.digFactor * 20.0);
+        // Play snow carving crunch sound
+        if (audioSystem && audioSystem.playSnowScrape) {
+          audioSystem.playSnowScrape(this.digFactor);
+        }
+        // Emit heavy snow spray plumes
+        if (sceneManager && sceneManager.emitHeavySnowSpray) {
+          sceneManager.emitHeavySnowSpray({ x: this.x, y: this.y, z: this.z }, this.steer, this.digFactor);
+        }
+      } else if (yeti) {
+        yeti.towBrakingForce = 0;
+      }
+
+      // Maintain cable tether positioning behind the Yeti during bull ride / tow
+      if (yeti && combat && combat.isTethered) {
+        const desiredCableLen = typeof combat.cableLength === "number" ? combat.cableLength : 22;
+        const desiredZ = yeti.z - desiredCableLen;
         // Smoothly pull player along to maintain cable length behind the beast
         this.z += (desiredZ - this.z) * Math.min(1.0, 10.0 * dt);
       }
@@ -307,11 +331,18 @@ export class PlayerPhysics {
     this.x += lateralStep;
     this.x = Math.max(-65, Math.min(65, this.x));
 
+    // Follow dramatic mountain elevation and valley contours
+    if (sceneManager && typeof sceneManager.getTerrainHeight === "function") {
+      this.y = sceneManager.getTerrainHeight(this.x, this.z);
+    } else if (window.__trackManager && typeof window.__trackManager.getTerrainHeight === "function") {
+      this.y = window.__trackManager.getTerrainHeight(this.x, this.z);
+    }
+
     // HARD INVARIANT: Player can NEVER shoot forward beyond the Yeti!
     const activeYeti = window.__yetiAI || window.__yetiPredator;
     if (activeYeti && activeYeti.active && (activeYeti.state === "FALLEN" || activeYeti.state === "DRAGGED_DOWN" || activeYeti.state === "STAGGERED" || this.isTowed || window.__combatSystem?.isTethered)) {
       const combat = window.__combatSystem;
-      const minBuffer = (combat && combat.isTethered && combat.towPhase === "RETRACTING") ? 5.5 : 12;
+      const minBuffer = (combat && combat.isTethered) ? 5.5 : 12;
       if (this.z > activeYeti.z - minBuffer) {
         this.z = activeYeti.z - minBuffer;
         this.speed = Math.min(this.speed, Math.max(8, (activeYeti.speed || 10) * 0.95));
@@ -635,6 +666,9 @@ export class PlayerPhysics {
   respawn() {
     this.z = 0;
     this.x = 0;
+    this.y = (window.__trackManager && typeof window.__trackManager.getTerrainHeight === "function")
+      ? window.__trackManager.getTerrainHeight(0, 0)
+      : 0;
     this.speed = 28;
     this.steer = 0;
     this.pitch = 0;

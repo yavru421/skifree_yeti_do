@@ -768,7 +768,26 @@
           <div style="position:absolute; left:35%; width:30%; height:100%; background:rgba(57,255,20,0.25); border-left:1px dashed #39ff14; border-right:1px dashed #39ff14; pointer-events:none;"></div>
           <div id="tension-fill" style="height:100%; width:50%; background:linear-gradient(90deg, #ff0033 0%, #ffaa00 35%, #39ff14 50%, #ffaa00 65%, #ff0033 100%); transition:width 0.08s ease-out;"></div>
         </div>
-        <div id="tow-action-prompt" style="font-size:11px; font-weight:900; color:#39ff14; margin-top:4px; text-shadow:0 0 8px currentColor;">⚡ SKI-BOAT TOW ENGAGED — RAPIDLY TAP TAKEDOWN!</div>
+        <div id="tow-action-prompt" style="font-size:11px; font-weight:900; color:#39ff14; margin-top:4px; text-shadow:0 0 8px currentColor;">⚡ SKI-BOAT TOW ENGAGED — CARVE TO DIG IN SKIS!</div>
+      </div>
+
+      <!-- 8-Second Bull Ride Rodeo HUD -->
+      <div id="bull-ride-hud" class="hidden" style="margin-top:10px; background:rgba(8,16,28,0.92); border:2px solid #00f0ff; border-radius:10px; padding:10px 14px; text-align:center; box-shadow:0 0 25px rgba(0,240,255,0.4);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-size:12px; font-weight:900; color:#ffff00; letter-spacing:1px; text-shadow:0 0 10px #ffff00;">🐂 8.0s BULL RIDE</span>
+          <span style="font-size:10px; font-weight:900; color:#00f0ff; background:rgba(0,240,255,0.15); border:1px solid #00f0ff; border-radius:4px; padding:2px 6px;">⛷️ FPV GOGGLE CAM</span>
+        </div>
+        <div id="bull-ride-countdown" style="font-size:clamp(28px, 6vw, 42px); font-weight:900; color:#00f0ff; text-shadow:0 0 20px #00aaff, 3px 3px 0 #000; letter-spacing:2px; margin:4px 0;">8.0s</div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:bold; color:#88a0c0; margin-bottom:3px;">
+          <span>RODEO BUCKING INTENSITY</span>
+          <span id="rodeo-intensity-val" style="color:#ff0055; font-weight:900;">50%</span>
+        </div>
+        <div style="width:100%; height:10px; background:#101824; border:1px solid #00f0ff; border-radius:4px; overflow:hidden;">
+          <div id="rodeo-intensity-fill" style="height:100%; width:50%; background:linear-gradient(90deg, #39ff14 0%, #ffff00 50%, #ff0055 100%); transition:width 0.08s ease-out;"></div>
+        </div>
+        <div id="bull-ride-instruction" style="font-size:11px; font-weight:900; color:#00f0ff; margin-top:6px; letter-spacing:0.5px; text-shadow:0 0 8px currentColor;">
+          🎿 CARVE SIDEWAYS [A / D] TO DIG SKIS & BRAKE THE BEAST!
+        </div>
       </div>
     </div>
 
@@ -948,6 +967,6 @@
   <audio id="bg-music-player" loop preload="auto" src="/assets/media/waltz_on_the_slope.mp3" style="display:none;"></audio>
 
   <!-- Boot Modular Game Application (Upright Alpine Skiing + Instant Takedown & Level Progression) -->
-  <script type="module" src="/js/main.js?v=20260907_gameapp_v16"></script>
+  <script type="module" src="/js/main.js?v=20260907_gameapp_v18"></script>
 </body>
 </html>

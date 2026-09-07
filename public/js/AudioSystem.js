@@ -554,6 +554,70 @@ export class AudioSystem {
     groanOsc.stop(t + 1.25);
   }
 
+  playBuzzer() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const now = this.ctx.currentTime;
+    // Classic loud 8-second rodeo arena takedown buzzer: rich low-frequency sawtooth buzz with harmonics
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(145, now);
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(148, now);
+
+    gain.gain.setValueAtTime(0.9, now);
+    gain.gain.setValueAtTime(0.9, now + 0.65);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.85);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.85);
+    osc2.stop(now + 0.85);
+  }
+
+  playSnowScrape(intensity = 1.0) {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    if (this._scrapeThrottle && performance.now() - this._scrapeThrottle < 120) return;
+    this._scrapeThrottle = performance.now();
+
+    const now = this.ctx.currentTime;
+    try {
+      const duration = 0.18;
+      const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.5));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(800 + intensity * 600, now);
+      filter.Q.setValueAtTime(2.0, now);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(Math.min(0.7, 0.2 + intensity * 0.5), now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + duration);
+    } catch (e) {}
+  }
+
   toggleSound() {
     this.isSoundOn = !this.isSoundOn;
     if (this.ctx) {

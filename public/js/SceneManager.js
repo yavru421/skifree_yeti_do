@@ -917,26 +917,48 @@ export class SceneManager {
 
     // 1. FPV Skis and Bindings (Directly visible under the player's goggles in FPV)
     this.fpvSkisGroup = new THREE.Group();
-    const skiGeo = new THREE.BoxGeometry(0.24, 0.08, 2.8);
-    
-    const leftSki = new THREE.Mesh(skiGeo, skiMat);
-    leftSki.position.set(-0.35, -0.65, 0.95);
-    const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.28, 0.55), bootMat);
-    leftBoot.position.set(-0.35, -0.5, 0.85);
-    this.fpvSkisGroup.add(leftSki);
-    this.fpvSkisGroup.add(leftBoot);
+    const skiTipMat = new THREE.MeshStandardMaterial({
+      color: 0xff0055,
+      roughness: 0.3,
+      metalness: 0.7,
+      emissive: 0x660022,
+      emissiveIntensity: 0.6
+    });
 
-    const rightSki = new THREE.Mesh(skiGeo, skiMat);
-    rightSki.position.set(0.35, -0.65, 0.95);
-    const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.28, 0.55), bootMat);
-    rightBoot.position.set(0.35, -0.5, 0.85);
-    this.fpvSkisGroup.add(rightSki);
-    this.fpvSkisGroup.add(rightBoot);
+    // Left Ski (Body + Upturned Tip + Boot Toe)
+    const leftSkiGroup = new THREE.Group();
+    const leftSkiBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 2.2), skiMat);
+    leftSkiGroup.add(leftSkiBody);
+    const leftSkiTip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.35), skiTipMat);
+    leftSkiTip.position.set(0, 0.07, -1.2);
+    leftSkiTip.rotation.x = -0.38; // Upturned alpine tip
+    leftSkiGroup.add(leftSkiTip);
+    const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.16, 0.38), bootMat);
+    leftBoot.position.set(0, 0.10, 0.15);
+    leftSkiGroup.add(leftBoot);
+    leftSkiGroup.position.set(-0.28, -0.42, -0.85);
+    this.leftSkiMesh = leftSkiGroup;
+    this.fpvSkisGroup.add(leftSkiGroup);
 
-    this.fpvSkisGroup.visible = this.isFPV;
-    this.skierGroup.add(this.fpvSkisGroup);
+    // Right Ski (Body + Upturned Tip + Boot Toe)
+    const rightSkiGroup = new THREE.Group();
+    const rightSkiBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 2.2), skiMat);
+    rightSkiGroup.add(rightSkiBody);
+    const rightSkiTip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.35), skiTipMat);
+    rightSkiTip.position.set(0, 0.07, -1.2);
+    rightSkiTip.rotation.x = -0.38; // Upturned alpine tip
+    rightSkiGroup.add(rightSkiTip);
+    const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.16, 0.38), bootMat);
+    rightBoot.position.set(0, 0.10, 0.15);
+    rightSkiGroup.add(rightBoot);
+    rightSkiGroup.position.set(0.28, -0.42, -0.85);
+    this.rightSkiMesh = rightSkiGroup;
+    this.fpvSkisGroup.add(rightSkiGroup);
 
-    // 2. Volumetric 3D Skier Avatar (Third-Person / Shadow / Drone Cam)
+    this.fpvSkisGroup.visible = true;
+    this.camera.add(this.fpvSkisGroup); // Attached directly to FPV camera viewport
+
+    // 2. Volumetric 3D Skier Avatar (Hidden in FPV so it never blocks camera)
     this.skier3DModel = new THREE.Group();
     const jacketMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.7 });
     const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85 });
@@ -1077,14 +1099,14 @@ export class SceneManager {
   }
 
   toggleCameraMode() {
-    this.isFPV = !this.isFPV;
+    this.isFPV = true; // PERMANENT FPV MANDATE
     if (this.fpvSkisGroup) {
-      this.fpvSkisGroup.visible = this.isFPV;
+      this.fpvSkisGroup.visible = true;
     }
     if (this.skier3DModel) {
-      this.skier3DModel.visible = !this.isFPV;
+      this.skier3DModel.visible = false;
     }
-    return this.isFPV ? "FPV (Goggles)" : "TPV (Chase)";
+    return "FPV (Goggles Only)";
   }
 
   updateCamera(playerPos, playerSteer, playerPitch, playerAirY, playerAirRoll, playerAirYaw, isAirborne, isNitroActive, avalancheDist) {
@@ -1102,16 +1124,25 @@ export class SceneManager {
       this.skierGroup.rotation.z = 0;
     }
 
+    // FPV Skis: Visibly carve in lower screen attached to FPV camera
     if (this.fpvSkisGroup) {
-      this.fpvSkisGroup.visible = this.isFPV;
-      this.fpvSkisGroup.rotation.y = playerSteer * 0.4;
-      this.fpvSkisGroup.rotation.z = playerSteer * 0.25;
+      this.fpvSkisGroup.visible = true;
+      const skiBankZ = -playerSteer * 0.35;
+      const skiTurnY = playerSteer * 0.22;
+      const skiDipY = -0.40 + (skiGlideY * 0.35) + (carveKneeDrop * 0.5);
+      this.fpvSkisGroup.position.set(0, skiDipY, -0.85);
+      this.fpvSkisGroup.rotation.set(0.08, skiTurnY, skiBankZ);
+
+      // Slide inside ski back slightly during carving turns
+      if (this.leftSkiMesh && this.rightSkiMesh) {
+        this.leftSkiMesh.position.z = -0.85 + (playerSteer > 0 ? playerSteer * 0.12 : 0);
+        this.rightSkiMesh.position.z = -0.85 + (playerSteer < 0 ? -playerSteer * 0.12 : 0);
+      }
     }
 
+    // Avatar model strictly hidden in FPV (never blocks camera view)
     if (this.skier3DModel) {
-      this.skier3DModel.visible = !this.isFPV;
-      this.skier3DModel.rotation.y = playerSteer * 0.5;
-      this.skier3DModel.rotation.z = -playerSteer * 0.3;
+      this.skier3DModel.visible = false;
     }
 
     // 1. FPV Harpoon Launcher Viewmodel Sway & Recoil Recovery

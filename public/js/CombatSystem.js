@@ -33,14 +33,12 @@ export class CombatSystem {
     this.staggerTimer = 0;
     this.towTimer = 0;
 
-    // 10-Second Retraction Takedown State
-    this.retractionDuration = 10.0;
-    this.retractionTimer = 10.0;
+    // 8-Second Bull Rider Takedown State
+    this.bullRideDuration = 8.0;
+    this.bullRideTimer = 8.0;
+    this.rodeoIntensity = 0.5;
     this.initialCableDist = 32.0;
-
-    // Rapid-Tap Takedown Mechanic (User: "rapidly tap a take down glowing button that appears once harpoon hits")
-    this.tapTakedownCount = 0;
-    this.tapTakedownTarget = 15; // 15 rapid taps to down the beast
+    this.lateralBrakingDrag = 0;
 
     // Drag-down legacy state (still used for visuals)
     this.dragTime = 0;
@@ -257,22 +255,22 @@ export class CombatSystem {
       }
     }
 
-    // Initialize 10-Second Ski-Behind Retraction Takedown Sequence
+    // Initialize 8-Second Bull Rider Takedown Sequence
     this.isTethered = true;
-    this.towPhase = "RETRACTING";
-    this.retractionDuration = 10.0;
-    this.retractionTimer = 10.0;
+    this.towPhase = "BULL_RIDE";
+    this.bullRideDuration = 8.0;
+    this.bullRideTimer = 8.0;
     this.initialCableDist = curDist;
     this.cableLength = curDist;
     this.cableTension = 0.5;
-    this.tapTakedownCount = 0;
+    this.rodeoIntensity = 0.5;
 
     // Put player in ski-behind towed state
     if (player && typeof player.setTowedState === "function") {
       player.setTowedState(true, targetSegment, 1.5);
     }
 
-    // Command Yeti to enter frantic downhill thrashing sprint!
+    // Command Yeti to enter frantic downhill thrashing sprint (50+ MPH)
     if (yeti) {
       if (typeof yeti.enterTowedThrashing === "function") {
         yeti.enterTowedThrashing();
@@ -281,8 +279,8 @@ export class CombatSystem {
       }
     }
 
+    this.showBullRideHUD(true);
     this.showTensionGauge(true);
-    this.showTakedownTapButton(true);
 
     if (audio && audio.playHarpoonLaunch) {
       audio.playHarpoonLaunch();
@@ -298,8 +296,51 @@ export class CombatSystem {
     if (window.__onGameEvent) {
       window.__onGameEvent({
         type: "HARPOON_LATCHED",
-        message: "⛓️ HARPOON LOCKED! SKI BEHIND THE BEAST • 10s CABLE RETRACTION ENGAGED!"
+        message: "🐂 8-SECOND BULL RIDE ENGAGED! CARVE SIDEWAYS TO DIG IN SKIS & BRAKE THE BEAST!"
       });
+    }
+  }
+
+  showBullRideHUD(show) {
+    const hud = document.getElementById("bull-ride-hud");
+    if (hud) {
+      hud.classList.toggle("hidden", !show);
+    }
+  }
+
+  updateBullRideHUD(timeLeft, digFactor, isDigging) {
+    const cd = document.getElementById("bull-ride-countdown");
+    if (cd) {
+      cd.textContent = `${timeLeft.toFixed(1)}s`;
+      if (timeLeft <= 2.5) {
+        cd.style.color = "#ff0055";
+        cd.style.textShadow = "0 0 30px #ff0033, 3px 3px 0 #000";
+      } else if (timeLeft <= 5.0) {
+        cd.style.color = "#ffff00";
+        cd.style.textShadow = "0 0 25px #ffaa00, 3px 3px 0 #000";
+      } else {
+        cd.style.color = "#00f0ff";
+        cd.style.textShadow = "0 0 20px #00aaff, 3px 3px 0 #000";
+      }
+    }
+
+    const fill = document.getElementById("rodeo-intensity-fill");
+    const val = document.getElementById("rodeo-intensity-val");
+    if (fill) {
+      const pct = Math.round((this.rodeoIntensity || 0.5) * 100);
+      fill.style.width = `${pct}%`;
+      if (val) val.textContent = `${pct}%`;
+    }
+
+    const instr = document.getElementById("bull-ride-instruction");
+    if (instr) {
+      if (isDigging) {
+        instr.textContent = `⚡ SKIS DUG IN! BRAKING DRAG: ${Math.round(digFactor * 100)}% • BEAST SLOWING!`;
+        instr.style.color = "#39ff14";
+      } else {
+        instr.textContent = `🎿 CARVE SIDEWAYS [A / D] TO DIG SKIS & BRAKE THE BEAST!`;
+        instr.style.color = "#00f0ff";
+      }
     }
   }
 
@@ -699,28 +740,50 @@ export class CombatSystem {
       return;
     }
 
-    // ─── PHASE: RETRACTING (10-Second Ski-Behind Takedown Sequence) ───
-    if (this.towPhase === "RETRACTING") {
-      this.retractionTimer -= dt;
-      const timeLeft = Math.max(0, this.retractionTimer);
-      const progress = Math.min(1.0, Math.max(0, 1.0 - (timeLeft / this.retractionDuration)));
+    // ─── PHASE: BULL_RIDE (8-Second Rodeo Tow Mechanic) ─────────────
+    if (this.towPhase === "BULL_RIDE") {
+      this.bullRideTimer -= dt;
+      const timeLeft = Math.max(0, this.bullRideTimer);
+      const progress = Math.min(1.0, Math.max(0, 1.0 - (timeLeft / this.bullRideDuration)));
 
-      // Smooth cable retraction from initial distance down to 6m point-blank
-      this.cableLength = 6 + (this.initialCableDist - 6) * (timeLeft / this.retractionDuration);
+      // Player ski digging detection (carving sideways digs ski edges into snow)
+      const isDigging = !!(player && (player.isDiggingIn || Math.abs(player.steer || 0) > 0.12));
+      const digFactor = (player && typeof player.digFactor === "number") ? player.digFactor : (isDigging ? 0.8 : 0);
 
-      // Tension stays lively in the green sweet spot (0.45 to 0.58)
-      this.cableTension = 0.5 + Math.sin(performance.now() * 0.009) * 0.08;
+      // Digging in applies heavy braking drag against the Yeti (up to 24 MPH drag)
+      if (isDigging) {
+        yeti.towBrakingForce = 22.0 * digFactor;
+        this.rodeoIntensity = Math.min(1.0, 0.45 + digFactor * 0.45 + Math.sin(performance.now() * 0.015) * 0.1);
+        if (sceneMgr && typeof sceneMgr.emitHeavySnowSpray === "function") {
+          sceneMgr.emitHeavySnowSpray(player, player.steer, digFactor);
+        }
+        if (window.__audioSystem && typeof window.__audioSystem.playSnowScrape === "function") {
+          window.__audioSystem.playSnowScrape(digFactor);
+        }
+      } else {
+        yeti.towBrakingForce = 0;
+        this.rodeoIntensity = 0.35 + Math.sin(performance.now() * 0.01) * 0.08;
+      }
 
-      // Progressive wear down of Yeti HP during the 10-second tow
+      // Maintain taut 22m-34m cable length directly ahead
+      this.cableLength = Math.max(20, Math.min(36, this.initialCableDist + Math.sin(performance.now() * 0.008) * 3));
+      this.cableTension = 0.52 + (digFactor * 0.35) + Math.sin(performance.now() * 0.012) * 0.08;
+
+      // Progressive wear down of Yeti HP during the 8-second bull ride
       if (yeti && yeti.maxHp) {
         yeti.hp = Math.max(1, Math.round(yeti.maxHp * (1 - progress * 0.95)));
       }
 
-      // Update HUD elements
+      // Update Bull Ride Rodeo HUD
+      this.updateBullRideHUD(timeLeft, digFactor, isDigging);
       this.updateTensionHUD();
 
-      // Check if 10-second countdown reached
-      if (this.retractionTimer <= 0) {
+      // Check if 8-second bull ride completed!
+      if (this.bullRideTimer <= 0) {
+        // Sound arena rodeo buzzer!
+        if (window.__audioSystem && typeof window.__audioSystem.playBuzzer === "function") {
+          window.__audioSystem.playBuzzer();
+        }
         this.executeFullTakedown();
         return;
       }

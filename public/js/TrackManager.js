@@ -11,7 +11,7 @@ export const TRACK_MANIFESTS = {
     fogDensity: 0.0030,
     snowColor: 0xffffff,
     finishDistance: 1800,
-    slopeIncline: -0.08,
+    slopeIncline: -0.095,
     ambientLight: 0xffffff,
     ambientIntensity: 0.90,
     sunLight: 0xfff2e0,
@@ -149,5 +149,28 @@ export class TrackManager {
     // Tangent angle of the track spine for natural orientation
     const dx = Math.cos(z * 0.0078) * 18.0 * 0.0078 + Math.cos(z * 0.026) * 7.5 * 0.026;
     return Math.atan2(dx, 1.0);
+  }
+
+  getTerrainHeight(x, z) {
+    const incline = this.track?.slopeIncline || -0.095;
+    // Base steep downhill slope (e.g. drops 190m over 2000m)
+    const baseSlope = z * incline;
+    // SSX 3 dramatic rolling elevation drops, rollers & terrain kickers
+    const rollers = Math.sin(z * 0.014) * 8.5 + Math.sin(z * 0.0045) * 16.0 + Math.cos(z * 0.025) * 3.5 - 3.5;
+    // Valley contour / mountain berms (bowl shape curving up on the sides)
+    const spineX = this.getTrackSpineX(z);
+    const dx = x - spineX;
+    const bowl = Math.pow(Math.min(3.5, Math.abs(dx) / 24.0), 2) * 9.5;
+    // Banked berms on curved turns: outside of turn is banked higher
+    const heading = this.getTrackHeading(z);
+    const bank = dx * Math.sin(heading) * 0.15;
+    return baseSlope + rollers + bowl + bank;
+  }
+
+  getTerrainSlopeAngle(x, z) {
+    const dz = 2.5;
+    const yAhead = this.getTerrainHeight(x, z + dz);
+    const yBehind = this.getTerrainHeight(x, z - dz);
+    return Math.atan2(yAhead - yBehind, dz * 2);
   }
 }
