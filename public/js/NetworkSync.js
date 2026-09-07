@@ -1,43 +1,42 @@
 // public/js/NetworkSync.js
-// Cloudflare Durable Object WebSocket Network Client & SQLite Score Publishing
+// Cloudflare Durable Object WebSocket Network Client for Frost Leviathan: Harpoon Hunt
 
 export class NetworkSync {
   constructor() {
     this.ws = null;
     this.playerId = null;
-    this.callsign = "YetiSlayer";
-    this.roomId = "main-alps";
-    this.gameMode = "hunt";
+    this.callsign = "HarpoonHunter";
+    this.roomId = "glacial-trench-1";
     this.isConnected = false;
     this.reconnectTimer = null;
 
-    this.remotePlayers = new Map();
+    this.remoteHunters = new Map();
+    this.whaleState = null;
     this.onMessageCallback = null;
   }
 
   getCredentials() {
-    let hunterId = localStorage.getItem('skifree_hunter_id');
-    let pin = localStorage.getItem('skifree_hunter_pin');
+    let hunterId = localStorage.getItem('frost_hunter_id');
+    let callsign = localStorage.getItem('frost_hunter_callsign');
     if (!hunterId) {
-      hunterId = 'hunt_' + Math.random().toString(36).slice(2, 11);
-      localStorage.setItem('skifree_hunter_id', hunterId);
+      hunterId = 'hunter_' + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('frost_hunter_id', hunterId);
     }
-    if (!pin) {
-      pin = Math.floor(1000 + Math.random() * 9000).toString();
-      localStorage.setItem('skifree_hunter_pin', pin);
+    if (!callsign) {
+      callsign = 'Hunter-' + Math.floor(1000 + Math.random() * 9000);
+      localStorage.setItem('frost_hunter_callsign', callsign);
     }
-    return { hunterId, pin };
+    return { hunterId, callsign };
   }
 
-  connect(roomId, callsign, mode, onMessage) {
-    this.roomId = roomId || "main-alps";
-    this.callsign = callsign || "YetiSlayer";
-    this.gameMode = mode || "hunt";
+  connect(roomId, callsign, onMessage) {
+    this.roomId = roomId || "glacial-trench-1";
+    this.callsign = callsign || this.getCredentials().callsign;
     this.onMessageCallback = onMessage;
 
     const { hunterId } = this.getCredentials();
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws?room=${encodeURIComponent(this.roomId)}&callsign=${encodeURIComponent(this.callsign)}&hunterId=${encodeURIComponent(hunterId)}&mode=${encodeURIComponent(this.gameMode)}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws?room=${encodeURIComponent(this.roomId)}&playerId=${encodeURIComponent(hunterId)}&name=${encodeURIComponent(this.callsign)}`;
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -50,12 +49,17 @@ export class NetworkSync {
 
       this.ws.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === "WELCOME") {
-            this.playerId = msg.playerId;
-          }
-          if (this.onMessageCallback) {
-            this.onMessageCallback(msg);
+          const batch = JSON.parse(event.data);
+          if (batch.type === "BATCH_UPDATE" && Array.isArray(batch.messages)) {
+            for (const msg of batch.messages) {
+              this.processMessage(msg);
+            }
+          } else if (Array.isArray(batch.messages)) {
+            for (const msg of batch.messages) {
+              this.processMessage(msg);
+            }
+          } else if (batch.type) {
+            this.processMessage(batch);
           }
         } catch (e) {}
       };
@@ -66,7 +70,7 @@ export class NetworkSync {
         if (toast) toast.style.display = "block";
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = setTimeout(() => {
-          this.connect(this.roomId, this.callsign, this.gameMode, this.onMessageCallback);
+          this.connect(this.roomId, this.callsign, this.onMessageCallback);
         }, 3000);
       };
 
@@ -78,49 +82,93 @@ export class NetworkSync {
     }
   }
 
-  send(data) {
+  private_send(msg) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(data));
+      const envelope = {
+        type: "BATCH_UPDATE",
+        timestamp: Date.now(),
+        messages: [msg]
+      };
+      this.ws.send(JSON.stringify(envelope));
     }
   }
 
-  sendTelemetry(x, z, speed, steer, pitch) {
-    this.send({
-      type: "INPUT",
-      x,
-      z,
-      speed,
-      steer,
-      pitch
+  processMessage(msg) {
+    switch (msg.type) {
+      case "WELCOME":
+        this.playerId = msg.playerId;
+        break;
+
+      case "LEVIATHAN_TICK":
+        this.whaleState = msg;
+        break;
+
+      case "PLAYER_MOVED":
+        if (msg.playerId !== this.playerId) {
+          this.remoteHunters.set(msg.playerId, msg);
+        }
+        break;
+
+      case "PLAYER_DISCONNECTED":
+        this.remoteHunters.delete(msg.playerId);
+        break;
+    }
+
+    if (this.onMessageCallback) {
+      this.onMessageCallback(msg);
+    }
+  }
+
+  // 10Hz authoritative position reporting
+  sendPositionUpdate(x, y, z, rotX, rotY, rotZ, speed, harpoonState) {
+    this.private_send({
+      type: "POSITION_UPDATED",
+      playerId: this.playerId,
+      position: `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`,
+      rotation: `${rotX.toFixed(2)},${rotY.toFixed(2)},${rotZ.toFixed(2)}`,
+      speed: speed || 25.0,
+      state: harpoonState || "IDLE"
     });
   }
 
-  sendReady(isReady, mode) {
-    this.send({
-      type: "READY",
-      ready: isReady,
-      mode: mode || this.gameMode
+  // High-frequency 10Hz TOWED_TICK for speed & duration sync
+  sendTowedTick(currentSpeed) {
+    this.private_send({
+      type: "TOWED_TICK",
+      currentSpeed: Number(currentSpeed) || 80.0
     });
   }
 
-  sendForceLaunch(mode) {
-    this.send({
-      type: "FORCE_LAUNCH",
-      mode: mode || this.gameMode
+  // Harpoon Hit: bind cable to whale segment
+  sendHarpoonHit(targetWhaleSeg = 3) {
+    this.private_send({
+      type: "HARPOON_HIT",
+      playerId: this.playerId,
+      targetWhaleSeg
     });
   }
 
-  sendShootHit(isCrit) {
-    this.send({
-      type: "SHOOT",
-      hit: true,
-      crit: isCrit
+  // Release cable manually
+  sendHarpoonReleased() {
+    this.private_send({
+      type: "HARPOON_RELEASED"
     });
   }
 
-  sendDropBait() {
-    this.send({
-      type: "DROP_BAIT"
+  // Crash into pine tree or obstacle while towed
+  sendPlayerCrashed() {
+    this.private_send({
+      type: "PLAYER_CRASHED"
+    });
+  }
+
+  // Deal damage to the Frost Leviathan health pool
+  sendLeviathanDamage(damage, isCrit = false) {
+    this.private_send({
+      type: "LEVIATHAN_DAMAGE",
+      playerId: this.playerId,
+      damage,
+      isCrit
     });
   }
 
@@ -131,27 +179,6 @@ export class NetworkSync {
         return await res.json();
       }
     } catch (e) {}
-    return { leaderboard: [], raceLeaderboard: [] };
-  }
-
-  async publishScore(callsign, pin, scoreData) {
-    const { hunterId } = this.getCredentials();
-    const payload = {
-      hunterId,
-      callsign,
-      pin,
-      ...scoreData
-    };
-
-    try {
-      const res = await fetch("/api/publish-score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      return await res.json();
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
+    return { leaderboard: [], sessionLogs: [] };
   }
 }

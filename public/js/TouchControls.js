@@ -126,18 +126,20 @@ export class TouchControls {
       }, { passive: false });
     };
 
-    bindBtn("btn-touch-shoot", () => {
-      this.triggerHaptic("shoot");
-      if (this.combatSystem) {
-        this.combatSystem.shoot(
-          { x: this.playerPhysics.x, y: 0, z: this.playerPhysics.z },
-          window.__yetiEntity,
-          this.audioSystem,
-          this.sceneManager,
-          window.__onGameEvent
-        );
-      }
-    });
+    const spearBtn = document.getElementById("btn-touch-spear");
+    if (spearBtn) {
+      const fireHarpoon = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.audioSystem) this.audioSystem.unlockAndStart();
+        this.triggerHaptic("shoot");
+        if (this.combatSystem) {
+          this.combatSystem.fireActiveHarpoon();
+        }
+      };
+      spearBtn.addEventListener("touchstart", fireHarpoon, { passive: false });
+      spearBtn.addEventListener("click", fireHarpoon);
+    }
 
     bindBtn("btn-touch-bait", () => {
       this.triggerHaptic("rescue");

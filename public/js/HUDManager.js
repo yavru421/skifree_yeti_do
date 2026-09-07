@@ -27,6 +27,7 @@ export class HUDManager {
     this.damageFlash = document.getElementById("damage-flash");
     this.clawOverlay = document.getElementById("claw-overlay");
     this.radarEl = document.getElementById("yeti-threat-radar");
+    this.huntStopwatch = document.getElementById("hunt-stopwatch");
 
     this.hearts = [
       document.getElementById("h1"),
@@ -65,6 +66,29 @@ export class HUDManager {
       trick.style.cssText = "position:absolute; top:35%; left:50%; transform:translate(-50%, -50%); font-family:'Impact', 'Arial Black', sans-serif; font-size:32px; font-weight:900; letter-spacing:2px; color:#ffff00; text-shadow:0 0 14px #ff5500, 2px 2px 0 #000; pointer-events:none; opacity:0; transition:opacity 0.25s, transform 0.25s; z-index:150;";
       document.body.appendChild(trick);
     }
+
+    // 3. SSX 3 Style Meter & Pack Aggro Banner
+    if (!document.getElementById("ssx-style-panel")) {
+      const panel = document.createElement("div");
+      panel.id = "ssx-style-panel";
+      panel.style.cssText = "position:absolute; top:65px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:4px; z-index:120; font-family:'Courier New', monospace; pointer-events:none;";
+      panel.innerHTML = `
+        <div id="aggro-banner" style="display:none; padding:4px 14px; border-radius:4px; font-size:12px; font-weight:900; letter-spacing:1px; text-shadow:0 0 8px #ff0033; border:1px solid #ff0033; background:rgba(20,0,5,0.85); color:#ff3355;">
+          ⚠️ YOU HOLD AGGRO! ACT AS BAIT & CARVE!
+        </div>
+        <div id="tethers-gauge" style="font-size:11px; font-weight:bold; color:#00f0ff; text-shadow:0 0 6px #00f0ff; background:rgba(5,15,30,0.8); padding:2px 10px; border-radius:3px; border:1px solid #0088cc;">
+          ⛓️ ACTIVE TETHERS: 0/3 (PIN IMMINENT AT 3)
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+          <span style="font-size:10px; font-weight:bold; color:#ffcc00;">STYLE</span>
+          <div style="width:220px; height:10px; background:rgba(0,0,0,0.7); border:1px solid #ffcc00; border-radius:4px; overflow:hidden;">
+            <div id="style-meter-fill" style="width:0%; height:100%; background:linear-gradient(90deg, #ff9900, #ffff00); box-shadow:0 0 10px #ffff00; transition:width 0.1s linear;"></div>
+          </div>
+          <span id="style-meter-text" style="font-size:10px; font-weight:bold; color:#ffff00;">0%</span>
+        </div>
+      `;
+      document.body.appendChild(panel);
+    }
   }
 
   showTrickBanner(text, color = "#ffff00") {
@@ -90,13 +114,13 @@ export class HUDManager {
       this.scoreEl.innerHTML = `${playerPhysics.score.toLocaleString()} <span style="font-size:10px;">PTS</span>`;
     }
 
-    // 2. Ammo & Flares
+    // 2. Shootable Harpoon & Flares
     if (this.ammoEl && combatSystem) {
       this.ammoEl.style.display = 'block';
-      if (combatSystem.isReloading) {
-        this.ammoEl.innerHTML = `<span style="color:#ff0033; font-weight:bold;">RELOADING...</span>`;
+      if (combatSystem.harpoonCooldown > 0) {
+        this.ammoEl.innerHTML = `<span style="color:#00f0ff; font-weight:bold;">🗡️ HARPOON: RELOADING...</span>`;
       } else {
-        this.ammoEl.innerHTML = `AMMO: <span style="color:#ffff00; font-weight:bold;">${combatSystem.ammo}/${combatSystem.maxAmmo}</span>`;
+        this.ammoEl.innerHTML = `<span style="color:#39ff14; font-weight:bold;">🗡️ HARPOON: READY [F / CLICK TO SHOOT]</span>`;
       }
     }
 
@@ -117,6 +141,57 @@ export class HUDManager {
         nitroFill.style.background = fuel >= 25 ? "#00f0ff" : "#ff0055";
       }
       if (nitroVal) nitroVal.textContent = `${fuel}%`;
+    }
+
+    // 3b. SSX 3 Style Meter & Pack Aggro Updates
+    const styleFill = document.getElementById("style-meter-fill");
+    const styleText = document.getElementById("style-meter-text");
+    if (styleFill && playerPhysics) {
+      const style = Math.round(playerPhysics.styleMeter || 0);
+      styleFill.style.width = `${style}%`;
+      if (style >= 80) {
+        styleFill.style.background = "linear-gradient(90deg, #ff0055, #ffff00)";
+        if (styleText) styleText.innerHTML = `<span style="color:#ff0055; animation:pulse 0.5s infinite;">UBER ${style}%</span>`;
+      } else {
+        styleFill.style.background = "linear-gradient(90deg, #ff9900, #ffff00)";
+        if (styleText) styleText.textContent = `${style}%`;
+      }
+    }
+
+    // Pack-of-Dogs Aggro & Tethers Gauge
+    const aggroBanner = document.getElementById("aggro-banner");
+    const tethersGauge = document.getElementById("tethers-gauge");
+    const whale = window.__frostLeviathan;
+    const netSync = window.__networkSync;
+
+    if (whale) {
+      if (tethersGauge) {
+        const tetherCount = (whale.activeTethers || []).length;
+        if (tetherCount >= 3 || whale.isStaggered) {
+          tethersGauge.innerHTML = `⛓️ ACTIVE TETHERS: ${tetherCount}/3 <span style="color:#39ff14; font-weight:900;">[BEAST PINNED & STAGGERED! 2.5x CRIT!]</span>`;
+        } else if (tetherCount === 2) {
+          tethersGauge.innerHTML = `⛓️ ACTIVE TETHERS: 2/3 <span style="color:#ffff00;">[PIN IMMINENT - 20% SLOWED]</span>`;
+        } else {
+          tethersGauge.innerHTML = `⛓️ ACTIVE TETHERS: ${tetherCount}/3 (PIN AT 3)`;
+        }
+      }
+
+      if (aggroBanner) {
+        if (whale.aggroTargetId) {
+          aggroBanner.style.display = "block";
+          if (netSync && whale.aggroTargetId === netSync.playerId) {
+            aggroBanner.textContent = "⚠️ YOU HOLD AGGRO! ACT AS BAIT & CARVE!";
+            aggroBanner.style.borderColor = "#ff0055";
+            aggroBanner.style.color = "#ff0055";
+          } else {
+            aggroBanner.textContent = `🎯 BEAST TARGETING TEAMMATE — PIN IT DOWN!`;
+            aggroBanner.style.borderColor = "#ffaa00";
+            aggroBanner.style.color = "#ffaa00";
+          }
+        } else {
+          aggroBanner.style.display = "none";
+        }
+      }
     }
 
     // 4. Rescued Squad Status
@@ -204,16 +279,21 @@ export class HUDManager {
         const dist = Math.hypot(yetiPredator.x - playerPhysics.x, yetiPredator.z - playerPhysics.z);
         if (dist < 45 && yetiPredator.hp > 0) {
           this.radarEl.style.opacity = "1";
-          this.radarEl.textContent = `👹 YETI ${Math.round(dist)}M [AUTO-AIM READY]`;
+          if (yetiPredator.state === "BAYED_UP") {
+            this.radarEl.innerHTML = `<span style="color:#ffff00; font-weight:900;">🐻 YETI BAYED UP! SQUAD PINNING IT • FLANK TO STRIKE!</span>`;
+          } else {
+            this.radarEl.textContent = `👹 YETI ${Math.round(dist)}M [PURSUING WITH PACK]`;
+          }
         } else {
           this.radarEl.style.opacity = "0";
         }
       }
     }
 
-    // 8. Slalom Race Mode HUD
+    // 8. Slalom Race Mode HUD vs Hunt Stopwatch
     if (gameMode === "slalom" && this.raceHud && playerPhysics) {
       this.raceHud.style.display = "block";
+      if (this.huntStopwatch) this.huntStopwatch.style.display = "none";
       if (this.raceTimeVal) {
         this.raceTimeVal.textContent = (raceElapsedSec || 0).toFixed(1) + "s";
       }
@@ -223,8 +303,17 @@ export class HUDManager {
       if (this.raceStreakVal) {
         this.raceStreakVal.textContent = `x${playerPhysics.gateStreak}`;
       }
-    } else if (this.raceHud) {
-      this.raceHud.style.display = "none";
+    } else {
+      if (this.raceHud) this.raceHud.style.display = "none";
+      if (this.huntStopwatch) {
+        this.huntStopwatch.style.display = "block";
+        const totalSec = Math.max(0, raceElapsedSec || 0);
+        const mins = Math.floor(totalSec / 60);
+        const secs = Math.floor(totalSec % 60);
+        const tenths = Math.floor((totalSec * 10) % 10);
+        const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${tenths}`;
+        this.huntStopwatch.textContent = `⏱️ HUNT TIME: ${formatted}`;
+      }
     }
 
     // 9. Minimap
@@ -243,6 +332,35 @@ export class HUDManager {
         this.minimapYeti.style.top = `${normYetiZ}%`;
       } else {
         this.minimapYeti.style.display = "none";
+      }
+    }
+
+    // 10. Dedicated On-Screen Harpoon Action Button Dynamic State
+    const hudHarpoonBtn = document.getElementById("btn-hud-harpoon");
+    const hudHarpoonText = document.getElementById("hud-harpoon-text");
+    const hudHarpoonIcon = document.getElementById("hud-harpoon-icon");
+    if (hudHarpoonBtn && combatSystem) {
+      if (combatSystem.isTethered) {
+        hudHarpoonBtn.style.background = "linear-gradient(135deg, rgba(57, 255, 20, 0.95), rgba(0, 170, 85, 0.95))";
+        hudHarpoonBtn.style.borderColor = "#39ff14";
+        hudHarpoonBtn.style.boxShadow = "0 0 24px rgba(57, 255, 20, 0.75)";
+        if (hudHarpoonIcon) hudHarpoonIcon.textContent = "⚡";
+        if (hudHarpoonText) hudHarpoonText.textContent = "TETHERED! [CLICK / R TO CUT]";
+        hudHarpoonBtn.style.opacity = "1.0";
+      } else if (combatSystem.harpoonCooldown > 0) {
+        hudHarpoonBtn.style.background = "linear-gradient(135deg, rgba(20, 30, 45, 0.92), rgba(10, 15, 25, 0.95))";
+        hudHarpoonBtn.style.borderColor = "#88a0c0";
+        hudHarpoonBtn.style.boxShadow = "none";
+        if (hudHarpoonIcon) hudHarpoonIcon.textContent = "⏳";
+        if (hudHarpoonText) hudHarpoonText.textContent = `RELOADING (${combatSystem.harpoonCooldown.toFixed(1)}s)`;
+        hudHarpoonBtn.style.opacity = "0.75";
+      } else {
+        hudHarpoonBtn.style.background = "linear-gradient(135deg, rgba(0, 240, 255, 0.95), rgba(0, 120, 255, 0.95))";
+        hudHarpoonBtn.style.borderColor = "#00f0ff";
+        hudHarpoonBtn.style.boxShadow = "0 0 24px rgba(0, 240, 255, 0.65)";
+        if (hudHarpoonIcon) hudHarpoonIcon.textContent = "🚀";
+        if (hudHarpoonText) hudHarpoonText.textContent = "FIRE HARPOON [SPACE]";
+        hudHarpoonBtn.style.opacity = "1.0";
       }
     }
   }

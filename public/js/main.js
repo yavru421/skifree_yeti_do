@@ -4,7 +4,7 @@
 import { AudioSystem } from './AudioSystem.js';
 import { SceneManager } from './SceneManager.js';
 import { PlayerPhysics } from './PlayerPhysics.js';
-import { YetiPredator } from './YetiPredator.js';
+import { FrostLeviathan } from './FrostLeviathan.js';
 import { CombatSystem } from './CombatSystem.js';
 import { TouchControls } from './TouchControls.js';
 import { HUDManager } from './HUDManager.js';
@@ -18,7 +18,17 @@ class GameApp {
     this.trackManager = new TrackManager();
     this.sceneManager = new SceneManager(this.canvas);
     this.playerPhysics = new PlayerPhysics();
-    this.yetiPredator = new YetiPredator(this.sceneManager);
+    this.frostLeviathan = new FrostLeviathan();
+    this.yetiPredator = {
+      x: 0,
+      y: 0,
+      z: 60,
+      hp: 8000,
+      maxHp: 8000,
+      state: "STALKING_NPCS",
+      active: true,
+      wave: 1
+    };
     this.combatSystem = new CombatSystem();
     this.hudManager = new HUDManager();
     this.networkSync = new NetworkSync();
@@ -30,11 +40,14 @@ class GameApp {
     );
 
     // Global pointers for event delegates
-    window.__yetiEntity = this.yetiPredator;
+    window.__frostLeviathan = this.frostLeviathan;
+    window.__yetiEntity = this.yetiPredator; // Authoritative Yeti entity for combat
+    window.__yetiPredator = this.yetiPredator;
     window.__playerPhysics = this.playerPhysics;
     window.__combatSystem = this.combatSystem;
     window.__sceneManager = this.sceneManager;
     window.__audioSystem = this.audioSystem;
+    window.__networkSync = this.networkSync;
     window.__onGameEvent = (e) => this.handleGameEvent(e);
 
     this.gameState = "INTRO";
@@ -43,6 +56,7 @@ class GameApp {
     this.raceStartTime = 0;
     this.raceElapsedSec = 0;
     this.telemetryTimer = 0;
+    this.lastTakedownTimeSec = 0;
 
     // Apply Default Alpine Track
     this.sceneManager.applyTrack(this.trackManager.getTrack());
@@ -215,6 +229,25 @@ class GameApp {
       });
     }
 
+    // 10b. Yeti Takedown Victory Modal Handlers
+    const btnTakedownClaim = document.getElementById("btn-takedown-claim");
+    if (btnTakedownClaim) {
+      btnTakedownClaim.addEventListener("click", () => {
+        const takedownModal = document.getElementById("takedown-modal");
+        if (takedownModal) takedownModal.classList.add("hidden");
+        this.promptScoreClaim(true);
+      });
+    }
+
+    const btnHuntAgain = document.getElementById("btn-hunt-again");
+    if (btnHuntAgain) {
+      btnHuntAgain.addEventListener("click", () => {
+        const takedownModal = document.getElementById("takedown-modal");
+        if (takedownModal) takedownModal.classList.add("hidden");
+        this.startGame();
+      });
+    }
+
     // 11. PIN High Score Claim
     const btnSubmitClaim = document.getElementById("btn-submit-claim");
     const btnSkipClaim = document.getElementById("btn-skip-claim");
@@ -235,7 +268,8 @@ class GameApp {
           maxSpeed: Math.round(this.playerPhysics.maxSpeedAchieved),
           maxDistance: Math.round(this.playerPhysics.z),
           gatesHit: this.playerPhysics.gatesHit,
-          clearTimeSec: this.raceElapsedSec
+          clearTimeSec: this.raceElapsedSec,
+          takedownTimeSec: this.lastTakedownTimeSec || 0
         });
 
         if (res.success) {
@@ -309,6 +343,9 @@ class GameApp {
         this.sceneManager.updateGhostSkiers(msg.skiers, this.networkSync.playerId);
       }
       if (msg.yeti && this.yetiPredator) {
+        if (typeof msg.yeti.x === "number") this.yetiPredator.x = msg.yeti.x;
+        if (typeof msg.yeti.z === "number") this.yetiPredator.z = msg.yeti.z;
+        if (msg.yeti.state) this.yetiPredator.state = msg.yeti.state;
         if (typeof msg.yeti.hp === "number") {
           this.yetiPredator.hp = msg.yeti.hp;
           this.yetiPredator.maxHp = msg.yeti.maxHp || 8000;
@@ -322,7 +359,7 @@ class GameApp {
     } else if (msg.type === "MATCH_LAUNCH") {
       this.launchActiveGame();
     } else if (msg.type === "YETI_DEFEATED") {
-      this.triggerGondolaRest(msg.killer);
+      this.handleYetiDefeated(msg.killer, msg.takedownTimeSec, msg.squadSize);
     } else if (msg.type === "NEXT_WAVE") {
       this.yetiPredator.wave = msg.wave;
       this.yetiPredator.hp = msg.yetiHp;
@@ -363,6 +400,9 @@ class GameApp {
 
     this.playerPhysics.respawn();
     this.yetiPredator.hp = this.yetiPredator.maxHp;
+    this.yetiPredator.z = this.playerPhysics.z + 24;
+    this.yetiPredator.x = this.playerPhysics.x;
+    this.yetiPredator.state = "RUNNING_DOWNHILL";
     this.raceStartTime = performance.now();
     this.raceElapsedSec = 0;
     this.gameState = "ACTIVE";
@@ -370,6 +410,37 @@ class GameApp {
 
   launchActiveGame() {
     this.startGame();
+  }
+
+  handleYetiDefeated(killerCallsign, takedownTimeSec, squadSize) {
+    if (this.gameState === "YETI_DEFEATED") return;
+    this.gameState = "YETI_DEFEATED";
+    this.lastTakedownTimeSec = takedownTimeSec || this.raceElapsedSec;
+
+    const totalSec = Math.max(0, this.lastTakedownTimeSec);
+    const mins = Math.floor(totalSec / 60);
+    const secs = Math.floor(totalSec % 60);
+    const tenths = Math.floor((totalSec * 10) % 10);
+    const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${tenths}`;
+
+    const takedownModal = document.getElementById("takedown-modal");
+    const takedownTime = document.getElementById("takedown-time");
+    const takedownDist = document.getElementById("takedown-dist");
+    const takedownSquad = document.getElementById("takedown-squad");
+    const takedownScore = document.getElementById("takedown-score");
+    const takedownSpeed = document.getElementById("takedown-speed");
+    const backdrop = document.getElementById("modal-backdrop");
+
+    if (takedownTime) takedownTime.textContent = timeStr;
+    if (takedownDist) takedownDist.textContent = `${Math.round(this.playerPhysics.z)}m`;
+    const houndCount = typeof squadSize === "number" ? squadSize : this.combatSystem.rescuedSquad.length;
+    if (takedownSquad) takedownSquad.textContent = `${houndCount} Hound Skiers`;
+    if (takedownScore) takedownScore.textContent = `${this.playerPhysics.score.toLocaleString()} PTS`;
+    if (takedownSpeed) takedownSpeed.textContent = `${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
+
+    if (backdrop) backdrop.classList.remove("hidden");
+    if (takedownModal) takedownModal.classList.remove("hidden");
+    this.audioSystem.playRescueFanfare();
   }
 
   triggerGondolaRest(killerCallsign) {
@@ -382,16 +453,19 @@ class GameApp {
   }
 
   handleGameEvent(e) {
-    if (e.type === "SHOOT") {
-      if (e.hit) {
+    if (e.type === "SPEAR_HIT" || e.type === "SHOOT") {
+      if (e.hit !== false && e.damage) {
         this.playerPhysics.score += e.damage;
         this.hudManager.showFloatingDamage(window.innerWidth / 2, window.innerHeight / 2 - 40, e.damage, e.isCrit);
-        this.hudManager.addCombatLog(e.isCrit ? `🎯 Critical Hit! (+${e.damage} PTS)` : `💥 Hit Yeti! (+${e.damage} PTS)`, e.isCrit ? "#ffff00" : "#00f0ff");
+        this.hudManager.addCombatLog(e.isCrit ? `🗡️ CRITICAL HARPOON IMPALE! (+${e.damage} PTS)` : `🗡️ Impaled Yeti! (+${e.damage} PTS)`, e.isCrit ? "#ffff00" : "#00f0ff");
       }
-    } else if (e.type === "RELOAD_START") {
-      this.hudManager.addCombatLog("🔄 Reloading Magazine...", "#88a0c0");
-    } else if (e.type === "RELOAD_COMPLETE") {
-      this.hudManager.addCombatLog("⚡ Magazine Loaded (8/8)", "#39ff14");
+    } else if (e.type === "SPEAR_DEFLECTED") {
+      this.hudManager.triggerDamageClawFlash();
+      this.hudManager.addCombatLog(e.message, "#ffaa00");
+    } else if (e.type === "SPEAR_WHIFF") {
+      this.hudManager.addCombatLog(e.message, "#ff0055");
+    } else if (e.type === "SPEAR_CHARGE_START") {
+      this.hudManager.addCombatLog("⚔️ Charging Spear Thrust... [RELEASE TO STRIKE]", "#ffff00");
     } else if (e.type === "FLARE_FIRED") {
       this.hudManager.addCombatLog(e.message, e.hit ? "#ff5500" : "#ffaa00");
     } else if (e.type === "YETI_BITE") {
@@ -470,14 +544,25 @@ class GameApp {
     const raceBody = document.getElementById("race-leaderboard-rows");
 
     if (huntBody && data.leaderboard) {
-      huntBody.innerHTML = data.leaderboard.map((row, idx) => `
-        <tr style="border-bottom: 1px solid #1a2a44;">
-          <td style="padding:4px; font-weight:bold; color:#00f0ff;">#${idx + 1}</td>
-          <td style="padding:4px;">${this.escapeHtml(row.callsign)}</td>
-          <td style="padding:4px; color:#ffff00; font-weight:bold;">${row.score.toLocaleString()}</td>
-          <td style="padding:4px;">${Math.round(row.max_speed)} MPH</td>
-        </tr>
-      `).join('');
+      huntBody.innerHTML = data.leaderboard.map((row, idx) => {
+        let scoreDisplay = `${row.score.toLocaleString()} PTS`;
+        if (row.takedown_time_sec && Number(row.takedown_time_sec) > 0) {
+          const t = Number(row.takedown_time_sec);
+          const m = Math.floor(t / 60);
+          const s = Math.floor(t % 60);
+          const tenths = Math.floor((t * 10) % 10);
+          const timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${tenths}`;
+          scoreDisplay = `<span style="color:#39ff14; font-weight:900;">⏱️ ${timeStr}</span><br><span style="font-size:9px; color:#88a0c0;">${row.score.toLocaleString()} PTS</span>`;
+        }
+        return `
+          <tr style="border-bottom: 1px solid #1a2a44;">
+            <td style="padding:4px; font-weight:bold; color:#00f0ff;">#${idx + 1}</td>
+            <td style="padding:4px;">${this.escapeHtml(row.callsign)}</td>
+            <td style="padding:4px;">${scoreDisplay}</td>
+            <td style="padding:4px;">${Math.round(row.max_speed)} MPH</td>
+          </tr>
+        `;
+      }).join('');
     }
 
     if (raceBody && data.raceLeaderboard) {
@@ -500,7 +585,15 @@ class GameApp {
     if (this.gameState === "ACTIVE") {
       this.raceElapsedSec += dt;
 
-      // 1. Local Player Physics (Kinematics, 3D Air Tricks, Nitro)
+      // Check Frost Leviathan / Yeti Defeat in Hunt Mode
+      if (this.gameMode === "hunt" && ((this.yetiPredator && this.yetiPredator.hp <= 0) || this.frostLeviathan.hp <= 0)) {
+        this.handleYetiDefeated("You & Squad", this.raceElapsedSec, 1);
+        this.sceneManager.render();
+        requestAnimationFrame((t) => this.loop(t));
+        return;
+      }
+
+      // 1. Local Player Physics (SSX 3 Kinematics, 3D Air Tricks, Style Meter)
       this.playerPhysics.update(
         dt,
         this.sceneManager,
@@ -509,23 +602,28 @@ class GameApp {
         currentTrack
       );
 
-      // 2. Combat System, Flare Gun & NPC Squad Rescue
-      this.combatSystem.update(
-        dt,
-        (e) => this.handleGameEvent(e),
-        { x: this.playerPhysics.x, z: this.playerPhysics.z },
-        this.yetiPredator.npcs,
-        this.audioSystem
-      );
+      // 2. Combat System (Steam Harpoon Gun, Secondary Explosives)
+      this.combatSystem.update(dt);
 
-      // 3. Yeti Predator AI (with Flare Burn Panic & Avalanche Awareness)
-      this.yetiPredator.update(
-        dt,
-        this.playerPhysics,
-        this.audioSystem,
-        (e) => this.handleGameEvent(e),
-        currentTrack
-      );
+      // Update active 3D flying harpoons & trailing cables
+      if (this.sceneManager && this.sceneManager.updateHarpoons) {
+        this.sceneManager.updateHarpoons(
+          dt,
+          this.yetiPredator,
+          { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
+          (harpoon, dist) => {
+            if (this.combatSystem && this.combatSystem.handleHarpoonHit) {
+              this.combatSystem.handleHarpoonHit(this.yetiPredator, 0);
+            }
+          }
+        );
+      }
+
+      // 3. Yeti & Frost Leviathan State Update
+      if (this.sceneManager && this.sceneManager.updateYeti) {
+        this.sceneManager.updateYeti(this.yetiPredator, dt);
+      }
+      this.frostLeviathan.update(dt, this.networkSync.whaleState);
 
       // 4. Update Third-Person Chase Camera with 3D Aerial Rotation & Nitro Effects
       this.sceneManager.updateCamera(
@@ -544,27 +642,46 @@ class GameApp {
       this.hudManager.update(
         this.playerPhysics,
         this.combatSystem,
-        this.yetiPredator,
+        this.frostLeviathan,
         this.gameMode,
         this.raceElapsedSec,
         currentTrack
       );
 
-      // 6. 15Hz Telemetry to Cloudflare Durable Object
+      // 6. Update 3D Dynamic Towing Rope Mesh (Authoritative Three.js Line)
+      if (this.sceneManager && this.sceneManager.updateTether) {
+        const isTethered = this.combatSystem.isTethered || this.playerPhysics.isTowed;
+        const targetPos = {
+          x: this.yetiPredator.x,
+          y: (this.sceneManager.getTerrainHeight ? this.sceneManager.getTerrainHeight(this.yetiPredator.x, this.yetiPredator.z) : 0) + 1.8,
+          z: this.yetiPredator.z
+        };
+        this.sceneManager.updateTether(
+          { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
+          targetPos,
+          isTethered,
+          this.yetiPredator.state === "BAYED_UP" || this.frostLeviathan.isStaggered
+        );
+      }
+
+      // 7. 10Hz Authoritative Telemetry to Cloudflare Durable Object
       this.telemetryTimer += dt;
-      if (this.telemetryTimer >= 0.066) {
+      if (this.telemetryTimer >= 0.1) {
         this.telemetryTimer = 0;
-        this.networkSync.sendTelemetry(
+        this.networkSync.sendPositionUpdate(
           this.playerPhysics.x,
+          this.playerPhysics.airY || 0,
           this.playerPhysics.z,
-          this.playerPhysics.speed,
+          this.playerPhysics.pitch,
           this.playerPhysics.steer,
-          this.playerPhysics.pitch
+          this.playerPhysics.airRoll || 0,
+          this.playerPhysics.speed,
+          (this.combatSystem.isTethered || this.playerPhysics.isTowed) ? "TOWED" : "IDLE"
         );
       }
     }
 
-    // Single-Pass High Performance 3D WebGL Render
+    // 8. Render 3D Scene
     this.sceneManager.render();
 
     requestAnimationFrame((t) => this.loop(t));

@@ -58,7 +58,22 @@ export class PlayerPhysics {
     this.maxSpeedAchieved = 0;
     this.isRaceFinished = false;
 
+    // Frost Leviathan Towed State
+    this.isTowed = false;
+    this.towedSegment = null;
+    this.towedTimer = 0;
+    this.towedTickTimer = 0;
+
     this.setupKeyboardListeners();
+  }
+
+  setTowedState(isTowed, segment) {
+    this.isTowed = !!isTowed;
+    this.towedSegment = segment || null;
+    if (this.isTowed) {
+      this.towedTimer = 0;
+      this.towedTickTimer = 0;
+    }
   }
 
   setRiderClass(rClass) {
@@ -88,6 +103,14 @@ export class PlayerPhysics {
           this.keys.down = true;
           break;
         case "Space":
+          // Spacebar directly fires steam harpoon cannon
+          if (window.__combatSystem) {
+            window.__combatSystem.fireActiveHarpoon();
+          }
+          break;
+        case "KeyJ":
+        case "KeyC":
+        case "KeyZ":
           this.keys.jump = true;
           this.triggerJump();
           break;
@@ -118,6 +141,10 @@ export class PlayerPhysics {
           this.keys.down = false;
           break;
         case "Space":
+          break;
+        case "KeyJ":
+        case "KeyC":
+        case "KeyZ":
           this.keys.jump = false;
           break;
       }
@@ -228,13 +255,26 @@ export class PlayerPhysics {
       targetSpeed += 26.0;
     }
 
+    // Frost Leviathan Towed Physics (80+ MPH Breakneck Speed)
+    if (this.isTowed) {
+      targetSpeed = Math.max(targetSpeed, 84.5);
+      this.towedTimer += dt;
+      this.towedTickTimer += dt;
+      if (this.towedTickTimer >= 0.1) {
+        this.towedTickTimer = 0;
+        if (window.__networkSync && window.__networkSync.sendTowedTick) {
+          window.__networkSync.sendTowedTick(this.speed);
+        }
+      }
+    }
+
     // Avalanche Speed Floor (Forces high velocity)
     if (currentTrack?.id === "avalanche") {
       targetSpeed = Math.max(34, targetSpeed);
     }
 
     // Smooth speed acceleration
-    this.speed += (targetSpeed - this.speed) * (this.keys.down ? 4.8 : 2.4) * dt;
+    this.speed += (targetSpeed - this.speed) * (this.keys.down ? 4.8 : (this.isTowed ? 5.2 : 2.4)) * dt;
     if (this.speed > this.maxSpeedAchieved) {
       this.maxSpeedAchieved = this.speed;
     }
@@ -247,12 +287,18 @@ export class PlayerPhysics {
     this.x += lateralStep;
     this.x = Math.max(-65, Math.min(65, this.x));
 
-    // 4. Air Physics & Landing Trick Stomp Evaluation
+    // 4. Air Physics & Landing Trick Stomp Evaluation (SSX 3 Arcade Floatiness)
     if (this.isAirborne) {
       this.airTime += dt;
-      const gravity = isBoarder ? 28.0 : 32.0;
+      // SSX 3 Floatier Arcade Gravity
+      const gravity = isBoarder ? 15.0 : 18.0;
       this.airVy -= gravity * dt;
       this.airY += this.airVy * dt;
+
+      // Accumulate in-air style rotation points
+      if (this.keys.left || this.keys.right || this.keys.up || this.keys.down) {
+        this.styleMeter = Math.min(100, (this.styleMeter || 0) + dt * 14.0);
+      }
 
       // Landing check
       if (this.airY <= 0) {
@@ -276,7 +322,6 @@ export class PlayerPhysics {
       const distDelta = (this.speed - avaSpeed) * 0.4 * dt;
       this.avalancheDist = Math.max(0, Math.min(180, this.avalancheDist + distDelta));
       if (this.avalancheDist <= 0.5) {
-        // Engulfed by avalanche
         this.takeDamage(3);
         if (audioSystem) audioSystem.playTreeThud();
         if (onEvent) onEvent({ type: "AVALANCHE_ENGULFED" });
@@ -291,17 +336,16 @@ export class PlayerPhysics {
 
   evaluateLanding(audioSystem, onEvent, sceneManager) {
     // Check rotation angles for clean stomp vs wipeout tumble
-    // Wrap to [-PI, PI]
     const normYaw = Math.abs(Math.atan2(Math.sin(this.airYaw), Math.cos(this.airYaw)));
     const normPitch = Math.abs(Math.atan2(Math.sin(this.airPitch), Math.cos(this.airPitch)));
 
     const isBoarder = this.riderClass === "snowboarder";
-    // Bad landing threshold: more than 52 degrees from forward
-    const badLanding = normPitch > 0.92 || normYaw > 0.95;
+    const badLanding = normPitch > 0.94 || normYaw > 0.96;
 
     if (badLanding) {
       // Tumble Wipeout!
       this.speed = Math.max(6, this.speed * 0.25);
+      this.styleMeter = Math.max(0, (this.styleMeter || 0) - 20);
       this.takeDamage(1);
       if (audioSystem) audioSystem.playTreeThud();
       if (sceneManager && sceneManager.addTrauma) sceneManager.addTrauma(0.45);
@@ -312,7 +356,7 @@ export class PlayerPhysics {
         });
       }
     } else {
-      // CLEAN STOMP! Calculate tricks
+      // CLEAN STOMP! SSX 3 Stunt Calculation
       const totalSpins = Math.round(Math.abs(this.airYaw) / (Math.PI * 2));
       const totalFlips = Math.round(Math.abs(this.airPitch) / (Math.PI * 2));
       const halfSpins = Math.round(Math.abs(this.airYaw) / Math.PI);
@@ -321,25 +365,83 @@ export class PlayerPhysics {
       let trickScore = 0;
 
       if (totalFlips >= 1 && totalSpins >= 1) {
-        trickName = `RODEO ${totalSpins * 360}° FLIP!`;
-        trickScore = 3500 + totalSpins * 1000;
+        trickName = `UBER ${totalSpins * 360}° RODEO FLIP!`;
+        trickScore = 3800 + totalSpins * 1200;
       } else if (totalFlips >= 1) {
-        trickName = totalFlips === 1 ? "CLEAN BACKFLIP!" : `DOUBLE FLIP x${totalFlips}!`;
-        trickScore = 2400 * totalFlips;
+        trickName = totalFlips === 1 ? "CLEAN BACKFLIP!" : `UBER DOUBLE FLIP x${totalFlips}!`;
+        trickScore = 2600 * totalFlips;
       } else if (totalSpins >= 1) {
-        trickName = `${totalSpins * 360}° HELICOPTER SPIN!`;
-        trickScore = 1200 * totalSpins;
+        trickName = `${totalSpins * 360}° SUPER SPIN!`;
+        trickScore = 1400 * totalSpins;
       } else if (halfSpins === 1) {
         trickName = isBoarder ? "180° SWITCH SHIFTY!" : "180° REVERSE CARVE!";
-        trickScore = 600;
+        trickScore = 700;
       }
 
       if (trickScore > 0) {
-        if (isBoarder) trickScore = Math.round(trickScore * 1.4); // Boarder trick bonus
+        if (isBoarder) trickScore = Math.round(trickScore * 1.4);
         this.score += trickScore;
-        this.nitroFuel = Math.min(100, this.nitroFuel + 25); // Bonus nitro on trick
+        this.nitroFuel = Math.min(100, this.nitroFuel + 35);
+        
+        // Fill Style Meter & Grant Temporary Speed Boost
+        this.styleMeter = Math.min(100, (this.styleMeter || 0) + Math.round(trickScore / 50));
+        this.styleBoostTimer = 3.5; // 3.5s of blazing speed boost
+
+        // Reduce Harpoon Reload Cooldown
+        if (window.__combatSystem) {
+          window.__combatSystem.harpoonCooldown = 0.0;
+        }
+
+        // Check if trick was executed directly over the Frost Leviathan (Draws Aggro)
+        const whale = window.__frostLeviathan;
+        if (whale && Math.abs(this.z - whale.z) < 90 && Math.abs(this.x - whale.x) < 70) {
+          if (window.__networkSync && window.__networkSync.sendTrickOverBeast) {
+            window.__networkSync.sendTrickOverBeast(trickScore, trickName);
+          }
+          if (onEvent) {
+            onEvent({
+              type: "TRICK_OVER_BEAST",
+              message: "🔥 AERIAL STUNT OVER THE BEAST! AGGRO DRAWN!",
+              score: trickScore
+            });
+          }
+        }
+
+        // Cooperative Synergy: Line Charge (Did player sail over a tethered teammate's line?)
+        const netSync = window.__networkSync;
+        if (netSync && netSync.remoteHunters) {
+          netSync.remoteHunters.forEach((rh, rhId) => {
+            if (rh.harpoonState === "TOWED") {
+              const rhPos = (rh.position || "0,0,0").split(',').map(Number);
+              const minZ = Math.min(rhPos[2] || 0, whale ? whale.z : 0);
+              const maxZ = Math.max(rhPos[2] || 0, whale ? whale.z : 0);
+              if (this.z >= minZ && this.z <= maxZ && Math.abs(this.x - (rhPos[0] || 0)) < 40) {
+                if (netSync.sendTrickOverLine) {
+                  netSync.sendTrickOverLine(rhId);
+                }
+                if (onEvent) {
+                  onEvent({
+                    type: "LINE_CHARGE",
+                    message: `⚡ LINE CHARGE! SAILED OVER ${rh.name || 'TEAMMATE'}'S TETHER! PLASMA STUN!`
+                  });
+                }
+              }
+            }
+          });
+        }
+
         if (audioSystem) audioSystem.playRescueFanfare();
-        if (sceneManager && sceneManager.addTrauma) sceneManager.addTrauma(0.12);
+        if (sceneManager && sceneManager.addTrauma) sceneManager.addTrauma(0.15);
+        if (onEvent) {
+          onEvent({
+            type: "TRICK_LANDED",
+            score: trickScore,
+            trickName,
+            isBoarder
+          });
+        }
+      }
+    }
         if (onEvent) {
           onEvent({
             type: "TRICK_LANDED",
@@ -393,6 +495,18 @@ export class PlayerPhysics {
       const distZ = Math.abs(tree.position.z - this.z);
       const distX = Math.abs(tree.position.x - this.x);
       if (distZ < 1.4 && distX < 1.3 && this.airY < 1.0) {
+        if (this.isTowed) {
+          this.setTowedState(false);
+          if (window.__networkSync && window.__networkSync.sendPlayerCrashed) {
+            window.__networkSync.sendPlayerCrashed();
+          }
+          if (window.__combatSystem && window.__combatSystem.releaseHarpoon) {
+            window.__combatSystem.releaseHarpoon();
+          }
+          if (sceneManager && sceneManager.addTrauma) {
+            sceneManager.addTrauma(0.6);
+          }
+        }
         this.speed = Math.max(8, this.speed * 0.35);
         if (audioSystem) audioSystem.playTreeThud();
         if (onEvent) {
@@ -457,20 +571,22 @@ export class PlayerPhysics {
       }
     });
 
-    // Dynamic Finish Line based on currentTrack
-    const finishDist = currentTrack?.finishDistance || 1200;
-    if (!this.isRaceFinished && this.z >= finishDist) {
-      this.isRaceFinished = true;
-      if (onEvent) {
-        onEvent({
-          type: "RACE_FINISHED",
-          clearTimeSec: 0,
-          gatesHit: this.gatesHit,
-          maxSpeed: Math.round(this.maxSpeedAchieved),
-          score: this.score,
-          trackId: currentTrack?.id || "alpine",
-          riderClass: this.riderClass
-        });
+    // Dynamic Finish Line: ONLY for Slalom mode! Hunt mode is an endless pursuit until Yeti takedown.
+    if (this.gameMode === "slalom") {
+      const finishDist = currentTrack?.finishDistance || 1200;
+      if (!this.isRaceFinished && this.z >= finishDist) {
+        this.isRaceFinished = true;
+        if (onEvent) {
+          onEvent({
+            type: "RACE_FINISHED",
+            clearTimeSec: 0,
+            gatesHit: this.gatesHit,
+            maxSpeed: Math.round(this.maxSpeedAchieved),
+            score: this.score,
+            trackId: currentTrack?.id || "alpine",
+            riderClass: this.riderClass
+          });
+        }
       }
     }
   }

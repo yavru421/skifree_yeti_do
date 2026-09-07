@@ -96,8 +96,8 @@ export class MountainDO extends DurableObject {
   private currentTargetPlayerId: string | null = null;
   
   private matchStartTime = 0;
-  private tickIntervalMs = 50; // 20Hz tick
-  private gameLoopTimer: any = null;
+  // 20Hz alarm-chained tick — DO NEVER uses setInterval (leaks across hibernation)
+  private readonly TICK_MS = 50;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -189,6 +189,12 @@ export class MountainDO extends DurableObject {
         this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN rider_class TEXT DEFAULT 'skier';");
       } catch (e) {}
       try {
+        this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN takedown_time_sec REAL DEFAULT 0;");
+      } catch (e) {}
+      try {
+        this.ctx.storage.sql.exec("ALTER TABLE yeti_kills ADD COLUMN takedown_time_sec REAL DEFAULT 0;");
+      } catch (e) {}
+      try {
         this.ctx.storage.sql.exec("ALTER TABLE race_leaderboard ADD COLUMN track_id TEXT DEFAULT 'alpine';");
       } catch (e) {}
       try {
@@ -214,8 +220,8 @@ export class MountainDO extends DurableObject {
     if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
       const trackFilter = url.searchParams.get("track") || "";
       const huntSql = trackFilter 
-        ? "SELECT callsign, score, max_speed, track_id, rider_class, created_at FROM global_leaderboard WHERE track_id = ? ORDER BY score DESC LIMIT 10"
-        : "SELECT callsign, score, max_speed, track_id, rider_class, created_at FROM global_leaderboard ORDER BY score DESC LIMIT 10";
+        ? "SELECT callsign, score, max_speed, max_distance, takedown_time_sec, track_id, rider_class, created_at FROM global_leaderboard WHERE track_id = ? ORDER BY CASE WHEN takedown_time_sec > 0 THEN 0 ELSE 1 END, CASE WHEN takedown_time_sec > 0 THEN takedown_time_sec END ASC, score DESC LIMIT 10"
+        : "SELECT callsign, score, max_speed, max_distance, takedown_time_sec, track_id, rider_class, created_at FROM global_leaderboard ORDER BY CASE WHEN takedown_time_sec > 0 THEN 0 ELSE 1 END, CASE WHEN takedown_time_sec > 0 THEN takedown_time_sec END ASC, score DESC LIMIT 10";
       const huntBoard = [...(trackFilter ? this.ctx.storage.sql.exec(huntSql, trackFilter) : this.ctx.storage.sql.exec(huntSql))];
 
       const raceSql = trackFilter
@@ -276,9 +282,10 @@ export class MountainDO extends DurableObject {
         } else {
           const maxDist = Number(body.maxDistance) || 0;
           const survivalTime = Number(body.survivalTime) || 0;
+          const takedownTimeSec = Number(body.takedownTimeSec) || 0;
           this.ctx.storage.sql.exec(
-            "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, track_id, rider_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            recordId, hunterId, callsign, maxDist, maxSpeed, survivalTime, score, trackId, riderClass, Date.now()
+            "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, takedown_time_sec, track_id, rider_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            recordId, hunterId, callsign, maxDist, maxSpeed, survivalTime, score, takedownTimeSec, trackId, riderClass, Date.now()
           );
         }
 
@@ -397,11 +404,62 @@ export class MountainDO extends DurableObject {
       }
 
       if (data.type === "INPUT") {
-        player.steer = data.steer || 0;
-        player.pitch = data.pitch || 0;
-        if (typeof data.z === "number") player.z = data.z;
-        if (typeof data.x === "number") player.x = data.x;
-        if (typeof data.speed === "number") player.speed = data.speed;
+        player.steer = Math.max(-1, Math.min(1, data.steer || 0));
+        player.pitch = Math.max(-1, Math.min(1, data.pitch || 0));
+        // Bounds-clamp position to prevent position-spoofing cheats
+        if (typeof data.z === "number") player.z = Math.max(player.z - 5, Math.min(player.z + 10, data.z));
+        if (typeof data.x === "number") player.x = Math.max(-65, Math.min(65, data.x));
+        if (typeof data.speed === "number") player.speed = Math.max(0, Math.min(120, data.speed));
+      } else if (data.type === "DAMAGE_YETI") {
+        // ─── C2: Server-Authoritative Yeti Damage Handler ─────────────────────
+        // Rate-limit: enforce 120ms minimum between shots per player
+        const now = Date.now();
+        const lastShot = (player as any).lastShot || 0;
+        if (now - lastShot < 120) return;
+        (player as any).lastShot = now;
+
+        // Validate: yeti must be alive and in melee range (18m max with ping tolerance)
+        if (this.yetiHp <= 0 || this.matchState !== "ACTIVE_HUNT") return;
+        const distToYeti = Math.hypot(player.x - this.yetiX, player.z - this.yetiZ);
+        if (distToYeti > 18) return; // authoritative melee harpoon/spear range
+
+        const isCrit = !!data.isCrit;
+        const weaponType: string = data.weaponType || "spear";
+        const chargeLevel: number = typeof data.chargeLevel === "number" ? Math.max(0.2, Math.min(1.5, data.chargeLevel)) : 1.0;
+
+        let damage = 0;
+        let staggerDuration = 0;
+        switch (weaponType) {
+          case "flare":
+            // Flare ignites panic, minimal direct damage
+            damage = 60;
+            staggerDuration = 0;
+            this.yetiDistractedTimer = Math.max(this.yetiDistractedTimer, 3.5);
+            this.broadcast({ type: "YETI_BURNING" });
+            break;
+          default: // spear / harpoon thrust
+            damage = Math.round((chargeLevel * 650) + (isCrit ? 450 : 0));
+            staggerDuration = isCrit ? 1.4 : 0.8;
+        }
+
+        this.yetiHp = Math.max(0, this.yetiHp - damage);
+        this.yetiStaggerTimer = Math.max(this.yetiStaggerTimer, staggerDuration);
+
+        // Update player score
+        player.score += damage;
+
+        this.broadcast({
+          type: "YETI_HIT",
+          damage,
+          isCrit,
+          hp: this.yetiHp,
+          maxHp: this.yetiMaxHp,
+          hitBy: player.callsign
+        });
+
+        if (this.yetiHp <= 0) {
+          this.handleYetiDefeated(player);
+        }
       } else if (data.type === "READY") {
         player.isReady = !!data.ready;
         player.gameMode = data.mode === "slalom" ? "slalom" : "hunt";
@@ -501,10 +559,18 @@ export class MountainDO extends DurableObject {
     this.matchStartTime = Date.now();
     this.yetiHp = 8000 * this.currentWave;
     this.yetiMaxHp = this.yetiHp;
-    this.yetiZ = 950;
-    this.yetiX = 0;
+    this.yetiZ = 25;
     this.boulders = [];
-    this.activeBaitItems = [];
+    for (let b = 0; b < 10; b++) {
+      this.boulders.push({
+        id: `boulder_${b}_${Date.now()}`,
+        x: (Math.random() - 0.5) * 60,
+        z: 200 + b * 75 + Math.random() * 25,
+        vx: (Math.random() - 0.5) * 6,
+        vz: 14 + Math.random() * 10,
+        radius: 2.2 + Math.random() * 1.2
+      });
+    }
     this.yetiDistractedTimer = 0;
     this.yetiEatingTimer = 0;
     this.yetiStaggerTimer = 0;
@@ -534,15 +600,19 @@ export class MountainDO extends DurableObject {
     this.restTimer = 5;
     this.yetiState = "DEAD";
 
+    const takedownTimeSec = Math.max(0, (Date.now() - this.matchStartTime) / 1000);
+
     this.ctx.storage.sql.exec(
-      "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, created_at) VALUES (?, ?, ?, ?, ?)",
-      killer.callsign, this.currentWave, killer.score, this.players.size, Date.now()
+      "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, takedown_time_sec, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      killer.callsign, this.currentWave, killer.score, this.players.size, takedownTimeSec, Date.now()
     );
 
     this.broadcast({
       type: "YETI_DEFEATED",
       wave: this.currentWave,
-      killer: killer.callsign
+      killer: killer.callsign,
+      takedownTimeSec,
+      squadSize: this.players.size
     });
 
     setTimeout(() => {
@@ -550,9 +620,9 @@ export class MountainDO extends DurableObject {
       this.matchState = "ACTIVE_HUNT";
       this.yetiHp = 8000 * this.currentWave;
       this.yetiMaxHp = this.yetiHp;
-      this.yetiZ = 950;
       this.players.forEach(p => p.isDead = false);
       const leadZ = Math.max(0, ...Array.from(this.players.values()).map(p => p.z));
+      this.yetiZ = leadZ + 25;
       this.spawnProceduralNPCs(leadZ);
 
       this.broadcast({
@@ -564,54 +634,47 @@ export class MountainDO extends DurableObject {
     }, 5000);
   }
 
-  private startGameLoop() {
-    if (this.gameLoopTimer) return;
-    this.gameLoopTimer = setInterval(() => {
-      this.gameTick();
-    }, this.tickIntervalMs);
-  }
-
-  private stopGameLoop() {
-    if (this.gameLoopTimer) {
-      clearInterval(this.gameLoopTimer);
-      this.gameLoopTimer = null;
-    }
-  }
-
+  // ─── Alarm-Chained 20Hz Tick (CORRECT DO pattern — NO setInterval) ───────────
+  // Cloudflare DOs guarantee alarm() survives hibernation; setInterval does NOT.
   private ensureGameLoop() {
     if (this.matchState === "ACTIVE_HUNT" && this.players.size > 0) {
-      this.startGameLoop();
+      // Prime the first tick immediately
+      this.ctx.storage.setAlarm(Date.now() + this.TICK_MS);
     }
-    // Schedule 5-minute inactivity dormancy watchdog alarm
-    this.ctx.storage.setAlarm(Date.now() + 300_000);
   }
 
   async alarm() {
-    // 5-minute inactivity dormancy watchdog
     const now = Date.now();
+
+    // 1. Inactivity watchdog — shut down if no players or all idle > 5 min
     let hasRecentActivity = false;
     for (const player of this.players.values()) {
-      if (now - player.lastActive < 300_000) {
-        hasRecentActivity = true;
-        break;
-      }
+      if (now - player.lastActive < 300_000) { hasRecentActivity = true; break; }
     }
     if (!hasRecentActivity || this.players.size === 0) {
-      this.stopGameLoop();
       this.matchState = "LOBBY_WAITING";
+      return; // DO goes dormant — no reschedule
+    }
+
+    // 2. Active hunt tick
+    if (this.matchState === "ACTIVE_HUNT") {
+      this.gameTick();
+      // Self-chain: reschedule next 20Hz alarm
+      this.ctx.storage.setAlarm(now + this.TICK_MS);
     } else {
-      this.ctx.storage.setAlarm(Date.now() + 300_000);
+      // Lobby / rest — keep a slow 5-min watchdog alive
+      this.ctx.storage.setAlarm(now + 300_000);
     }
   }
 
   private gameTick() {
     if (this.players.size === 0 || this.matchState !== "ACTIVE_HUNT") {
-      this.stopGameLoop();
+      // Alarm will not reschedule if matchState != ACTIVE_HUNT — loop naturally stops
       return;
     }
 
     if (this.matchState === "ACTIVE_HUNT") {
-      const dt = this.tickIntervalMs / 1000;
+      const dt = this.TICK_MS / 1000;
       const alivePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
       const leadSkierZ = alivePlayers.length > 0 ? Math.max(...alivePlayers.map(p => p.z)) : 0;
       
@@ -638,6 +701,17 @@ export class MountainDO extends DurableObject {
             npc.isEaten = false;
             npc.isRescued = false;
             npc.eatTimer = undefined;
+          }
+        });
+
+        // 1b. Update Rolling Boulders
+        this.boulders.forEach(b => {
+          b.x += b.vx * dt;
+          b.z += b.vz * dt;
+          if (b.x < -60 || b.x > 60) b.vx = -b.vx;
+          if (leadSkierZ - b.z > 40) {
+            b.z = leadSkierZ + 120 + Math.random() * 80;
+            b.x = (Math.random() - 0.5) * 60;
           }
         });
 

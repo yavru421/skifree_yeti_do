@@ -11,7 +11,7 @@ export class SceneManager {
     this.renderer = null;
     this.textureLoader = new THREE.TextureLoader();
 
-    this.isFPV = false;
+    this.isFPV = true;
     this.cameraOffset = new THREE.Vector3(0, 6.0, -9.2);
     this.cameraLookOffset = new THREE.Vector3(0, 1.0, 9.5);
 
@@ -20,6 +20,8 @@ export class SceneManager {
     this.skierGroup = null;
     this.skierSprite = null;
     this.skierTexture = null;
+    this.yetiSprite = null;
+    this.yetiTexture = null;
 
     // Track Feature Collections
     this.trees = [];
@@ -35,6 +37,7 @@ export class SceneManager {
     this.halfpipeMeshes = [];
     this.ghostSkiers = new Map();
     this.trauma = 0;
+    this.activeHarpoons = [];
 
     this.hemiLight = null;
     this.dirLight = null;
@@ -71,8 +74,65 @@ export class SceneManager {
     this.buildSnowParticles();
     this.buildCarveSpraySystem();
     this.buildNitroJetsSystem();
+    this.buildTetherLine();
+    this.loadYetiSprite();
 
     window.addEventListener("resize", () => this.onWindowResize());
+  }
+
+  buildTetherLine() {
+    const numPoints = 20;
+    const points = [];
+    for (let i = 0; i < numPoints; i++) {
+      points.push(new THREE.Vector3(0, -999, 0));
+    }
+    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x00ffff,
+      linewidth: 3,
+      transparent: true,
+      opacity: 0.95
+    });
+    this.tetherLineMesh = new THREE.Line(lineGeo, lineMat);
+    this.tetherLineMesh.visible = false;
+    this.scene.add(this.tetherLineMesh);
+  }
+
+  updateTether(playerPos, targetPos, isTethered, isStaggered) {
+    if (!this.tetherLineMesh) return;
+    if (!isTethered || !playerPos || !targetPos) {
+      this.tetherLineMesh.visible = false;
+      return;
+    }
+
+    this.tetherLineMesh.visible = true;
+    const positions = this.tetherLineMesh.geometry.attributes.position.array;
+    const numPoints = positions.length / 3;
+
+    // Set material color based on staggered state
+    if (isStaggered) {
+      this.tetherLineMesh.material.color.setHex(0xff0055);
+    } else {
+      this.tetherLineMesh.material.color.setHex(0x00f0ff);
+    }
+
+    const p0 = new THREE.Vector3(playerPos.x, playerPos.y + 0.8, playerPos.z);
+    const p1 = new THREE.Vector3(targetPos.x, Math.max(0, targetPos.y) + 1.2, targetPos.z);
+
+    for (let i = 0; i < numPoints; i++) {
+      const t = i / (numPoints - 1);
+      // Interpolate with dynamic catenary sag & high-speed vibration
+      const x = p0.x + (p1.x - p0.x) * t;
+      const sag = Math.sin(t * Math.PI) * -0.8;
+      const vibe = Math.sin(performance.now() * 0.04 + i) * 0.08;
+      const y = p0.y + (p1.y - p0.y) * t + sag + vibe;
+      const z = p0.z + (p1.z - p0.z) * t;
+
+      positions[i * 3] = x;
+      positions[i * 3 + 1] = y;
+      positions[i * 3 + 2] = z;
+    }
+    this.tetherLineMesh.geometry.attributes.position.needsUpdate = true;
   }
 
   setupLighting() {
@@ -259,6 +319,76 @@ export class SceneManager {
     }
   }
 
+  buildTrackSequoiaLogs(track) {
+    if (!track.features?.sequoiaLogs) return;
+    this.sequoiaLogs = [];
+
+    const barkMat = new THREE.MeshStandardMaterial({
+      color: 0x5a2d0c, // Deep redwood bark
+      roughness: 0.85,
+      metalness: 0.1
+    });
+
+    const snowTopMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.2,
+      metalness: 0.1
+    });
+
+    track.features.sequoiaLogs.forEach((log) => {
+      const group = new THREE.Group();
+      const trunkGeo = new THREE.CylinderGeometry(log.radius, log.radius * 1.15, log.length, 12);
+      const trunkMesh = new THREE.Mesh(trunkGeo, barkMat);
+      trunkMesh.rotation.x = Math.PI / 2 + (log.angle || 0);
+      group.add(trunkMesh);
+
+      // Top snow frosting / grind lip
+      const snowGeo = new THREE.BoxGeometry(log.radius * 1.2, 0.4, log.length);
+      const snowMesh = new THREE.Mesh(snowGeo, snowTopMat);
+      snowMesh.position.set(0, log.radius + 0.2, 0);
+      snowMesh.rotation.x = log.angle || 0;
+      group.add(snowMesh);
+
+      group.position.set(log.x, log.radius * 0.7, log.z);
+      this.scene.add(group);
+      this.sequoiaLogs.push({ group, ...log });
+    });
+  }
+
+  buildTrackHalfpipes(track) {
+    if (!track.features?.halfpipes) return;
+    this.halfpipeMeshes = [];
+
+    const iceWallMat = new THREE.MeshStandardMaterial({
+      color: 0xb0e8ff,
+      roughness: 0.1,
+      metalness: 0.6,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide
+    });
+
+    track.features.halfpipes.forEach((hp) => {
+      const len = hp.endZ - hp.startZ;
+      const wallGeo = new THREE.CylinderGeometry(hp.wallHeight, hp.wallHeight, len, 16, 1, true, 0, Math.PI * 0.5);
+
+      // Left Quarterpipe
+      const leftWall = new THREE.Mesh(wallGeo, iceWallMat);
+      leftWall.rotation.x = Math.PI / 2;
+      leftWall.position.set(-hp.width * 0.5, hp.wallHeight * 0.5, hp.startZ + len * 0.5);
+      this.scene.add(leftWall);
+      this.halfpipeMeshes.push(leftWall);
+
+      // Right Quarterpipe
+      const rightWall = new THREE.Mesh(wallGeo, iceWallMat);
+      rightWall.rotation.x = Math.PI / 2;
+      rightWall.rotation.z = Math.PI;
+      rightWall.position.set(hp.width * 0.5, hp.wallHeight * 0.5, hp.startZ + len * 0.5);
+      this.scene.add(rightWall);
+      this.halfpipeMeshes.push(rightWall);
+    });
+  }
+
   buildTrackIce(track) {
     const iceGeo = new THREE.PlaneGeometry(22, 34);
     const isBlackIce = track.features?.icePatches?.blackIce;
@@ -426,8 +556,126 @@ export class SceneManager {
     }
   }
 
+  buildHarpoonGunMesh() {
+    const gunGroup = new THREE.Group();
+
+    // 1. Heavy Pneumatic Steel Barrel
+    const barrelGeo = new THREE.CylinderGeometry(0.1, 0.12, 2.4, 12);
+    barrelGeo.rotateX(Math.PI / 2);
+    const barrelMat = new THREE.MeshStandardMaterial({
+      color: 0x222a35,
+      metalness: 0.9,
+      roughness: 0.2
+    });
+    const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+    barrel.position.set(0, 0, 0.5);
+    gunGroup.add(barrel);
+
+    // 2. High-Pressure Brass Steam Tank / Pressure Reservoir
+    const tankGeo = new THREE.CylinderGeometry(0.14, 0.14, 1.2, 12);
+    tankGeo.rotateX(Math.PI / 2);
+    const tankMat = new THREE.MeshStandardMaterial({
+      color: 0xd49b38,
+      metalness: 0.85,
+      roughness: 0.25
+    });
+    const tank = new THREE.Mesh(tankGeo, tankMat);
+    tank.position.set(0, -0.18, 0.1);
+    gunGroup.add(tank);
+
+    // 3. Glowing Cyan Steam Pressure Gauge
+    const gaugeGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 10);
+    const gaugeMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 1.2,
+      roughness: 0.2
+    });
+    const gauge = new THREE.Mesh(gaugeGeo, gaugeMat);
+    gauge.position.set(0.14, 0.04, 0.12);
+    gauge.rotation.z = Math.PI / 2;
+    gunGroup.add(gauge);
+
+    // 4. Heavy Reinforced Mounting Brackets
+    const bracketGeo = new THREE.BoxGeometry(0.34, 0.38, 0.14);
+    const bracketMat = new THREE.MeshStandardMaterial({
+      color: 0x141820,
+      metalness: 0.92,
+      roughness: 0.3
+    });
+    const bracketRear = new THREE.Mesh(bracketGeo, bracketMat);
+    bracketRear.position.set(0, -0.06, -0.2);
+    gunGroup.add(bracketRear);
+
+    const bracketFront = new THREE.Mesh(bracketGeo, bracketMat);
+    bracketFront.position.set(0, -0.06, 0.75);
+    gunGroup.add(bracketFront);
+
+    // 5. Primed Heavy Spear Loaded In The Chamber
+    const primedSpearGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.2, 8);
+    primedSpearGeo.rotateX(Math.PI / 2);
+    const primedSpearMat = new THREE.MeshStandardMaterial({
+      color: 0xccddff,
+      metalness: 0.95,
+      roughness: 0.15
+    });
+    const primedSpear = new THREE.Mesh(primedSpearGeo, primedSpearMat);
+    primedSpear.position.set(0, 0, 0.9);
+    gunGroup.add(primedSpear);
+
+    // Glowing Cyan Barbed Tip on Loaded Spear
+    const tipGeo = new THREE.ConeGeometry(0.16, 0.55, 8);
+    tipGeo.rotateX(Math.PI / 2);
+    const tipMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 2.0,
+      metalness: 0.9,
+      roughness: 0.1
+    });
+    const tip = new THREE.Mesh(tipGeo, tipMat);
+    tip.position.set(0, 0, 2.15);
+    gunGroup.add(tip);
+
+    // Reverse barbs on primed spear tip
+    const barbGeo = new THREE.BoxGeometry(0.04, 0.16, 0.22);
+    const barbMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x0099cc, emissiveIntensity: 1.5 });
+    const barbL = new THREE.Mesh(barbGeo, barbMat);
+    barbL.position.set(-0.1, 0, 1.95);
+    barbL.rotation.y = 0.4;
+    gunGroup.add(barbL);
+
+    const barbR = new THREE.Mesh(barbGeo, barbMat);
+    barbR.position.set(0.1, 0, 1.95);
+    barbR.rotation.y = -0.4;
+    gunGroup.add(barbR);
+
+    // Cable Drum Winch Reel
+    const drumGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.24, 12);
+    drumGeo.rotateZ(Math.PI / 2);
+    const drumMat = new THREE.MeshStandardMaterial({
+      color: 0x334455,
+      metalness: 0.75,
+      roughness: 0.35
+    });
+    const drum = new THREE.Mesh(drumGeo, drumMat);
+    drum.position.set(0, -0.24, -0.45);
+    gunGroup.add(drum);
+
+    // Positioning on Skier's Right Rig
+    gunGroup.position.set(0.72, 1.25, 0.25);
+    gunGroup.rotation.y = 0.04;
+    gunGroup.scale.set(1.2, 1.2, 1.2);
+
+    return gunGroup;
+  }
+
   buildSkierMesh() {
     this.skierGroup = new THREE.Group();
+
+    // Prominent 3D Steam Harpoon Cannon Rig mounted to the skier
+    this.harpoonLauncherMesh = this.buildHarpoonGunMesh();
+    this.skierGroup.add(this.harpoonLauncherMesh);
 
     loadChromaKeyTexture('/assets/skier.jpg?v=' + Date.now(), 215, (texture) => {
       this.skierTexture = texture;
@@ -556,6 +804,17 @@ export class SceneManager {
       this.skierSprite.visible = !this.isFPV;
     }
 
+    // Harpoon Cannon Recoil Recovery & Visibility
+    if (this.harpoonLauncherMesh) {
+      this.harpoonLauncherMesh.position.z += (0.25 - this.harpoonLauncherMesh.position.z) * 0.18;
+      this.harpoonLauncherMesh.visible = true;
+      if (this.isFPV) {
+        this.harpoonLauncherMesh.position.set(0.38, 1.45, 0.85);
+      } else {
+        this.harpoonLauncherMesh.position.set(0.72, 1.25, 0.25);
+      }
+    }
+
     // 2. Nitro Flames
     if (isNitroActive) {
       this.emitNitroParticles(playerPos);
@@ -588,17 +847,17 @@ export class SceneManager {
           this.skierTexture.offset.set(2 * 0.125, 0.1667);
           this.skierSprite.material.rotation = playerAirRoll || 0;
         } else if (playerSteer > 0.35) {
-          this.skierTexture.offset.set(3 * 0.125, 0.5000);
-          this.skierSprite.material.rotation = -0.08;
-        } else if (playerSteer > 0.08) {
-          this.skierTexture.offset.set(1 * 0.125, 0.5000);
-          this.skierSprite.material.rotation = -0.04;
-        } else if (playerSteer < -0.35) {
           this.skierTexture.offset.set(3 * 0.125, 0.6667);
           this.skierSprite.material.rotation = 0.08;
-        } else if (playerSteer < -0.08) {
+        } else if (playerSteer > 0.08) {
           this.skierTexture.offset.set(1 * 0.125, 0.6667);
           this.skierSprite.material.rotation = 0.04;
+        } else if (playerSteer < -0.35) {
+          this.skierTexture.offset.set(3 * 0.125, 0.5000);
+          this.skierSprite.material.rotation = -0.08;
+        } else if (playerSteer < -0.08) {
+          this.skierTexture.offset.set(1 * 0.125, 0.5000);
+          this.skierSprite.material.rotation = -0.04;
         } else if (playerPitch < -0.05) {
           this.skierTexture.offset.set(2 * 0.125, 0.3333);
           this.skierSprite.material.rotation = 0;
@@ -741,6 +1000,206 @@ export class SceneManager {
 
     this.carveSprayIndex++;
     this.carveParticlesMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  spawnHarpoon(startPos, dir, speed = 88) {
+    // Physical weapon recoil kick
+    if (this.harpoonLauncherMesh) {
+      this.harpoonLauncherMesh.position.z = -0.15;
+    }
+
+    const group = new THREE.Group();
+
+    // 1. Heavy Reinforced Steel / Titanium Spear Shaft
+    const shaftGeo = new THREE.CylinderGeometry(0.14, 0.14, 3.2, 10);
+    const shaftMat = new THREE.MeshStandardMaterial({
+      color: 0xccddee,
+      metalness: 0.92,
+      roughness: 0.15
+    });
+    const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+    shaft.rotation.x = Math.PI / 2;
+    group.add(shaft);
+
+    // Cyan glowing energy tracer rings along spear shaft
+    for (let r = -1.0; r <= 1.0; r += 0.6) {
+      const ringGeo = new THREE.TorusGeometry(0.16, 0.035, 8, 16);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.z = r;
+      group.add(ring);
+    }
+
+    // 2. Barbed Harpoon Spearhead with high-intensity glowing cyan tip
+    const headGeo = new THREE.ConeGeometry(0.42, 1.1, 10);
+    const headMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 2.8,
+      metalness: 0.95,
+      roughness: 0.1
+    });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.rotation.x = -Math.PI / 2;
+    head.position.z = 1.85;
+    group.add(head);
+
+    // Wicked Lateral Reverse Barbs
+    const barbGeo = new THREE.BoxGeometry(0.08, 0.28, 0.55);
+    const barbMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00aacc,
+      emissiveIntensity: 2.0,
+      metalness: 0.9
+    });
+    const barbLeft = new THREE.Mesh(barbGeo, barbMat);
+    barbLeft.position.set(-0.25, 0, 1.45);
+    barbLeft.rotation.y = 0.45;
+    group.add(barbLeft);
+
+    const barbRight = new THREE.Mesh(barbGeo, barbMat);
+    barbRight.position.set(0.25, 0, 1.45);
+    barbRight.rotation.y = -0.45;
+    group.add(barbRight);
+
+    // Illuminating dynamic PointLight attached directly to projectile
+    const spearLight = new THREE.PointLight(0x00ffff, 3.8, 22);
+    spearLight.position.set(0, 0, 1.8);
+    group.add(spearLight);
+
+    // 3. Trailing High-Tension Neon Cable Line
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(startPos.x, startPos.y + 0.8, startPos.z),
+      new THREE.Vector3(startPos.x, startPos.y + 0.8, startPos.z)
+    ]);
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x00ffff,
+      linewidth: 4,
+      transparent: true,
+      opacity: 0.95
+    });
+    const cableLine = new THREE.Line(lineGeo, lineMat);
+    this.scene.add(cableLine);
+
+    // Initial position & orientation
+    group.position.set(startPos.x, startPos.y + 0.9, startPos.z + 0.8);
+    
+    // Rotate to face trajectory
+    const targetPoint = new THREE.Vector3().copy(group.position).add(dir);
+    group.lookAt(targetPoint);
+
+    this.scene.add(group);
+
+    const harpoon = {
+      mesh: group,
+      line: cableLine,
+      startPos: new THREE.Vector3().copy(startPos),
+      dir: new THREE.Vector3().copy(dir).normalize(),
+      speed: speed || 115,
+      traveled: 0,
+      maxDist: 140,
+      life: 2.0
+    };
+
+    this.activeHarpoons.push(harpoon);
+    return harpoon;
+  }
+
+  spawnHarpoon(startPos, dir, speed) {
+    return this.fireHarpoon(startPos, dir, speed);
+  }
+
+  loadYetiSprite() {
+    loadChromaKeyTexture('/assets/yeti_v2.jpg', 220, (tex) => {
+      this.yetiTexture = tex;
+      this.yetiTexture.repeat.set(1 / 4, 1 / 4); // 4 columns, 4 rows
+      this.yetiTexture.offset.set(0, 3 / 4); // row 0 (top row)
+      const mat = new THREE.SpriteMaterial({ map: this.yetiTexture, transparent: true });
+      this.yetiSprite = new THREE.Sprite(mat);
+      this.yetiSprite.scale.set(7.5, 7.5, 1.0);
+      this.yetiSprite.position.set(0, 3.5, 60);
+      this.scene.add(this.yetiSprite);
+    });
+  }
+
+  updateYeti(yetiData, dt) {
+    if (!yetiData) {
+      if (this.yetiSprite) this.yetiSprite.visible = false;
+      return;
+    }
+    if (!this.yetiSprite) return;
+
+    if (typeof yetiData.hp === "number" && yetiData.hp <= 0) {
+      this.yetiSprite.visible = false;
+      return;
+    }
+
+    this.yetiSprite.visible = true;
+    this.yetiSprite.position.x = yetiData.x || 0;
+    this.yetiSprite.position.y = (yetiData.y || 0) + 3.6;
+    this.yetiSprite.position.z = yetiData.z || 0;
+
+    if (this.yetiTexture) {
+      const state = yetiData.state || "STALKING_NPCS";
+      const frameTick = Math.floor((performance.now() * 0.006) % 4);
+      if (state === "BAYED_UP" || state === "DEFENSIVE") {
+        this.yetiTexture.offset.set(frameTick * 0.25, 0.25);
+      } else if (state === "CHARGING" || state === "EATING_NPC") {
+        this.yetiTexture.offset.set(frameTick * 0.25, 0.0);
+      } else {
+        this.yetiTexture.offset.set(frameTick * 0.25, 0.75);
+      }
+    }
+  }
+
+  updateHarpoons(dt, yetiEntity, playerPos, onHitCallback) {
+    if (!this.activeHarpoons || this.activeHarpoons.length === 0) return;
+
+    for (let i = this.activeHarpoons.length - 1; i >= 0; i--) {
+      const h = this.activeHarpoons[i];
+      h.life -= dt;
+      const step = h.speed * dt;
+      h.traveled += step;
+
+      h.mesh.position.addScaledVector(h.dir, step);
+
+      // Update trailing cable line
+      if (h.line && playerPos) {
+        const positions = h.line.geometry.attributes.position.array;
+        positions[0] = playerPos.x;
+        positions[1] = playerPos.y + 0.8;
+        positions[2] = playerPos.z;
+        positions[3] = h.mesh.position.x;
+        positions[4] = h.mesh.position.y;
+        positions[5] = h.mesh.position.z;
+        h.line.geometry.attributes.position.needsUpdate = true;
+      }
+
+      // Proximity check to Yeti or target
+      let hit = false;
+      const target = yetiEntity || (this.yetiSprite && this.yetiSprite.visible ? { x: this.yetiSprite.position.x, y: this.yetiSprite.position.y, z: this.yetiSprite.position.z, hp: 1000 } : null);
+      if (target && (typeof target.hp !== "number" || target.hp > 0)) {
+        const dx = h.mesh.position.x - target.x;
+        const dz = h.mesh.position.z - target.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist < 6.5) {
+          hit = true;
+          if (onHitCallback) {
+            onHitCallback(h, dist, dx, dz);
+          }
+          if (window.__combatSystem && typeof window.__combatSystem.handleHarpoonHit === "function") {
+            window.__combatSystem.handleHarpoonHit(target, 0);
+          }
+        }
+      }
+
+      if (hit || h.traveled >= h.maxDist || h.life <= 0) {
+        if (h.mesh) this.scene.remove(h.mesh);
+        if (h.line) this.scene.remove(h.line);
+        this.activeHarpoons.splice(i, 1);
+      }
+    }
   }
 
   render() {

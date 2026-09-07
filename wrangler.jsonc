@@ -9,6 +9,10 @@
   "durable_objects": {
     "bindings": [
       {
+        "name": "GAME_ROOM",
+        "class_name": "GameRoom"
+      },
+      {
         "name": "MOUNTAIN_DO",
         "class_name": "MountainDO"
       }
@@ -19,6 +23,12 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "MountainDO"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "GameRoom"
       ]
     }
   ],
