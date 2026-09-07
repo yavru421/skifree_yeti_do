@@ -1112,7 +1112,27 @@ export class SceneManager {
   updateCamera(playerPos, playerSteer, playerPitch, playerAirY, playerAirRoll, playerAirYaw, isAirborne, isNitroActive, avalancheDist) {
     this.camera.up.set(0, 1, 0);
 
-    // 1. Sync skier world position & 3D rotation
+    // 1. AUTHENTIC ALPINE SKIING GLIDE MOTION & SUSPENSION DYNAMICS
+    const playerSpeed = window.__playerPhysics?.speed || 28;
+    const speedRatio = Math.min(1.8, Math.max(0.2, playerSpeed / 28));
+
+    // Smooth 2.6Hz vertical terrain slope glide & knee suspension
+    this.glideTimer = (this.glideTimer || 0) + (0.016 * 2.6 * speedRatio);
+    const skiGlideY = !isAirborne ? Math.sin(this.glideTimer) * 0.022 : 0;
+    const skiGlideX = !isAirborne ? Math.cos(this.glideTimer * 0.5) * 0.012 : 0;
+
+    // Carve knee compression: body sinks into snow on sharp carving turns
+    const carveKneeDrop = !isAirborne ? -Math.abs(playerSteer || 0) * 0.045 : 0;
+
+    // Subtle high-speed snow surface texture micro-chatter (not jarring steps)
+    const snowChatter = (!isAirborne && playerSpeed > 6) ? Math.sin(performance.now() * 0.06) * 0.0025 : 0;
+
+    // Dynamic Speed FOV Warp
+    const targetFov = 75 + Math.min(18, (playerSpeed - 20) * 0.35) + (isNitroActive ? 6 : 0);
+    this.camera.fov += (targetFov - this.camera.fov) * 0.12;
+    this.camera.updateProjectionMatrix();
+
+    // 2. Sync skier world position & 3D rotation
     this.skierGroup.position.set(playerPos.x, playerPos.y + playerAirY, playerPos.z);
     
     // Airborne 3D Rotation
@@ -1145,7 +1165,7 @@ export class SceneManager {
       this.skier3DModel.visible = false;
     }
 
-    // 1. FPV Harpoon Launcher Viewmodel Sway & Recoil Recovery
+    // 3. FPV Harpoon Launcher Viewmodel Sway & Recoil Recovery
     if (this.fpvLauncherGroup && this.fpvLauncherBasePos) {
       this.fpvLauncherGroup.visible = this.isFPV;
 
@@ -1169,40 +1189,20 @@ export class SceneManager {
       }
     }
 
-    // 2. Nitro Flames
+    // 4. Nitro Flames
     if (isNitroActive) {
       this.emitNitroParticles(playerPos);
     } else if (this.nitroJetsMesh) {
       this.nitroJetsMesh.visible = false;
     }
 
-    // 3. Avalanche Snow Wall positioning
+    // 5. Avalanche Snow Wall positioning
     if (this.avalancheWallMesh && typeof avalancheDist === "number") {
       this.avalancheWallMesh.position.set(playerPos.x, 12, playerPos.z - avalancheDist);
       if (avalancheDist < 45) {
         this.addTrauma(0.08);
       }
     }
-
-    // 4. AUTHENTIC ALPINE SKIING GLIDE MOTION (NO JOGGING / WALKING JERK)
-    const playerSpeed = window.__playerPhysics?.speed || 28;
-    const speedRatio = Math.min(1.8, Math.max(0.2, playerSpeed / 28));
-
-    // Smooth 2.6Hz vertical terrain slope glide & knee suspension
-    this.glideTimer = (this.glideTimer || 0) + (0.016 * 2.6 * speedRatio);
-    const skiGlideY = !isAirborne ? Math.sin(this.glideTimer) * 0.022 : 0;
-    const skiGlideX = !isAirborne ? Math.cos(this.glideTimer * 0.5) * 0.012 : 0;
-
-    // Carve knee compression: body sinks into snow on sharp carving turns
-    const carveKneeDrop = !isAirborne ? -Math.abs(playerSteer || 0) * 0.045 : 0;
-
-    // Subtle high-speed snow surface texture micro-chatter (not jarring steps)
-    const snowChatter = (!isAirborne && playerSpeed > 6) ? Math.sin(performance.now() * 0.06) * 0.0025 : 0;
-
-    // Dynamic Speed FOV Warp
-    const targetFov = 75 + Math.min(18, (playerSpeed - 20) * 0.35) + (isNitroActive ? 6 : 0);
-    this.camera.fov += (targetFov - this.camera.fov) * 0.12;
-    this.camera.updateProjectionMatrix();
 
     // Safe NaN guards
     const steer = typeof playerSteer === "number" && !isNaN(playerSteer) ? playerSteer : 0;

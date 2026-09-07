@@ -195,8 +195,19 @@ class GameApp {
     if (btnRespawn) {
       btnRespawn.addEventListener("click", () => {
         const deathModal = document.getElementById("death-modal");
+        const claimModal = document.getElementById("claim-score-modal");
         if (deathModal) deathModal.classList.add("hidden");
+        if (claimModal) claimModal.classList.add("hidden");
         this.startGame();
+      });
+    }
+
+    const btnClaimFromDeath = document.getElementById("btn-claim-from-death");
+    if (btnClaimFromDeath) {
+      btnClaimFromDeath.addEventListener("click", () => {
+        const deathModal = document.getElementById("death-modal");
+        if (deathModal) deathModal.classList.add("hidden");
+        this.promptScoreClaim();
       });
     }
 
@@ -274,6 +285,10 @@ class GameApp {
       btnSkipClaim.addEventListener("click", () => {
         const claimModal = document.getElementById("claim-score-modal");
         if (claimModal) claimModal.classList.add("hidden");
+        if (this.gameState === "DEAD") {
+          const deathModal = document.getElementById("death-modal");
+          if (deathModal) deathModal.classList.remove("hidden");
+        }
       });
     }
   }
@@ -376,6 +391,10 @@ class GameApp {
 
   startGame() {
     const startModal = document.getElementById("start-modal");
+    const deathModal = document.getElementById("death-modal");
+    const claimModal = document.getElementById("claim-score-modal");
+    const menuModal = document.getElementById("menu-modal");
+    const takedownModal = document.getElementById("takedown-modal");
     const backdrop = document.getElementById("modal-backdrop");
     const hudOverlay = document.getElementById("hud-overlay");
     const introOverlay = document.getElementById("intro-overlay");
@@ -384,6 +403,10 @@ class GameApp {
     if (introOverlay) introOverlay.classList.add("hidden");
     if (introVideo) introVideo.pause();
     if (startModal) startModal.classList.add("hidden");
+    if (deathModal) deathModal.classList.add("hidden");
+    if (claimModal) claimModal.classList.add("hidden");
+    if (menuModal) menuModal.classList.add("hidden");
+    if (takedownModal) takedownModal.classList.add("hidden");
     if (backdrop) backdrop.classList.add("hidden");
     if (hudOverlay) hudOverlay.classList.remove("hidden");
 
@@ -633,14 +656,14 @@ class GameApp {
       const backdrop = document.getElementById("modal-backdrop");
       const deathModal = document.getElementById("death-modal");
       const deathStat = document.getElementById("death-stat");
+      const claimModal = document.getElementById("claim-score-modal");
+      if (claimModal) claimModal.classList.add("hidden");
 
       if (backdrop) backdrop.classList.remove("hidden");
       if (deathModal) deathModal.classList.remove("hidden");
       if (deathStat) {
         deathStat.textContent = `[${reason || "YETI MAULED"}] • Track: ${this.trackManager.getTrack().name} • Distance: ${Math.round(this.playerPhysics.z)}m • Score: ${this.playerPhysics.score.toLocaleString()} PTS • Top Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
       }
-
-      this.promptScoreClaim();
     }, 1100);
   }
 
@@ -662,9 +685,21 @@ class GameApp {
     this.promptScoreClaim();
   }
 
-  promptScoreClaim() {
+  promptScoreClaim(isVictory = false) {
     const claimModal = document.getElementById("claim-score-modal");
+    const deathModal = document.getElementById("death-modal");
+    const takedownModal = document.getElementById("takedown-modal");
+    const menuModal = document.getElementById("menu-modal");
+    const startModal = document.getElementById("start-modal");
+    const backdrop = document.getElementById("modal-backdrop");
     const summary = document.getElementById("claim-stat-summary");
+
+    if (startModal) startModal.classList.add("hidden");
+    if (deathModal) deathModal.classList.add("hidden");
+    if (takedownModal) takedownModal.classList.add("hidden");
+    if (menuModal) menuModal.classList.add("hidden");
+    if (backdrop) backdrop.classList.remove("hidden");
+
     if (claimModal && summary) {
       summary.textContent = `Score: ${this.playerPhysics.score.toLocaleString()} PTS • Max Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH • Class: ${this.playerPhysics.riderClass.toUpperCase()}`;
       claimModal.classList.remove("hidden");
