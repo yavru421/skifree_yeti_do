@@ -1,8 +1,7 @@
-const CACHE_NAME = 'skifree-v2-cache-v20260902b';
+const CACHE_NAME = 'skifree-v2-cache-v20260907-csgo-v1';
 const ASSETS = [
   '/',
   '/index.html',
-  '/landing.html',
   '/manifest.json',
   '/assets/skier.jpg?v=10',
   '/assets/yeti_v2.jpg',
@@ -10,8 +9,7 @@ const ASSETS = [
   '/assets/pine_tree.png',
   '/assets/snow_texture.jpg',
   '/assets/ice_texture.jpg',
-  '/assets/media/waltz_on_the_slope.mp3',
-  '/assets/media/teaser_trailer.mp4'
+  '/assets/media/waltz_on_the_slope.mp3'
 ];
 
 self.addEventListener('install', (event) => {

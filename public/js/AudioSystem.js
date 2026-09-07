@@ -161,6 +161,65 @@ export class AudioSystem {
     osc.stop(this.ctx.currentTime + 0.65);
   }
 
+  playJumpscareDeath() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const now = this.ctx.currentTime;
+
+    // 1. Sub-bass seismic slam (40Hz down to 18Hz)
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(80, now);
+    subOsc.frequency.exponentialRampToValueAtTime(22, now + 0.8);
+    subGain.gain.setValueAtTime(1.0, now);
+    subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.85);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.85);
+
+    // 2. Screeching beast dissonant roar
+    const roarOsc = this.ctx.createOscillator();
+    const roarGain = this.ctx.createGain();
+    roarOsc.type = 'sawtooth';
+    roarOsc.frequency.setValueAtTime(240, now);
+    roarOsc.frequency.linearRampToValueAtTime(480, now + 0.15);
+    roarOsc.frequency.exponentialRampToValueAtTime(60, now + 0.7);
+    roarGain.gain.setValueAtTime(0.95, now);
+    roarGain.gain.exponentialRampToValueAtTime(0.01, now + 0.75);
+    roarOsc.connect(roarGain);
+    roarGain.connect(this.ctx.destination);
+    roarOsc.start(now);
+    roarOsc.stop(now + 0.75);
+
+    // 3. Bone crunch & lens shatter noise burst
+    try {
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.4);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      const noiseFilter = this.ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(1200, now);
+      noiseFilter.Q.setValueAtTime(3.0, now);
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(1.0, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+      noise.start(now);
+      noise.stop(now + 0.4);
+    } catch (e) {}
+  }
+
   playSkierScream() {
     if (!this.ctx || !this.isSoundOn) return;
     this.unlockAndStart();

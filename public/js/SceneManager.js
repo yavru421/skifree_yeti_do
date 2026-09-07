@@ -12,7 +12,9 @@ export class SceneManager {
     this.textureLoader = new THREE.TextureLoader();
 
     this.isFPV = true;
-    this.cameraOffset = new THREE.Vector3(0, 6.0, -9.2);
+    this.headBobTimer = 0;
+    this.baseFov = 75;
+    this.cameraOffset = new THREE.Vector3(0, 1.75, 0.2);
     this.cameraLookOffset = new THREE.Vector3(0, 1.0, 9.5);
 
     this.terrainMesh = null;
@@ -48,8 +50,8 @@ export class SceneManager {
 
   init() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x89b6dc);
-    this.scene.fog = new THREE.FogExp2(0x9fc0e2, 0.0035);
+    this.scene.background = new THREE.Color(0x7eb0d5);
+    this.scene.fog = new THREE.FogExp2(0xa4c8e8, 0.0030);
 
     this.camera = new THREE.PerspectiveCamera(
       65,
@@ -61,14 +63,19 @@ export class SceneManager {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true,
+      alpha: false,
       powerPreference: "high-performance"
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setClearColor(0x7eb0d5, 1.0);
+
+    this.scene.add(this.camera);
 
     this.setupLighting();
     this.buildDistantMountainRange();
     this.buildSkierMesh();
+    this.buildFpvHarpoonLauncher();
     this.buildContinuousSnowTerrain();
     this.buildSkiLiftSystem();
     this.buildSnowParticles();
@@ -590,126 +597,132 @@ export class SceneManager {
     }
   }
 
-  buildHarpoonGunMesh() {
-    const gunGroup = new THREE.Group();
+  buildFpvHarpoonLauncher() {
+    this.fpvLauncherGroup = new THREE.Group();
 
-    // 1. Heavy Pneumatic Steel Barrel
-    const barrelGeo = new THREE.CylinderGeometry(0.1, 0.12, 2.4, 12);
-    barrelGeo.rotateX(Math.PI / 2);
+    // 1. Heavy Steam Harpoon Cannon Barrel (Gunmetal Titanium, pointing down -Z into aim line)
+    const barrelGeo = new THREE.CylinderGeometry(0.065, 0.08, 1.15, 12);
+    barrelGeo.rotateX(-Math.PI / 2);
     const barrelMat = new THREE.MeshStandardMaterial({
-      color: 0x222a35,
-      metalness: 0.9,
-      roughness: 0.2
+      color: 0x1c2430,
+      metalness: 0.92,
+      roughness: 0.22
     });
     const barrel = new THREE.Mesh(barrelGeo, barrelMat);
-    barrel.position.set(0, 0, 0.5);
-    gunGroup.add(barrel);
+    barrel.position.set(0, 0, -0.4);
+    this.fpvLauncherGroup.add(barrel);
 
-    // 2. High-Pressure Brass Steam Tank / Pressure Reservoir
-    const tankGeo = new THREE.CylinderGeometry(0.14, 0.14, 1.2, 12);
-    tankGeo.rotateX(Math.PI / 2);
-    const tankMat = new THREE.MeshStandardMaterial({
+    // Muzzle anchor point for world projectile spawn
+    this.harpoonMuzzleAnchor = new THREE.Object3D();
+    this.harpoonMuzzleAnchor.position.set(0, 0, -1.02);
+    this.fpvLauncherGroup.add(this.harpoonMuzzleAnchor);
+
+    // 2. High-Pressure Brass Steam Chamber
+    const chamberGeo = new THREE.CylinderGeometry(0.095, 0.095, 0.7, 12);
+    chamberGeo.rotateX(-Math.PI / 2);
+    const brassMat = new THREE.MeshStandardMaterial({
       color: 0xd49b38,
-      metalness: 0.85,
-      roughness: 0.25
+      metalness: 0.88,
+      roughness: 0.2
     });
-    const tank = new THREE.Mesh(tankGeo, tankMat);
-    tank.position.set(0, -0.18, 0.1);
-    gunGroup.add(tank);
+    const chamber = new THREE.Mesh(chamberGeo, brassMat);
+    chamber.position.set(0, -0.07, -0.15);
+    this.fpvLauncherGroup.add(chamber);
 
     // 3. Glowing Cyan Steam Pressure Gauge
-    const gaugeGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.08, 10);
+    const gaugeGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.04, 10);
     const gaugeMat = new THREE.MeshStandardMaterial({
       color: 0x00ffff,
       emissive: 0x00f0ff,
-      emissiveIntensity: 1.2,
+      emissiveIntensity: 1.8,
       roughness: 0.2
     });
     const gauge = new THREE.Mesh(gaugeGeo, gaugeMat);
-    gauge.position.set(0.14, 0.04, 0.12);
+    gauge.position.set(0.08, 0.02, -0.2);
     gauge.rotation.z = Math.PI / 2;
-    gunGroup.add(gauge);
+    this.fpvLauncherGroup.add(gauge);
 
-    // 4. Heavy Reinforced Mounting Brackets
-    const bracketGeo = new THREE.BoxGeometry(0.34, 0.38, 0.14);
-    const bracketMat = new THREE.MeshStandardMaterial({
-      color: 0x141820,
-      metalness: 0.92,
+    // 4. Steel Winch Cable Spool with High-Tension Wire
+    const spoolGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 12);
+    spoolGeo.rotateZ(Math.PI / 2);
+    const spoolMat = new THREE.MeshStandardMaterial({
+      color: 0x334455,
+      metalness: 0.8,
       roughness: 0.3
     });
-    const bracketRear = new THREE.Mesh(bracketGeo, bracketMat);
-    bracketRear.position.set(0, -0.06, -0.2);
-    gunGroup.add(bracketRear);
+    const spool = new THREE.Mesh(spoolGeo, spoolMat);
+    spool.position.set(0, -0.13, 0.12);
+    this.fpvLauncherGroup.add(spool);
 
-    const bracketFront = new THREE.Mesh(bracketGeo, bracketMat);
-    bracketFront.position.set(0, -0.06, 0.75);
-    gunGroup.add(bracketFront);
+    // 5. THE VISIBLE LOADED HOOK / SPEARHEAD STICKING PROMINENTLY OUT OF THE BARREL
+    this.loadedHookMesh = new THREE.Group();
 
-    // 5. Primed Heavy Spear Loaded In The Chamber
-    const primedSpearGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.2, 8);
-    primedSpearGeo.rotateX(Math.PI / 2);
-    const primedSpearMat = new THREE.MeshStandardMaterial({
+    // Shaft protruding from barrel
+    const loadedShaftGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.75, 8);
+    loadedShaftGeo.rotateX(-Math.PI / 2);
+    const loadedShaftMat = new THREE.MeshStandardMaterial({
       color: 0xccddff,
       metalness: 0.95,
       roughness: 0.15
     });
-    const primedSpear = new THREE.Mesh(primedSpearGeo, primedSpearMat);
-    primedSpear.position.set(0, 0, 0.9);
-    gunGroup.add(primedSpear);
+    const loadedShaft = new THREE.Mesh(loadedShaftGeo, loadedShaftMat);
+    loadedShaft.position.set(0, 0, -0.82);
+    this.loadedHookMesh.add(loadedShaft);
 
-    // Glowing Cyan Barbed Tip on Loaded Spear
-    const tipGeo = new THREE.ConeGeometry(0.16, 0.55, 8);
-    tipGeo.rotateX(Math.PI / 2);
+    // Wicked Barbed Glowing Cyan Spearhead Tip protruding out of the muzzle
+    const tipGeo = new THREE.ConeGeometry(0.09, 0.38, 8);
+    tipGeo.rotateX(-Math.PI / 2);
     const tipMat = new THREE.MeshStandardMaterial({
       color: 0x00ffff,
       emissive: 0x00ffff,
-      emissiveIntensity: 2.0,
-      metalness: 0.9,
-      roughness: 0.1
+      emissiveIntensity: 3.2,
+      metalness: 0.95,
+      roughness: 0.08
     });
     const tip = new THREE.Mesh(tipGeo, tipMat);
-    tip.position.set(0, 0, 2.15);
-    gunGroup.add(tip);
+    tip.position.set(0, 0, -1.22);
+    this.loadedHookMesh.add(tip);
 
-    // Reverse barbs on primed spear tip
-    const barbGeo = new THREE.BoxGeometry(0.04, 0.16, 0.22);
-    const barbMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x0099cc, emissiveIntensity: 1.5 });
+    // Reverse lateral barbs on the Hook Tip
+    const barbMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x0099cc,
+      emissiveIntensity: 2.2,
+      metalness: 0.9
+    });
+    const barbGeo = new THREE.BoxGeometry(0.025, 0.08, 0.15);
+
     const barbL = new THREE.Mesh(barbGeo, barbMat);
-    barbL.position.set(-0.1, 0, 1.95);
-    barbL.rotation.y = 0.4;
-    gunGroup.add(barbL);
+    barbL.position.set(-0.065, 0, -1.12);
+    barbL.rotation.y = 0.45;
+    this.loadedHookMesh.add(barbL);
 
     const barbR = new THREE.Mesh(barbGeo, barbMat);
-    barbR.position.set(0.1, 0, 1.95);
-    barbR.rotation.y = -0.4;
-    gunGroup.add(barbR);
+    barbR.position.set(0.065, 0, -1.12);
+    barbR.rotation.y = -0.45;
+    this.loadedHookMesh.add(barbR);
 
-    // Cable Drum Winch Reel
-    const drumGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.24, 12);
-    drumGeo.rotateZ(Math.PI / 2);
-    const drumMat = new THREE.MeshStandardMaterial({
-      color: 0x334455,
-      metalness: 0.75,
-      roughness: 0.35
-    });
-    const drum = new THREE.Mesh(drumGeo, drumMat);
-    drum.position.set(0, -0.24, -0.45);
-    gunGroup.add(drum);
+    // Glowing cyan pointlight on hook tip
+    const hookLight = new THREE.PointLight(0x00ffff, 1.8, 5);
+    hookLight.position.set(0, 0, -1.18);
+    this.loadedHookMesh.add(hookLight);
 
-    // Positioning on Skier's Right Rig
-    gunGroup.position.set(0.72, 1.25, 0.25);
-    gunGroup.rotation.y = 0.04;
-    gunGroup.scale.set(1.2, 1.2, 1.2);
+    this.fpvLauncherGroup.add(this.loadedHookMesh);
 
-    return gunGroup;
+    // Position cleanly in FPV lower right screen viewport (right hand weapon hold)
+    this.fpvLauncherBasePos = new THREE.Vector3(0.24, -0.22, -0.52);
+    this.fpvLauncherGroup.position.copy(this.fpvLauncherBasePos);
+    this.fpvLauncherGroup.rotation.set(0.04, -0.03, 0);
+    this.fpvLauncherGroup.scale.set(0.55, 0.55, 0.55);
+
+    // Attach directly to camera
+    this.camera.add(this.fpvLauncherGroup);
+
+    return this.fpvLauncherGroup;
   }
 
   buildSkierMesh() {
     this.skierGroup = new THREE.Group();
-
-    // Prominent 3D Steam Harpoon Cannon Rig mounted to the skier
-    this.harpoonLauncherMesh = this.buildHarpoonGunMesh();
-    this.skierGroup.add(this.harpoonLauncherMesh);
 
     const skiMat = new THREE.MeshStandardMaterial({
       color: 0x00f0ff,
@@ -914,7 +927,7 @@ export class SceneManager {
     if (this.fpvSkisGroup) {
       this.fpvSkisGroup.visible = this.isFPV;
       this.fpvSkisGroup.rotation.y = playerSteer * 0.4;
-      this.fpvSkisGroup.rotation.z = -playerSteer * 0.25;
+      this.fpvSkisGroup.rotation.z = playerSteer * 0.25;
     }
 
     if (this.skier3DModel) {
@@ -923,14 +936,27 @@ export class SceneManager {
       this.skier3DModel.rotation.z = -playerSteer * 0.3;
     }
 
-    // Harpoon Cannon Recoil Recovery & Visibility
-    if (this.harpoonLauncherMesh) {
-      this.harpoonLauncherMesh.position.z += (0.25 - this.harpoonLauncherMesh.position.z) * 0.18;
-      this.harpoonLauncherMesh.visible = true;
-      if (this.isFPV) {
-        this.harpoonLauncherMesh.position.set(0.38, 1.45, 0.85);
-      } else {
-        this.harpoonLauncherMesh.position.set(0.68, 1.35, 0.25);
+    // 1. FPV Harpoon Launcher Viewmodel Sway & Recoil Recovery
+    if (this.fpvLauncherGroup && this.fpvLauncherBasePos) {
+      this.fpvLauncherGroup.visible = this.isFPV;
+
+      // Gentle weapon sway matching ski carving momentum and low-frequency terrain glide
+      const swayX = -playerSteer * 0.045 + Math.cos((this.glideTimer || 0) * 0.5) * 0.008;
+      const swayY = Math.sin(this.glideTimer || 0) * 0.012 - Math.abs(playerSteer) * 0.02;
+
+      this.fpvLauncherGroup.position.x += (this.fpvLauncherBasePos.x + swayX - this.fpvLauncherGroup.position.x) * 0.22;
+      this.fpvLauncherGroup.position.y += (this.fpvLauncherBasePos.y + swayY - this.fpvLauncherGroup.position.y) * 0.22;
+      this.fpvLauncherGroup.position.z += (this.fpvLauncherBasePos.z - this.fpvLauncherGroup.position.z) * 0.22;
+
+      this.fpvLauncherGroup.rotation.x += (0.04 - this.fpvLauncherGroup.rotation.x) * 0.22;
+      this.fpvLauncherGroup.rotation.z += (-playerSteer * 0.18 - this.fpvLauncherGroup.rotation.z) * 0.22;
+
+      // Reload animation: smoothly slide hook back into barrel
+      if (typeof this.harpoonReloadTimer === "number" && this.harpoonReloadTimer > 0) {
+        this.harpoonReloadTimer -= 0.016;
+        if (this.harpoonReloadTimer <= 0) {
+          if (this.loadedHookMesh) this.loadedHookMesh.visible = true;
+        }
       }
     }
 
@@ -944,61 +970,73 @@ export class SceneManager {
     // 3. Avalanche Snow Wall positioning
     if (this.avalancheWallMesh && typeof avalancheDist === "number") {
       this.avalancheWallMesh.position.set(playerPos.x, 12, playerPos.z - avalancheDist);
-      // Tremor shake when avalanche is close
       if (avalancheDist < 45) {
         this.addTrauma(0.08);
       }
     }
 
+    // 4. AUTHENTIC ALPINE SKIING GLIDE MOTION (NO JOGGING / WALKING JERK)
+    const playerSpeed = window.__playerPhysics?.speed || 28;
+    const speedRatio = Math.min(1.8, Math.max(0.2, playerSpeed / 28));
+
+    // Smooth 2.6Hz vertical terrain slope glide & knee suspension
+    this.glideTimer = (this.glideTimer || 0) + (0.016 * 2.6 * speedRatio);
+    const skiGlideY = !isAirborne ? Math.sin(this.glideTimer) * 0.022 : 0;
+    const skiGlideX = !isAirborne ? Math.cos(this.glideTimer * 0.5) * 0.012 : 0;
+
+    // Carve knee compression: body sinks into snow on sharp carving turns
+    const carveKneeDrop = !isAirborne ? -Math.abs(playerSteer || 0) * 0.045 : 0;
+
+    // Subtle high-speed snow surface texture micro-chatter (not jarring steps)
+    const snowChatter = (!isAirborne && playerSpeed > 6) ? Math.sin(performance.now() * 0.06) * 0.0025 : 0;
+
+    // Dynamic Speed FOV Warp
+    const targetFov = 75 + Math.min(18, (playerSpeed - 20) * 0.35) + (isNitroActive ? 6 : 0);
+    this.camera.fov += (targetFov - this.camera.fov) * 0.12;
+    this.camera.updateProjectionMatrix();
+
+    // Safe NaN guards
+    const steer = typeof playerSteer === "number" && !isNaN(playerSteer) ? playerSteer : 0;
+    const pitch = typeof playerPitch === "number" && !isNaN(playerPitch) ? playerPitch : 0;
+    const airRoll = typeof playerAirRoll === "number" && !isNaN(playerAirRoll) ? playerAirRoll : 0;
+    const airYaw = typeof playerAirYaw === "number" && !isNaN(playerAirYaw) ? playerAirYaw : 0;
+
     if (this.isFPV) {
-      this.camera.position.set(playerPos.x, playerPos.y + playerAirY + 1.75, playerPos.z + 0.2);
-      const fpvLookTarget = new THREE.Vector3(
-        playerPos.x + Math.sin(playerSteer) * 12.0,
-        playerPos.y + playerAirY - 1.8 + playerPitch * 3.5,
-        playerPos.z + 50.0
-      );
-      this.camera.lookAt(fpvLookTarget);
-      this.camera.rotation.z = playerSteer * 0.22;
+      if (this.fpvSkisGroup) this.fpvSkisGroup.visible = true;
+      if (this.skier3DModel) this.skier3DModel.visible = false;
+      if (this.fpvLauncherGroup) this.fpvLauncherGroup.visible = true;
+
+      // Place camera at exact skier eye level with smooth ski suspension
+      const eyeY = (playerPos.y || 0) + (playerAirY || 0) + 1.68 + skiGlideY + carveKneeDrop + snowChatter;
+      const eyeX = (playerPos.x || 0) + skiGlideX;
+      const eyeZ = (playerPos.z || 0) + 0.15;
+      this.camera.position.set(eyeX, eyeY, eyeZ);
+
+      // PERMANENT RIGHT-SIDE UP DOWNHILL CAMERA ORIENTATION (order = 'YXZ')
+      this.camera.rotation.order = 'YXZ';
+      const pitchAngle = -0.08 + (pitch * 0.5); // Looking slightly downward along slope
+      const yawAngle = Math.PI + (steer * 0.72) + (airYaw || 0); // Downhill (+Z) and natural carve turning
+      const rollAngle = steer * 0.25 + (airRoll || 0) * 0.5; // Ski carve body lean / bank roll
+
+      this.camera.rotation.set(pitchAngle, yawAngle, rollAngle);
     } else {
-      // Third-Person View (TPV Chase Cam)
-      if (this.skierTexture && this.skierSprite) {
-        if (playerAirY > 0.4) {
-          this.skierTexture.offset.set(2 * 0.125, 0.1667);
-          this.skierSprite.material.rotation = playerAirRoll || 0;
-        } else if (playerSteer > 0.35) {
-          this.skierTexture.offset.set(3 * 0.125, 0.6667);
-          this.skierSprite.material.rotation = 0.08;
-        } else if (playerSteer > 0.08) {
-          this.skierTexture.offset.set(1 * 0.125, 0.6667);
-          this.skierSprite.material.rotation = 0.04;
-        } else if (playerSteer < -0.35) {
-          this.skierTexture.offset.set(3 * 0.125, 0.5000);
-          this.skierSprite.material.rotation = -0.08;
-        } else if (playerSteer < -0.08) {
-          this.skierTexture.offset.set(1 * 0.125, 0.5000);
-          this.skierSprite.material.rotation = -0.04;
-        } else if (playerPitch < -0.05) {
-          this.skierTexture.offset.set(2 * 0.125, 0.3333);
-          this.skierSprite.material.rotation = 0;
-        } else {
-          this.skierTexture.offset.set(0.0, 0.8333);
-          this.skierSprite.material.rotation = 0;
-        }
-      }
+      if (this.fpvSkisGroup) this.fpvSkisGroup.visible = false;
+      if (this.skier3DModel) this.skier3DModel.visible = true;
+      if (this.fpvLauncherGroup) this.fpvLauncherGroup.visible = false;
 
-      const targetCamPos = new THREE.Vector3(
-        playerPos.x,
-        playerPos.y + playerAirY * 0.5 + this.cameraOffset.y,
-        playerPos.z + this.cameraOffset.z
-      );
-      this.camera.position.lerp(targetCamPos, 0.25);
+      // Third-Person Chase Cam behind player looking downhill
+      const chaseDist = 6.8;
+      const chaseHeight = 3.2;
+      const camX = (playerPos.x || 0) - Math.sin(steer * 0.5) * 1.8;
+      const camY = (playerPos.y || 0) + (playerAirY || 0) * 0.5 + chaseHeight;
+      const camZ = (playerPos.z || 0) - chaseDist;
+      this.camera.position.set(camX, camY, camZ);
 
-      const lookTarget = new THREE.Vector3(
-        playerPos.x + Math.sin(playerSteer) * 1.5,
-        playerPos.y + playerAirY * 0.3 + this.cameraLookOffset.y,
-        playerPos.z + this.cameraLookOffset.z
-      );
-      this.camera.lookAt(lookTarget);
+      this.camera.rotation.order = 'YXZ';
+      const pitchAngle = -0.16 + (pitch * 0.3);
+      const yawAngle = Math.PI + (steer * 0.5) + (airYaw || 0);
+      const rollAngle = (airRoll || 0) * 0.3;
+      this.camera.rotation.set(pitchAngle, yawAngle, rollAngle);
     }
 
     // Camera Trauma Screen Shake decay
@@ -1117,27 +1155,47 @@ export class SceneManager {
     pos[idx + 1] = playerPos.y + 0.1 + Math.random() * 0.25;
     pos[idx + 2] = playerPos.z - 0.4 - Math.random() * 0.8;
 
-    this.carveSprayIndex++;
+      this.carveSprayIndex++;
     this.carveParticlesMesh.geometry.attributes.position.needsUpdate = true;
   }
 
   spawnHarpoon(startPos, dir, speed = 88) {
-    // Physical weapon recoil kick
-    if (this.harpoonLauncherMesh) {
-      this.harpoonLauncherMesh.position.z = -0.15;
+    // 1. Physical weapon recoil kick & reload trigger on FPV launcher viewmodel
+    if (this.fpvLauncherGroup) {
+      this.fpvLauncherGroup.position.z += 0.14; // Kick backward into screen
+      this.fpvLauncherGroup.rotation.x -= 0.08; // Muzzle kick upward
+      if (this.loadedHookMesh) {
+        this.loadedHookMesh.visible = false; // Loaded hook visibly leaves the barrel!
+      }
+      this.harpoonReloadTimer = 0.45; // Smooth reload timer
+    }
+
+    // 2. Trajectory: Fire exactly from the barrel muzzle in the forward direction of the barrel/camera
+    let actualStart = startPos;
+    let actualDir = dir;
+
+    if (this.harpoonMuzzleAnchor) {
+      const muzzleWorld = new THREE.Vector3();
+      this.harpoonMuzzleAnchor.getWorldPosition(muzzleWorld);
+      actualStart = muzzleWorld;
+    }
+    if (this.camera) {
+      const camDir = new THREE.Vector3();
+      this.camera.getWorldDirection(camDir);
+      actualDir = camDir.normalize();
     }
 
     const group = new THREE.Group();
 
     // 1. Heavy Reinforced Steel / Titanium Spear Shaft
     const shaftGeo = new THREE.CylinderGeometry(0.14, 0.14, 3.2, 10);
+    shaftGeo.rotateX(Math.PI / 2);
     const shaftMat = new THREE.MeshStandardMaterial({
       color: 0xccddee,
       metalness: 0.92,
       roughness: 0.15
     });
     const shaft = new THREE.Mesh(shaftGeo, shaftMat);
-    shaft.rotation.x = Math.PI / 2;
     group.add(shaft);
 
     // Cyan glowing energy tracer rings along spear shaft
@@ -1188,8 +1246,8 @@ export class SceneManager {
 
     // 3. Trailing High-Tension Neon Cable Line
     const lineGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(startPos.x, startPos.y + 0.8, startPos.z),
-      new THREE.Vector3(startPos.x, startPos.y + 0.8, startPos.z)
+      new THREE.Vector3(actualStart.x, actualStart.y, actualStart.z),
+      new THREE.Vector3(actualStart.x, actualStart.y, actualStart.z)
     ]);
     const lineMat = new THREE.LineBasicMaterial({
       color: 0x00ffff,
@@ -1201,10 +1259,10 @@ export class SceneManager {
     this.scene.add(cableLine);
 
     // Initial position & orientation
-    group.position.set(startPos.x, startPos.y + 0.9, startPos.z + 0.8);
+    group.position.copy(actualStart);
     
     // Rotate to face trajectory
-    const targetPoint = new THREE.Vector3().copy(group.position).add(dir);
+    const targetPoint = new THREE.Vector3().copy(group.position).add(actualDir);
     group.lookAt(targetPoint);
 
     this.scene.add(group);
@@ -1212,11 +1270,11 @@ export class SceneManager {
     const harpoon = {
       mesh: group,
       line: cableLine,
-      startPos: new THREE.Vector3().copy(startPos),
-      dir: new THREE.Vector3().copy(dir).normalize(),
-      speed: speed || 115,
+      startPos: new THREE.Vector3().copy(actualStart),
+      dir: new THREE.Vector3().copy(actualDir).normalize(),
+      speed: speed || 120,
       traveled: 0,
-      maxDist: 140,
+      maxDist: 150,
       life: 2.0
     };
 
@@ -1224,8 +1282,8 @@ export class SceneManager {
     return harpoon;
   }
 
-  spawnHarpoon(startPos, dir, speed) {
-    return this.fireHarpoon(startPos, dir, speed);
+  fireHarpoon(startPos, dir, speed) {
+    return this.spawnHarpoon(startPos, dir, speed);
   }
 
   buildYeti3DModel() {

@@ -356,75 +356,129 @@
       z-index: 55;
     }
 
-    /* Mobile Touch Zones */
-    #touch-steer-zone {
+    /* CS:GO Dynamic Crosshair & Tactical HUD */
+    #csgo-crosshair {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 55vw;
-      height: 100%;
-      z-index: 75;
-      touch-action: none;
-      pointer-events: auto;
-    }
-    #touch-stick-base {
-      position: absolute;
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      border: 2px dashed rgba(0, 240, 255, 0.7);
-      background: rgba(0, 240, 255, 0.12);
-      pointer-events: none;
+      top: 50%;
+      left: 50%;
       transform: translate(-50%, -50%);
-      display: none;
-      z-index: 76;
-    }
-    #touch-stick-thumb {
-      position: absolute;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #00f0ff 0%, rgba(0, 240, 255, 0.6) 80%);
-      box-shadow: 0 0 14px #00f0ff;
+      width: 40px;
+      height: 40px;
       pointer-events: none;
-      transform: translate(-50%, -50%);
-      display: none;
-      z-index: 77;
+      z-index: 95;
+    }
+    .ch-bar {
+      position: absolute;
+      background: #00ff66;
+      box-shadow: 0 0 4px rgba(0, 255, 102, 0.8), 0 0 1px #000;
+      transition: transform 0.04s ease-out;
+    }
+    .ch-top {
+      width: 2px;
+      height: 9px;
+      top: 2px;
+      left: 19px;
+      transform-origin: bottom center;
+    }
+    .ch-bottom {
+      width: 2px;
+      height: 9px;
+      bottom: 2px;
+      left: 19px;
+      transform-origin: top center;
+    }
+    .ch-left {
+      width: 9px;
+      height: 2px;
+      left: 2px;
+      top: 19px;
+      transform-origin: right center;
+    }
+    .ch-right {
+      width: 9px;
+      height: 2px;
+      right: 2px;
+      top: 19px;
+      transform-origin: left center;
+    }
+    .ch-dot {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: #00ff66;
+      top: 19px;
+      left: 19px;
+      box-shadow: 0 0 2px #000;
     }
 
-    #mobile-action-bar {
+    /* CS:GO Tactical Bottom HUD */
+    #csgo-tactical-hud {
       position: absolute;
-      bottom: max(10px, env(safe-area-inset-bottom, 10px));
-      right: max(10px, env(safe-area-inset-right, 10px));
+      bottom: 16px;
+      left: 0;
+      width: 100vw;
+      padding: 0 28px;
       display: flex;
-      flex-direction: row;
-      gap: clamp(6px, 1.5vw, 12px);
-      z-index: 80;
-      pointer-events: auto;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      z-index: 70;
+      font-family: 'Courier New', 'Consolas', monospace;
     }
-    .touch-btn {
-      background: rgba(10, 20, 35, 0.92);
-      border: 2px solid #00f0ff;
-      border-radius: 12px;
-      color: #fff;
-      font-family: inherit;
+    .csgo-hud-block {
+      background: rgba(8, 12, 20, 0.88);
+      border: 1px solid rgba(0, 255, 102, 0.4);
+      border-radius: 4px;
+      padding: 6px 14px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .csgo-hud-label {
+      font-size: 11px;
+      color: #88a0b0;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    .csgo-hud-val {
+      font-size: 26px;
       font-weight: 900;
-      font-size: clamp(10px, 2.2vw, 12px);
-      padding: clamp(8px, 1.8vh, 12px) clamp(10px, 2.2vw, 16px);
-      min-height: 46px;
-      min-width: 58px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
-      touch-action: manipulation;
-      cursor: pointer;
+      color: #00ff66;
+      text-shadow: 0 0 8px rgba(0, 255, 102, 0.6);
+      letter-spacing: 1px;
     }
-    .touch-btn-shoot {
-      background: linear-gradient(135deg, rgba(255, 0, 127, 0.95), rgba(255, 0, 50, 0.95));
-      border-color: #ff0055;
-      box-shadow: 0 0 16px rgba(255, 0, 85, 0.6);
-      min-width: 85px;
+    .csgo-ammo-sub {
+      font-size: 13px;
+      color: #00e5ff;
+      font-weight: 700;
+    }
+
+    /* Killfeed */
+    #csgo-killfeed {
+      position: absolute;
+      top: 14px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: none;
+      z-index: 72;
+      font-family: 'Courier New', 'Consolas', monospace;
+    }
+    .killfeed-row {
+      background: rgba(10, 14, 24, 0.85);
+      border-right: 3px solid #ff0055;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: #fff;
+      font-weight: 800;
+      border-radius: 2px;
+      animation: killfeedFade 0.25s ease-out;
+    }
+    @keyframes killfeedFade {
+      0% { opacity: 0; transform: translateX(20px); }
+      100% { opacity: 1; transform: translateX(0); }
     }
 
     /* Modal Backdrop */
@@ -533,6 +587,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+  <!-- Fixed Three.js Game Viewport Canvas -->
+  <canvas id="game-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; display:block;"></canvas>
+
   <!-- Network Reconnection Toast -->
   <div id="network-toast" style="display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(255,0,85,0.92); border:2px solid #ff0033; border-radius:8px; color:#fff; font-weight:900; font-size:12px; padding:6px 16px; z-index:9999;">⚠️ RECONNECTING TO ALPINE LOBBY...</div>
 
@@ -585,15 +642,29 @@
     <button class="modal-btn" id="btn-hunt-again" style="max-width:280px; margin:8px auto 0 auto; display:block; background:#1a2a44;" type="button">HUNT AGAIN 🌲</button>
   </div>
 
-  <!-- Mobile Touch Controls -->
-  <div id="touch-steer-zone" class="hidden"></div>
-  <div id="touch-stick-base"></div>
-  <div id="touch-stick-thumb"></div>
+  <!-- CS:GO Dynamic Crosshair -->
+  <div id="csgo-crosshair">
+    <div class="ch-bar ch-top" id="ch-top"></div>
+    <div class="ch-bar ch-bottom" id="ch-bottom"></div>
+    <div class="ch-bar ch-left" id="ch-left"></div>
+    <div class="ch-bar ch-right" id="ch-right"></div>
+    <div class="ch-dot"></div>
+  </div>
 
-  <div id="mobile-action-bar" class="hidden">
-    <button id="btn-touch-spear" class="touch-btn" type="button" style="background:linear-gradient(135deg, #00f0ff, #0088cc);">🚀 HARPOON</button>
-    <button id="btn-touch-bait" class="touch-btn" type="button">🥩 BAIT</button>
-    <button id="btn-touch-jump" class="touch-btn" type="button">🦘 JUMP</button>
+  <!-- CS:GO Tactical Killfeed -->
+  <div id="csgo-killfeed"></div>
+
+  <!-- CS:GO Minimalist Bottom HUD -->
+  <div id="csgo-tactical-hud">
+    <div class="csgo-hud-block">
+      <span class="csgo-hud-label">+ HEALTH</span>
+      <span class="csgo-hud-val" id="csgo-hp-val">100</span>
+    </div>
+    <div class="csgo-hud-block">
+      <span class="csgo-hud-label">WEAPON</span>
+      <span class="csgo-hud-val" id="csgo-ammo-val">1</span>
+      <span class="csgo-ammo-sub">/ HARPOON [CABLE READY]</span>
+    </div>
   </div>
 
   <div id="damage-flash"></div>
@@ -673,37 +744,10 @@
       </div>
     </div>
 
-    <!-- Dedicated Tactical Harpoon Launch Action Button (Desktop & Mobile) -->
-    <div id="hud-harpoon-container" style="position:fixed; bottom:clamp(20px, 4vh, 32px); right:clamp(20px, 4vw, 36px); z-index:110; pointer-events:auto;">
-      <button id="btn-hud-harpoon" type="button" style="
-        background: linear-gradient(135deg, rgba(0, 240, 255, 0.95), rgba(0, 120, 255, 0.95));
-        border: 2px solid #00f0ff;
-        border-radius: 12px;
-        color: #000;
-        font-family: inherit;
-        font-size: clamp(13px, 2.8vw, 17px);
-        font-weight: 900;
-        letter-spacing: 1px;
-        padding: clamp(10px, 2vh, 16px) clamp(16px, 3.2vw, 26px);
-        box-shadow: 0 0 24px rgba(0, 240, 255, 0.65), inset 0 0 8px rgba(255, 255, 255, 0.6);
-        cursor: pointer;
-        user-select: none;
-        touch-action: manipulation;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        transition: transform 0.08s ease, filter 0.08s ease, background 0.2s ease, border-color 0.2s ease;
-      ">
-        <span id="hud-harpoon-icon" style="font-size: clamp(16px, 3.4vw, 22px);">🚀</span>
-        <span id="hud-harpoon-text">FIRE HARPOON [SPACE]</span>
-      </button>
-    </div>
   </div>
 
-  <canvas id="game-canvas"></canvas>
-
   <!-- Chalet Modal Wrapper -->
-  <div id="modal-backdrop">
+  <div id="modal-backdrop" class="hidden">
     <div id="start-modal" style="max-width:460px; text-align:center; padding:24px;">
       <div class="modal-title" style="font-size:clamp(22px, 4.8vw, 34px); color:#00f0ff; text-shadow:0 0 25px rgba(0,240,255,0.85); margin-bottom:8px;">🎿 SKIFREE 2: HARPOON HUNT</div>
       <div style="font-size:12px; color:#88a0c0; line-height:1.5; margin-bottom:14px;">
@@ -782,28 +826,7 @@
   <!-- Master Soundtrack Audio Stream Player -->
   <audio id="bg-music-player" loop preload="auto" src="/assets/media/waltz_on_the_slope.mp3" style="display:none;"></audio>
 
-  <!-- Intro Cinematic Overlay (autoplay muted, skips to lobby on any interaction) -->
-  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:9998; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-    <video id="intro-video" autoplay muted playsinline loop
-      style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;"
-      src="/assets/media/teaser_trailer.mp4">
-    </video>
-    <div style="position:relative; z-index:1; text-align:center; pointer-events:none;">
-      <div style="font-size:clamp(28px,6vw,56px); font-weight:900; color:#00f0ff; text-shadow:0 0 30px #00f0ff; letter-spacing:4px;">SKIFREE 2</div>
-      <div style="font-size:clamp(12px,2.4vw,18px); color:#ffff00; font-weight:bold; margin-top:8px; text-shadow:0 0 12px #ff7700;">ALPINE YETI HUNT</div>
-    </div>
-    <div style="position:relative; z-index:1; margin-top:32px; display:flex; gap:14px;">
-      <button id="btn-skip-intro" style="background:rgba(10,20,35,0.92); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 24px; border-radius:8px; cursor:pointer; box-shadow:0 0 14px rgba(0,240,255,0.5); touch-action:manipulation;" type="button">
-        ▶ ENTER THE MOUNTAIN
-      </button>
-      <button id="btn-unmute-intro" style="background:rgba(10,20,35,0.92); border:2px solid #ffff00; color:#ffff00; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 18px; border-radius:8px; cursor:pointer; touch-action:manipulation;" type="button">
-        🔊 UNMUTE
-      </button>
-    </div>
-    <div style="position:relative; z-index:1; margin-top:14px; font-size:11px; color:rgba(255,255,255,0.45);">Press SPACE or click to skip</div>
-  </div>
-
-  <!-- Boot Modular Game Application (cache-busted) -->
-  <script type="module" src="/js/main.js?v=20260906_3d_yeti_hunt_v3"></script>
+  <!-- Boot Modular Game Application (Upright Alpine Skiing + FPV Loaded Harpoon Viewmodel Build) -->
+  <script type="module" src="/js/main.js?v=20260907_upright_carve_v5"></script>
 </body>
 </html>

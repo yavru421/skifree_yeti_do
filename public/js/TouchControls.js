@@ -8,7 +8,7 @@ export class TouchControls {
     this.sceneManager = sceneManager;
     this.audioSystem = audioSystem;
 
-    this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth <= 920;
     this.touchZone = document.getElementById("touch-steer-zone");
     this.stickBase = document.getElementById("touch-stick-base");
     this.stickThumb = document.getElementById("touch-stick-thumb");

@@ -126,7 +126,7 @@ export class HUDManager {
 
     const flareVal = document.getElementById("flare-val");
     if (flareVal && combatSystem) {
-      flareVal.textContent = `${combatSystem.flareAmmo}/${combatSystem.maxFlareAmmo}`;
+      flareVal.textContent = `${combatSystem.flareAmmo || 3}/${combatSystem.maxFlareAmmo || 3}`;
     }
 
     // 3. Nitro Fuel Gauge
@@ -197,11 +197,12 @@ export class HUDManager {
     // 4. Rescued Squad Status
     const squadHud = document.getElementById("squad-hud");
     const squadVal = document.getElementById("squad-val");
-    if (squadHud && combatSystem) {
+    if (squadHud && combatSystem && Array.isArray(combatSystem.rescuedSquad)) {
       if (combatSystem.rescuedSquad.length > 0) {
         squadHud.style.display = "block";
         if (squadVal) {
-          squadVal.textContent = `${combatSystem.rescuedSquad.length} (x${combatSystem.rescueMultiplier.toFixed(2)})`;
+          const mult = typeof combatSystem.rescueMultiplier === "number" ? combatSystem.rescueMultiplier.toFixed(2) : "1.00";
+          squadVal.textContent = `${combatSystem.rescuedSquad.length} (x${mult})`;
         }
       } else {
         squadHud.style.display = "none";

@@ -6,7 +6,6 @@ import { SceneManager } from './SceneManager.js';
 import { PlayerPhysics } from './PlayerPhysics.js';
 import { FrostLeviathan } from './FrostLeviathan.js';
 import { CombatSystem } from './CombatSystem.js';
-import { TouchControls } from './TouchControls.js';
 import { HUDManager } from './HUDManager.js';
 import { NetworkSync } from './NetworkSync.js';
 import { TrackManager } from './TrackManager.js';
@@ -32,12 +31,11 @@ class GameApp {
     this.combatSystem = new CombatSystem();
     this.hudManager = new HUDManager();
     this.networkSync = new NetworkSync();
-    this.touchControls = new TouchControls(
-      this.playerPhysics,
-      this.combatSystem,
-      this.sceneManager,
-      this.audioSystem
-    );
+    this.touchControls = null;
+
+    // Desktop Pointer Lock State
+    this.isPointerLocked = false;
+    this.physicsAccumulator = 0;
 
     // Global pointers for event delegates
     window.__frostLeviathan = this.frostLeviathan;
@@ -50,10 +48,10 @@ class GameApp {
     window.__networkSync = this.networkSync;
     window.__onGameEvent = (e) => this.handleGameEvent(e);
 
-    this.gameState = "INTRO";
+    this.gameState = "ACTIVE"; // Immediate active slope entry
     this.gameMode = "hunt";
     this.lastTime = performance.now();
-    this.raceStartTime = 0;
+    this.raceStartTime = performance.now();
     this.raceElapsedSec = 0;
     this.telemetryTimer = 0;
     this.lastTakedownTimeSec = 0;
@@ -76,15 +74,52 @@ class GameApp {
     return div.innerHTML;
   }
 
+  setupPointerLock() {
+    this.canvas.addEventListener("click", () => {
+      if (document.pointerLockElement !== this.canvas) {
+        this.canvas.requestPointerLock();
+      }
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      this.isPointerLocked = document.pointerLockElement === this.canvas;
+      const modal = document.getElementById("start-modal");
+      const backdrop = document.getElementById("modal-backdrop");
+      if (this.isPointerLocked) {
+        if (modal) modal.classList.add("hidden");
+        if (backdrop) backdrop.classList.add("hidden");
+        this.audioSystem.unlockAndStart();
+        this.gameState = "ACTIVE";
+      }
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (this.isPointerLocked && this.playerPhysics) {
+        if (this.playerPhysics.applyMouseLook) {
+          this.playerPhysics.applyMouseLook(e.movementX, e.movementY);
+        }
+      }
+    });
+
+    window.addEventListener("mousedown", (e) => {
+      if (e.button === 0 && this.isPointerLocked) {
+        if (this.combatSystem && this.combatSystem.fireActiveHarpoon) {
+          this.combatSystem.fireActiveHarpoon();
+        }
+      }
+    });
+  }
+
   setupUI() {
+    this.setupPointerLock();
+
     // 1. Ready & Start Buttons
     const btnStart = document.getElementById("btn-start");
     if (btnStart) {
       btnStart.addEventListener("click", () => {
-        const introOverlay = document.getElementById("intro-overlay");
-        const introVideo = document.getElementById("intro-video");
-        if (introOverlay) introOverlay.classList.add("hidden");
-        if (introVideo) introVideo.pause();
+        if (document.pointerLockElement !== this.canvas) {
+          this.canvas.requestPointerLock();
+        }
         this.audioSystem.unlockAndStart();
         this.startGame();
       });
@@ -451,18 +486,65 @@ class GameApp {
   }
 
   handlePlayerDeath() {
-    this.gameState = "DEAD";
-    const backdrop = document.getElementById("modal-backdrop");
-    const deathModal = document.getElementById("death-modal");
-    const deathStat = document.getElementById("death-stat");
+    this.triggerHorrorJumpscareDeath("Yeti Consumed Camera");
+  }
 
-    if (backdrop) backdrop.classList.remove("hidden");
-    if (deathModal) deathModal.classList.remove("hidden");
-    if (deathStat) {
-      deathStat.textContent = `Track: ${this.trackManager.getTrack().name} • Distance: ${Math.round(this.playerPhysics.z)}m • Score: ${this.playerPhysics.score.toLocaleString()} PTS • Top Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
+  triggerHorrorJumpscareDeath(reason) {
+    if (this.gameState === "DEAD" || this.gameState === "JUMPSCARE") return;
+    this.gameState = "JUMPSCARE";
+
+    // 1. Lock physics to halt motion immediately
+    this.playerPhysics.speed = 0;
+    this.playerPhysics.isBraking = true;
+
+    // 2. Position Yeti directly in front of camera at point-blank range
+    if (this.yetiPredator) {
+      this.yetiPredator.x = this.playerPhysics.x;
+      this.yetiPredator.z = this.playerPhysics.z + 1.2;
+      this.yetiPredator.state = "SPRINTING";
     }
 
-    this.promptScoreClaim();
+    // 3. Trigger maximum screen trauma shudder and audio jumpscare
+    if (this.sceneManager && this.sceneManager.addTrauma) {
+      this.sceneManager.addTrauma(1.0);
+    }
+    if (this.audioSystem) {
+      if (this.audioSystem.playJumpscareDeath) {
+        this.audioSystem.playJumpscareDeath();
+      } else if (this.audioSystem.playYetiRoar) {
+        this.audioSystem.playYetiRoar();
+      }
+    }
+
+    // 4. Activate bloody cracked lens overlay
+    const jumpscareOverlay = document.getElementById("jumpscare-overlay");
+    const blackout = document.getElementById("jumpscare-blackout");
+    if (jumpscareOverlay) {
+      jumpscareOverlay.classList.add("active");
+    }
+
+    // 5. Blackout after 650ms, then display death modal
+    setTimeout(() => {
+      if (blackout) blackout.classList.add("blacked-out");
+    }, 650);
+
+    setTimeout(() => {
+      this.gameState = "DEAD";
+      if (jumpscareOverlay) jumpscareOverlay.classList.remove("active");
+      if (blackout) blackout.classList.remove("blacked-out");
+
+      const backdrop = document.getElementById("modal-backdrop");
+      const deathModal = document.getElementById("death-modal");
+      const deathStat = document.getElementById("death-stat");
+
+      if (backdrop) backdrop.classList.remove("hidden");
+      if (deathModal) deathModal.classList.remove("hidden");
+      if (deathStat) {
+        deathStat.textContent = `[${reason || "YETI MAULED"}] • Track: ${this.trackManager.getTrack().name} • Distance: ${Math.round(this.playerPhysics.z)}m • Score: ${this.playerPhysics.score.toLocaleString()} PTS • Top Speed: ${Math.round(this.playerPhysics.maxSpeedAchieved)} MPH`;
+      }
+
+      this.promptScoreClaim();
+    }, 1100);
   }
 
   handleRaceFinished() {
@@ -530,6 +612,119 @@ class GameApp {
     }
   }
 
+  physicsTick(dt, currentTrack) {
+    // 1. Local Player Physics (CS:GO Source Kinematics & Air Strafing)
+    this.playerPhysics.update(
+      dt,
+      this.sceneManager,
+      this.audioSystem,
+      (e) => this.handleGameEvent(e),
+      currentTrack
+    );
+
+    // 2. Combat System (Steam Harpoon Gun, Secondary Explosives)
+    this.combatSystem.update(dt);
+
+    // Update active 3D flying harpoons & trailing cables
+    if (this.sceneManager && this.sceneManager.updateHarpoons) {
+      this.sceneManager.updateHarpoons(
+        dt,
+        this.yetiPredator,
+        { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
+        (harpoon, dist) => {
+          if (this.combatSystem && this.combatSystem.handleHarpoonHit) {
+            this.combatSystem.handleHarpoonHit(this.yetiPredator, 0);
+          }
+        }
+      );
+    }
+
+    // 3. Yeti & Frost Leviathan State Update
+    if (this.sceneManager && this.sceneManager.updateYeti) {
+      this.sceneManager.updateYeti(this.yetiPredator, dt);
+    }
+    this.frostLeviathan.update(dt, this.networkSync.whaleState);
+
+    // 4. Update FPV Camera (Safe with fallback guards)
+    try {
+      this.sceneManager.updateCamera(
+        { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
+        this.playerPhysics.steer || 0,
+        this.playerPhysics.pitch || 0,
+        this.playerPhysics.airY || 0,
+        this.playerPhysics.airRoll || 0,
+        this.playerPhysics.airYaw || 0,
+        !!this.playerPhysics.isAirborne,
+        !!this.playerPhysics.isNitroActive,
+        this.playerPhysics.avalancheDist || 120
+      );
+    } catch (camErr) {
+      console.warn("updateCamera error guard:", camErr);
+    }
+
+    // 5. Update 3D Dynamic Towing Rope Mesh
+    if (this.sceneManager && this.sceneManager.updateTether) {
+      const isTethered = this.combatSystem.isTethered || this.playerPhysics.isTowed;
+      const targetPos = {
+        x: this.yetiPredator.x,
+        y: (this.sceneManager.getTerrainHeight ? this.sceneManager.getTerrainHeight(this.yetiPredator.x, this.yetiPredator.z) : 0) + 1.8,
+        z: this.yetiPredator.z
+      };
+      this.sceneManager.updateTether(
+        { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
+        targetPos,
+        isTethered,
+        this.yetiPredator.state === "BAYED_UP" || this.frostLeviathan.isStaggered
+      );
+    }
+
+    // 6. 10Hz Authoritative Telemetry to Cloudflare Durable Object
+    this.telemetryTimer += dt;
+    if (this.telemetryTimer >= 0.1) {
+      this.telemetryTimer = 0;
+      this.networkSync.sendPositionUpdate(
+        this.playerPhysics.x,
+        this.playerPhysics.airY || 0,
+        this.playerPhysics.z,
+        this.playerPhysics.pitch,
+        this.playerPhysics.steer,
+        this.playerPhysics.airRoll || 0,
+        this.playerPhysics.speed,
+        (this.combatSystem.isTethered || this.playerPhysics.isTowed) ? "TOWED" : "IDLE"
+      );
+    }
+  }
+
+  updateVisuals(dt, currentTrack) {
+    // Update Legacy HUD
+    this.hudManager.update(
+      this.playerPhysics,
+      this.combatSystem,
+      this.frostLeviathan,
+      this.gameMode,
+      this.raceElapsedSec,
+      currentTrack
+    );
+
+    // Update CS:GO Tactical HUD
+    const hpVal = document.getElementById("csgo-hp-val");
+    if (hpVal) hpVal.textContent = Math.max(0, this.playerPhysics.lives * 34);
+
+    const ammoVal = document.getElementById("csgo-ammo-val");
+    if (ammoVal) ammoVal.textContent = this.combatSystem.activeHarpoonInFlight ? "0" : "1";
+
+    // Dynamic Crosshair Bloom based on Speed & Air
+    const spread = Math.min(24, Math.max(0, (this.playerPhysics.speed - 20) * 0.35 + (this.playerPhysics.isAirborne ? 14 : 0)));
+    const chTop = document.getElementById("ch-top");
+    const chBottom = document.getElementById("ch-bottom");
+    const chLeft = document.getElementById("ch-left");
+    const chRight = document.getElementById("ch-right");
+    if (chTop) chTop.style.transform = `translateY(-${spread}px)`;
+    if (chBottom) chBottom.style.transform = `translateY(${spread}px)`;
+    if (chLeft) chLeft.style.transform = `translateX(-${spread}px)`;
+    if (chRight) chRight.style.transform = `translateX(${spread}px)`;
+  }
+
   loop(currentTime) {
     const dt = Math.min(0.1, (currentTime - this.lastTime) / 1000);
     this.lastTime = currentTime;
@@ -541,101 +736,33 @@ class GameApp {
       // Check Frost Leviathan / Yeti Defeat in Hunt Mode
       if (this.gameMode === "hunt" && ((this.yetiPredator && this.yetiPredator.hp <= 0) || this.frostLeviathan.hp <= 0)) {
         this.handleYetiDefeated("You & Squad", this.raceElapsedSec, 1);
-        this.sceneManager.render();
-        requestAnimationFrame((t) => this.loop(t));
-        return;
       }
 
-      // 1. Local Player Physics (SSX 3 Kinematics, 3D Air Tricks, Style Meter)
-      this.playerPhysics.update(
-        dt,
-        this.sceneManager,
-        this.audioSystem,
-        (e) => this.handleGameEvent(e),
-        currentTrack
-      );
-
-      // 2. Combat System (Steam Harpoon Gun, Secondary Explosives)
-      this.combatSystem.update(dt);
-
-      // Update active 3D flying harpoons & trailing cables
-      if (this.sceneManager && this.sceneManager.updateHarpoons) {
-        this.sceneManager.updateHarpoons(
-          dt,
-          this.yetiPredator,
-          { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
-          (harpoon, dist) => {
-            if (this.combatSystem && this.combatSystem.handleHarpoonHit) {
-              this.combatSystem.handleHarpoonHit(this.yetiPredator, 0);
-            }
-          }
-        );
+      // Check Mountain Bottom Horror Failure
+      const finishDist = (currentTrack && currentTrack.finishDistance) || 1800;
+      if (this.gameMode === "hunt" && this.playerPhysics.z >= finishDist && this.yetiPredator && this.yetiPredator.hp > 0) {
+        this.triggerHorrorJumpscareDeath("YETI OVERTOOK AT BASE OF MOUNTAIN");
       }
 
-      // 3. Yeti & Frost Leviathan State Update
-      if (this.sceneManager && this.sceneManager.updateYeti) {
-        this.sceneManager.updateYeti(this.yetiPredator, dt);
-      }
-      this.frostLeviathan.update(dt, this.networkSync.whaleState);
-
-      // 4. Update Third-Person Chase Camera with 3D Aerial Rotation & Nitro Effects
-      this.sceneManager.updateCamera(
-        { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
-        this.playerPhysics.steer,
-        this.playerPhysics.pitch,
-        this.playerPhysics.airY,
-        this.playerPhysics.airRoll,
-        this.playerPhysics.airYaw,
-        this.playerPhysics.isAirborne,
-        this.playerPhysics.isNitroActive,
-        this.playerPhysics.avalancheDist
-      );
-
-      // 5. Update HUD Overlays
-      this.hudManager.update(
-        this.playerPhysics,
-        this.combatSystem,
-        this.frostLeviathan,
-        this.gameMode,
-        this.raceElapsedSec,
-        currentTrack
-      );
-
-      // 6. Update 3D Dynamic Towing Rope Mesh (Authoritative Three.js Line)
-      if (this.sceneManager && this.sceneManager.updateTether) {
-        const isTethered = this.combatSystem.isTethered || this.playerPhysics.isTowed;
-        const targetPos = {
-          x: this.yetiPredator.x,
-          y: (this.sceneManager.getTerrainHeight ? this.sceneManager.getTerrainHeight(this.yetiPredator.x, this.yetiPredator.z) : 0) + 1.8,
-          z: this.yetiPredator.z
-        };
-        this.sceneManager.updateTether(
-          { x: this.playerPhysics.x, y: this.playerPhysics.y, z: this.playerPhysics.z },
-          targetPos,
-          isTethered,
-          this.yetiPredator.state === "BAYED_UP" || this.frostLeviathan.isStaggered
-        );
+      // 128Hz Fixed Physics Timestep Accumulator (7.8125ms per tick)
+      const TICK_SEC = 1 / 128;
+      this.physicsAccumulator = (this.physicsAccumulator || 0) + dt;
+      let safetyTicks = 0;
+      while (this.physicsAccumulator >= TICK_SEC && safetyTicks < 16) {
+        this.physicsTick(TICK_SEC, currentTrack);
+        this.physicsAccumulator -= TICK_SEC;
+        safetyTicks++;
       }
 
-      // 7. 10Hz Authoritative Telemetry to Cloudflare Durable Object
-      this.telemetryTimer += dt;
-      if (this.telemetryTimer >= 0.1) {
-        this.telemetryTimer = 0;
-        this.networkSync.sendPositionUpdate(
-          this.playerPhysics.x,
-          this.playerPhysics.airY || 0,
-          this.playerPhysics.z,
-          this.playerPhysics.pitch,
-          this.playerPhysics.steer,
-          this.playerPhysics.airRoll || 0,
-          this.playerPhysics.speed,
-          (this.combatSystem.isTethered || this.playerPhysics.isTowed) ? "TOWED" : "IDLE"
-        );
-      }
+      this.updateVisuals(dt, currentTrack);
     }
 
-    // 8. Render 3D Scene
-    this.sceneManager.render();
+    // 8. UNCONDITIONAL 3D RENDER
+    try {
+      this.sceneManager.render();
+    } catch (renderErr) {
+      console.error("Three.js render exception caught:", renderErr);
+    }
 
     requestAnimationFrame((t) => this.loop(t));
   }

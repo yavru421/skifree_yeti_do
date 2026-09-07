@@ -14,8 +14,13 @@ export class CombatSystem {
     this.maxExplosive = 3;
 
     // Magnesium Flare Gun (Alt-Fire: KeyE)
-    this.flareAmmo = 2;
+    this.flareAmmo = 3;
+    this.maxFlareAmmo = 3;
     this.flareCooldown = 0;
+
+    // Rescued squad state for HUD and scoring
+    this.rescuedSquad = [];
+    this.rescueMultiplier = 1.0;
 
     this.setupControls();
   }

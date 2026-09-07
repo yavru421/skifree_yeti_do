@@ -227,13 +227,14 @@ export class PlayerPhysics {
       }
 
     } else {
-      // GROUND CARVING
-      const steerSpeed = (3.2 * (isBoarder ? 1.25 : 1.0)) * dt;
+      // AUTHENTIC CONTINUOUS ALPINE SKI CARVING
+      const carveRate = (2.2 * (isBoarder ? 1.15 : 1.0)) * dt;
       if (this.keys.left) {
-        this.steer = Math.min(0.75, this.steer + steerSpeed);
+        this.steer = Math.min(0.72, this.steer + carveRate);
       } else if (this.keys.right) {
-        this.steer = Math.max(-0.75, this.steer - steerSpeed);
+        this.steer = Math.max(-0.72, this.steer - carveRate);
       } else {
+        // Smooth progressive edge release: skis flow naturally back down the fall line
         this.steer *= Math.pow(0.06, dt);
       }
     }
