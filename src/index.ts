@@ -121,14 +121,14 @@ export default {
     }
 
     // 4. Landing page & Game shortcuts
-    if (url.pathname === "/" || url.pathname === "/landing") {
-      const landingReq = new Request(new URL("/landing.html", request.url), request);
-      const res = await env.ASSETS.fetch(landingReq);
-      return withSecurityHeaders(res);
-    }
-    if (url.pathname === "/play" || url.pathname === "/game") {
+    if (url.pathname === "/" || url.pathname === "/play" || url.pathname === "/game") {
       const gameReq = new Request(new URL("/index.html", request.url), request);
       const res = await env.ASSETS.fetch(gameReq);
+      return withSecurityHeaders(res);
+    }
+    if (url.pathname === "/landing" || url.pathname === "/teaser") {
+      const landingReq = new Request(new URL("/landing.html", request.url), request);
+      const res = await env.ASSETS.fetch(landingReq);
       return withSecurityHeaders(res);
     }
 
