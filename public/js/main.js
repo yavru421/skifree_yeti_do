@@ -81,6 +81,10 @@ class GameApp {
     const btnStart = document.getElementById("btn-start");
     if (btnStart) {
       btnStart.addEventListener("click", () => {
+        const introOverlay = document.getElementById("intro-overlay");
+        const introVideo = document.getElementById("intro-video");
+        if (introOverlay) introOverlay.classList.add("hidden");
+        if (introVideo) introVideo.pause();
         this.audioSystem.unlockAndStart();
         this.startGame();
       });
@@ -93,14 +97,6 @@ class GameApp {
         this.networkSync.sendReady(true, this.gameMode);
         btnReady.textContent = "READY! 🎿";
         btnReady.style.background = "linear-gradient(135deg, #39ff14, #00aa55)";
-      });
-    }
-
-    const btnStart = document.getElementById("btn-start");
-    if (btnStart) {
-      btnStart.addEventListener("click", () => {
-        this.audioSystem.unlockAndStart();
-        this.startGame();
       });
     }
 
@@ -251,7 +247,12 @@ class GameApp {
       const introVideo = document.getElementById("intro-video");
       if (introOverlay) introOverlay.classList.add("hidden");
       if (introVideo) introVideo.pause();
-      this.gameState = "LOBBY";
+      const startModal = document.getElementById("start-modal");
+      const backdrop = document.getElementById("modal-backdrop");
+      if (startModal) startModal.classList.add("hidden");
+      if (backdrop) backdrop.classList.add("hidden");
+      this.audioSystem.unlockAndStart();
+      this.startGame();
     };
 
     const btnSkip = document.getElementById("btn-skip-intro");
@@ -270,7 +271,7 @@ class GameApp {
     }
 
     window.addEventListener("keydown", (e) => {
-      if (this.gameState === "INTRO" && (e.code === "Space" || e.code === "Escape")) {
+      if (this.gameState === "INTRO" && (e.code === "Space" || e.code === "Escape" || e.code === "Enter")) {
         skipIntro();
       }
     });
@@ -340,19 +341,24 @@ class GameApp {
     const startModal = document.getElementById("start-modal");
     const backdrop = document.getElementById("modal-backdrop");
     const hudOverlay = document.getElementById("hud-overlay");
+    const introOverlay = document.getElementById("intro-overlay");
+    const introVideo = document.getElementById("intro-video");
 
+    if (introOverlay) introOverlay.classList.add("hidden");
+    if (introVideo) introVideo.pause();
     if (startModal) startModal.classList.add("hidden");
     if (backdrop) backdrop.classList.add("hidden");
     if (hudOverlay) hudOverlay.classList.remove("hidden");
 
     this.playerPhysics.respawn();
     this.yetiPredator.hp = this.yetiPredator.maxHp;
-    this.yetiPredator.z = this.playerPhysics.z + 24;
+    this.yetiPredator.z = this.playerPhysics.z + 28;
     this.yetiPredator.x = this.playerPhysics.x;
     this.yetiPredator.state = "RUNNING_DOWNHILL";
     this.raceStartTime = performance.now();
     this.raceElapsedSec = 0;
     this.gameState = "ACTIVE";
+    this.audioSystem.unlockAndStart();
   }
 
   launchActiveGame() {

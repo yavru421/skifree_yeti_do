@@ -220,45 +220,79 @@ export class SceneManager {
   }
 
   buildTrackTrees(track) {
-    const treeTex = this.textureLoader.load('/assets/pine_tree.png');
-    const treeGeo = new THREE.PlaneGeometry(6.5, 9.0);
     const isNeon = track.features?.trees?.neonTint;
     
-    const treeMat = new THREE.MeshStandardMaterial({
-      map: treeTex,
-      transparent: true,
-      alphaTest: 0.15,
-      roughness: 0.8,
-      side: THREE.DoubleSide,
-      color: isNeon ? 0x00ffff : 0xffffff,
-      emissive: isNeon ? 0x003366 : 0x000000,
-      emissiveIntensity: isNeon ? 0.6 : 0
+    // Realistic multi-tier volumetric spruce pine tree
+    const trunkMat = new THREE.MeshStandardMaterial({
+      color: 0x3d2817,
+      roughness: 0.95,
+      metalness: 0.05
+    });
+    const needleColor = isNeon ? 0x00ffcc : 0x1b3b22;
+    const foliageMat = new THREE.MeshStandardMaterial({
+      color: needleColor,
+      roughness: 0.85,
+      metalness: 0.05,
+      emissive: isNeon ? 0x004433 : 0x000000,
+      emissiveIntensity: isNeon ? 0.4 : 0
+    });
+    const snowCapMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.9
     });
 
-    const count = track.features?.trees?.count || 75;
-    const maxZ = track.features?.trees?.maxZ || 1180;
-    const minZ = track.features?.trees?.minZ || 40;
+    const trunkGeo = new THREE.CylinderGeometry(0.35, 0.55, 3.2, 7);
+    const cone1Geo = new THREE.ConeGeometry(2.4, 3.2, 7);
+    const cone2Geo = new THREE.ConeGeometry(1.8, 2.6, 7);
+    const cone3Geo = new THREE.ConeGeometry(1.2, 2.0, 7);
+    const snowCapGeo = new THREE.ConeGeometry(0.65, 1.1, 7);
+
+    const count = Math.max(150, track.features?.trees?.count || 140);
+    const maxZ = track.features?.trees?.maxZ || 1850;
+    const minZ = 25; // Starts immediately at 25m!
 
     for (let i = 0; i < count; i++) {
       const treeGroup = new THREE.Group();
-      const p1 = new THREE.Mesh(treeGeo, treeMat);
-      p1.position.y = 4.5;
-      const p2 = new THREE.Mesh(treeGeo, treeMat);
-      p2.position.y = 4.5;
-      p2.rotation.y = Math.PI / 2;
 
-      treeGroup.add(p1);
-      treeGroup.add(p2);
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.y = 1.6;
+      treeGroup.add(trunk);
 
-      const tz = minZ + (i / count) * (maxZ - minZ) + (Math.random() - 0.5) * 15;
+      const tier1 = new THREE.Mesh(cone1Geo, foliageMat);
+      tier1.position.y = 3.6;
+      treeGroup.add(tier1);
+
+      const tier2 = new THREE.Mesh(cone2Geo, foliageMat);
+      tier2.position.y = 5.2;
+      treeGroup.add(tier2);
+
+      const tier3 = new THREE.Mesh(cone3Geo, foliageMat);
+      tier3.position.y = 6.6;
+      treeGroup.add(tier3);
+
+      const snowCap = new THREE.Mesh(snowCapGeo, snowCapMat);
+      snowCap.position.y = 7.3;
+      treeGroup.add(snowCap);
+
+      // Distribute trees across the entire mountain corridor, including dense central slalom hazards
+      const tz = minZ + (i / count) * (maxZ - minZ) + (Math.random() - 0.5) * 12;
+      
       let tx;
-      if (tz < 350) {
-        const side = Math.random() > 0.5 ? 1 : -1;
-        tx = side * (32 + Math.random() * 35);
+      if (i % 3 === 0) {
+        // Direct central slope slalom tree hazards (-22m to +22m)
+        tx = (Math.random() - 0.5) * 44;
+      } else if (i % 3 === 1) {
+        // Mid-slope flanking clusters (-38m to +38m)
+        const s = Math.random() > 0.5 ? 1 : -1;
+        tx = s * (12 + Math.random() * 26);
       } else {
-        tx = (Math.random() - 0.5) * 100;
+        // Outer forest borders
+        const s = Math.random() > 0.5 ? 1 : -1;
+        tx = s * (32 + Math.random() * 32);
       }
 
+      const sScale = 0.85 + Math.random() * 0.45;
+      treeGroup.scale.set(sScale, sScale, sScale);
       treeGroup.position.set(tx, 0, tz);
       this.trees.push(treeGroup);
       this.scene.add(treeGroup);
@@ -677,22 +711,96 @@ export class SceneManager {
     this.harpoonLauncherMesh = this.buildHarpoonGunMesh();
     this.skierGroup.add(this.harpoonLauncherMesh);
 
-    loadChromaKeyTexture('/assets/skier.jpg?v=' + Date.now(), 215, (texture) => {
-      this.skierTexture = texture;
-      this.skierTexture.repeat.set(1 / 8, 1 / 6);
-      this.skierTexture.offset.set(0.0, 5 / 6);
-
-      const spriteMat = new THREE.SpriteMaterial({
-        map: this.skierTexture,
-        transparent: true,
-        alphaTest: 0.05
-      });
-      this.skierSprite = new THREE.Sprite(spriteMat);
-      this.skierSprite.scale.set(3.2, 3.2, 1);
-      this.skierSprite.position.set(0, 1.4, 0);
-      this.skierSprite.visible = !this.isFPV;
-      this.skierGroup.add(this.skierSprite);
+    const skiMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      metalness: 0.85,
+      roughness: 0.2,
+      emissive: 0x003355,
+      emissiveIntensity: 0.5
     });
+    const bootMat = new THREE.MeshStandardMaterial({
+      color: 0x111827,
+      roughness: 0.4,
+      metalness: 0.6
+    });
+
+    // 1. FPV Skis and Bindings (Directly visible under the player's goggles in FPV)
+    this.fpvSkisGroup = new THREE.Group();
+    const skiGeo = new THREE.BoxGeometry(0.24, 0.08, 2.8);
+    
+    const leftSki = new THREE.Mesh(skiGeo, skiMat);
+    leftSki.position.set(-0.35, -0.65, 0.95);
+    const leftBoot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.28, 0.55), bootMat);
+    leftBoot.position.set(-0.35, -0.5, 0.85);
+    this.fpvSkisGroup.add(leftSki);
+    this.fpvSkisGroup.add(leftBoot);
+
+    const rightSki = new THREE.Mesh(skiGeo, skiMat);
+    rightSki.position.set(0.35, -0.65, 0.95);
+    const rightBoot = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.28, 0.55), bootMat);
+    rightBoot.position.set(0.35, -0.5, 0.85);
+    this.fpvSkisGroup.add(rightSki);
+    this.fpvSkisGroup.add(rightBoot);
+
+    this.fpvSkisGroup.visible = this.isFPV;
+    this.skierGroup.add(this.fpvSkisGroup);
+
+    // 2. Volumetric 3D Skier Avatar (Third-Person / Shadow / Drone Cam)
+    this.skier3DModel = new THREE.Group();
+    const jacketMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.7 });
+    const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85 });
+    const helmetMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.2 });
+    const visorMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 1.4,
+      roughness: 0.1
+    });
+
+    // Torso
+    const torsoMesh = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.55), jacketMat);
+    torsoMesh.position.y = 1.35;
+    this.skier3DModel.add(torsoMesh);
+
+    // Helmet & Visor
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 2.15, 0);
+    const helmetMesh = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 12), helmetMat);
+    headGroup.add(helmetMesh);
+    const visorMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.22), visorMat);
+    visorMesh.position.set(0, 0.05, 0.28);
+    headGroup.add(visorMesh);
+    this.skier3DModel.add(headGroup);
+
+    // Legs & Boots
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.9, 8), pantsMat);
+    legL.position.set(-0.25, 0.55, 0);
+    const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.9, 8), pantsMat);
+    legR.position.set(0.25, 0.55, 0);
+    this.skier3DModel.add(legL);
+    this.skier3DModel.add(legR);
+
+    // Full 3D Skis for TPV
+    const tpvSkiL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 2.4), skiMat);
+    tpvSkiL.position.set(-0.28, 0.04, 0.2);
+    const tpvSkiR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 2.4), skiMat);
+    tpvSkiR.position.set(0.28, 0.04, 0.2);
+    this.skier3DModel.add(tpvSkiL);
+    this.skier3DModel.add(tpvSkiR);
+
+    // Ski Poles
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.8 });
+    const poleL = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.4, 6), poleMat);
+    poleL.position.set(-0.65, 0.9, 0.1);
+    poleL.rotation.x = -0.2;
+    const poleR = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.4, 6), poleMat);
+    poleR.position.set(0.65, 0.9, 0.1);
+    poleR.rotation.x = -0.2;
+    this.skier3DModel.add(poleL);
+    this.skier3DModel.add(poleR);
+
+    this.skier3DModel.visible = !this.isFPV;
+    this.skierGroup.add(this.skier3DModel);
 
     this.scene.add(this.skierGroup);
   }
@@ -779,8 +887,11 @@ export class SceneManager {
 
   toggleCameraMode() {
     this.isFPV = !this.isFPV;
-    if (this.skierSprite) {
-      this.skierSprite.visible = !this.isFPV;
+    if (this.fpvSkisGroup) {
+      this.fpvSkisGroup.visible = this.isFPV;
+    }
+    if (this.skier3DModel) {
+      this.skier3DModel.visible = !this.isFPV;
     }
     return this.isFPV ? "FPV (Goggles)" : "TPV (Chase)";
   }
@@ -788,7 +899,7 @@ export class SceneManager {
   updateCamera(playerPos, playerSteer, playerPitch, playerAirY, playerAirRoll, playerAirYaw, isAirborne, isNitroActive, avalancheDist) {
     this.camera.up.set(0, 1, 0);
 
-    // 1. Sync skier sprite world position & 3D rotation
+    // 1. Sync skier world position & 3D rotation
     this.skierGroup.position.set(playerPos.x, playerPos.y + playerAirY, playerPos.z);
     
     // Airborne 3D Rotation
@@ -800,8 +911,16 @@ export class SceneManager {
       this.skierGroup.rotation.z = 0;
     }
 
-    if (this.skierSprite) {
-      this.skierSprite.visible = !this.isFPV;
+    if (this.fpvSkisGroup) {
+      this.fpvSkisGroup.visible = this.isFPV;
+      this.fpvSkisGroup.rotation.y = playerSteer * 0.4;
+      this.fpvSkisGroup.rotation.z = -playerSteer * 0.25;
+    }
+
+    if (this.skier3DModel) {
+      this.skier3DModel.visible = !this.isFPV;
+      this.skier3DModel.rotation.y = playerSteer * 0.5;
+      this.skier3DModel.rotation.z = -playerSteer * 0.3;
     }
 
     // Harpoon Cannon Recoil Recovery & Visibility
@@ -811,7 +930,7 @@ export class SceneManager {
       if (this.isFPV) {
         this.harpoonLauncherMesh.position.set(0.38, 1.45, 0.85);
       } else {
-        this.harpoonLauncherMesh.position.set(0.72, 1.25, 0.25);
+        this.harpoonLauncherMesh.position.set(0.68, 1.35, 0.25);
       }
     }
 
@@ -1109,56 +1228,229 @@ export class SceneManager {
     return this.fireHarpoon(startPos, dir, speed);
   }
 
-  loadYetiSprite() {
-    loadChromaKeyTexture('/assets/yeti_v2.jpg', 220, (tex) => {
-      this.yetiTexture = tex;
-      this.yetiTexture.repeat.set(1 / 4, 1 / 4); // 4 columns, 4 rows
-      this.yetiTexture.offset.set(0, 3 / 4); // row 0 (top row)
-      const mat = new THREE.SpriteMaterial({ map: this.yetiTexture, transparent: true });
-      this.yetiSprite = new THREE.Sprite(mat);
-      this.yetiSprite.scale.set(7.5, 7.5, 1.0);
-      this.yetiSprite.position.set(0, 3.5, 60);
-      this.scene.add(this.yetiSprite);
+  buildYeti3DModel() {
+    this.yetiGroup = new THREE.Group();
+
+    // Volumetric Fur Material (Snowy Shaggy Beast)
+    const furMat = new THREE.MeshStandardMaterial({
+      color: 0xebf2f8,
+      roughness: 0.88,
+      metalness: 0.04
     });
+    const darkMuzzleMat = new THREE.MeshStandardMaterial({
+      color: 0x1f2937,
+      roughness: 0.95
+    });
+    const clawMat = new THREE.MeshStandardMaterial({
+      color: 0x0f172a,
+      roughness: 0.3,
+      metalness: 0.6
+    });
+    const eyeMat = new THREE.MeshStandardMaterial({
+      color: 0xff0033,
+      emissive: 0xff0033,
+      emissiveIntensity: 2.5,
+      roughness: 0.2
+    });
+    const fangMat = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc,
+      roughness: 0.2,
+      metalness: 0.1
+    });
+
+    // 1. Heavy Hunched Torso & Muscular Chest
+    const torsoGeo = new THREE.BoxGeometry(3.6, 4.4, 2.6);
+    this.yetiTorso = new THREE.Mesh(torsoGeo, furMat);
+    this.yetiTorso.position.y = 3.6;
+    this.yetiGroup.add(this.yetiTorso);
+
+    // Hunched Back & Massive Traps
+    const backHumpGeo = new THREE.BoxGeometry(3.8, 2.6, 2.2);
+    const backHump = new THREE.Mesh(backHumpGeo, furMat);
+    backHump.position.set(0, 4.8, -0.6);
+    this.yetiGroup.add(backHump);
+
+    // 2. Yeti Head & Snarling Fanged Jaw
+    this.yetiHead = new THREE.Group();
+    this.yetiHead.position.set(0, 5.7, 0.8);
+
+    const skullGeo = new THREE.BoxGeometry(2.2, 2.0, 2.2);
+    const skull = new THREE.Mesh(skullGeo, furMat);
+    this.yetiHead.add(skull);
+
+    // Dark Sunken Muzzle
+    const muzzleGeo = new THREE.BoxGeometry(1.6, 1.1, 1.2);
+    const muzzle = new THREE.Mesh(muzzleGeo, darkMuzzleMat);
+    muzzle.position.set(0, -0.3, 1.2);
+    this.yetiHead.add(muzzle);
+
+    // Glowing Menacing Eyes
+    const eyeGeo = new THREE.SphereGeometry(0.18, 8, 8);
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.55, 0.25, 1.05);
+    const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeR.position.set(0.55, 0.25, 1.05);
+    this.yetiHead.add(eyeL);
+    this.yetiHead.add(eyeR);
+
+    // Sharp Carnivore Fangs (Top & Bottom)
+    const fangGeo = new THREE.ConeGeometry(0.12, 0.45, 6);
+    for (let f = -0.5; f <= 0.5; f += 0.5) {
+      const topFang = new THREE.Mesh(fangGeo, fangMat);
+      topFang.rotation.x = Math.PI;
+      topFang.position.set(f, -0.1, 1.6);
+      this.yetiHead.add(topFang);
+
+      const botFang = new THREE.Mesh(fangGeo, fangMat);
+      botFang.position.set(f * 0.8, -0.65, 1.55);
+      this.yetiHead.add(botFang);
+    }
+    this.yetiGroup.add(this.yetiHead);
+
+    // 3. Articulated Long Primal Arms & Claws
+    // Left Arm
+    this.yetiArmL = new THREE.Group();
+    this.yetiArmL.position.set(-2.2, 4.8, 0.2);
+    const armGeo = new THREE.CylinderGeometry(0.65, 0.55, 3.6, 8);
+    const armMeshL = new THREE.Mesh(armGeo, furMat);
+    armMeshL.position.y = -1.6;
+    this.yetiArmL.add(armMeshL);
+
+    // Left Paw & Claws
+    const pawL = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 1.2), furMat);
+    pawL.position.set(0, -3.4, 0.2);
+    this.yetiArmL.add(pawL);
+    for (let c = -0.35; c <= 0.35; c += 0.24) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.48, 6), clawMat);
+      claw.rotation.x = -Math.PI / 2;
+      claw.position.set(c, -3.4, 0.85);
+      this.yetiArmL.add(claw);
+    }
+    this.yetiGroup.add(this.yetiArmL);
+
+    // Right Arm
+    this.yetiArmR = new THREE.Group();
+    this.yetiArmR.position.set(2.2, 4.8, 0.2);
+    const armMeshR = new THREE.Mesh(armGeo, furMat);
+    armMeshR.position.y = -1.6;
+    this.yetiArmR.add(armMeshR);
+
+    // Right Paw & Claws
+    const pawR = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 1.2), furMat);
+    pawR.position.set(0, -3.4, 0.2);
+    this.yetiArmR.add(pawR);
+    for (let c = -0.35; c <= 0.35; c += 0.24) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.48, 6), clawMat);
+      claw.rotation.x = -Math.PI / 2;
+      claw.position.set(c, -3.4, 0.85);
+      this.yetiArmR.add(claw);
+    }
+    this.yetiGroup.add(this.yetiArmR);
+
+    // 4. Heavy Muscular Legs
+    const legGeo = new THREE.CylinderGeometry(0.8, 0.65, 3.2, 8);
+    // Left Leg
+    this.yetiLegL = new THREE.Group();
+    this.yetiLegL.position.set(-1.1, 2.2, 0);
+    const legMeshL = new THREE.Mesh(legGeo, furMat);
+    legMeshL.position.y = -1.4;
+    this.yetiLegL.add(legMeshL);
+    const footL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.0), furMat);
+    footL.position.set(0, -2.8, 0.4);
+    this.yetiLegL.add(footL);
+    this.yetiGroup.add(this.yetiLegL);
+
+    // Right Leg
+    this.yetiLegR = new THREE.Group();
+    this.yetiLegR.position.set(1.1, 2.2, 0);
+    const legMeshR = new THREE.Mesh(legGeo, furMat);
+    legMeshR.position.y = -1.4;
+    this.yetiLegR.add(legMeshR);
+    const footR = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 2.0), furMat);
+    footR.position.set(0, -2.8, 0.4);
+    this.yetiLegR.add(footR);
+    this.yetiGroup.add(this.yetiLegR);
+
+    // 5. Harpoon Embedded Socket Marker (Glowing Cyan Wound)
+    const woundGeo = new THREE.TorusGeometry(0.35, 0.08, 8, 16);
+    const woundMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 2.2
+    });
+    this.yetiTetherSocket = new THREE.Mesh(woundGeo, woundMat);
+    this.yetiTetherSocket.position.set(0, 4.4, -1.35);
+    this.yetiTetherSocket.rotation.x = Math.PI / 2;
+    this.yetiGroup.add(this.yetiTetherSocket);
+
+    this.yetiGroup.position.set(0, 0, 60);
+    this.scene.add(this.yetiGroup);
+  }
+
+  loadYetiSprite() {
+    this.buildYeti3DModel();
   }
 
   updateYeti(yetiData, dt) {
     if (!yetiData) {
-      if (this.yetiSprite) this.yetiSprite.visible = false;
+      if (this.yetiGroup) this.yetiGroup.visible = false;
       return;
     }
-    if (!this.yetiSprite) return;
+    if (!this.yetiGroup) return;
 
     if (typeof yetiData.hp === "number" && yetiData.hp <= 0) {
-      this.yetiSprite.visible = false;
+      this.yetiGroup.visible = false;
       return;
     }
 
-    this.yetiSprite.visible = true;
-    this.yetiSprite.position.x = yetiData.x || 0;
-    this.yetiSprite.position.y = (yetiData.y || 0) + 3.6;
-    this.yetiSprite.position.z = yetiData.z || 0;
+    this.yetiGroup.visible = true;
+    this.yetiGroup.position.x = yetiData.x || 0;
+    this.yetiGroup.position.z = yetiData.z || 0;
 
-    if (this.yetiTexture) {
-      const state = yetiData.state || "STALKING_NPCS";
-      const frameTick = Math.floor((performance.now() * 0.006) % 4);
-      if (state === "DRAGGED_DOWN") {
-        // Tumbled face-first into snow! Knocked prone on the slope
-        this.yetiTexture.offset.set(frameTick * 0.25, 0.0);
-        this.yetiSprite.material.rotation = Math.PI / 2;
-        this.yetiSprite.position.y = (yetiData.y || 0) + 1.2;
-      } else if (state === "BAYED_UP" || state === "DEFENSIVE") {
-        // Thrashing against tension cable
-        this.yetiTexture.offset.set(frameTick * 0.25, 0.25);
-        this.yetiSprite.material.rotation = Math.sin(performance.now() * 0.03) * 0.18;
-        this.yetiSprite.position.x += Math.sin(performance.now() * 0.06) * 0.4;
-      } else if (state === "CHARGING" || state === "EATING_NPC") {
-        this.yetiTexture.offset.set(frameTick * 0.25, 0.0);
-        this.yetiSprite.material.rotation = 0;
-      } else {
-        this.yetiTexture.offset.set(frameTick * 0.25, 0.75);
-        this.yetiSprite.material.rotation = 0;
-      }
+    const t = performance.now() * 0.001;
+    const state = yetiData.state || "RUNNING_DOWNHILL";
+
+    if (state === "DRAGGED_DOWN") {
+      // 💥 REALISTIC 3D DRAG-DOWN: Tumbled flat face-first into snow, skidding down the slope!
+      this.yetiGroup.position.y = (yetiData.y || 0) + 0.6;
+      this.yetiGroup.rotation.x = Math.PI / 2 - 0.15; // Pitched flat on snow
+      this.yetiGroup.rotation.y = (yetiData.steer || 0) * 0.6 + Math.sin(t * 14) * 0.1;
+      this.yetiGroup.rotation.z = Math.sin(t * 10) * 0.15;
+
+      // Arms flailed forward clawing at the snow
+      if (this.yetiArmL) this.yetiArmL.rotation.x = 2.4;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = 2.4;
+      if (this.yetiLegL) this.yetiLegL.rotation.x = 0.2;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = -0.2;
+
+      // Snow plume spray around dragging beast
+      this.emitCarveSpray(this.yetiGroup.position, 0.5);
+    } else if (state === "BAYED_UP" || state === "DEFENSIVE") {
+      // ⚡ TETHERED & THRASHING: Straining back against cable tension
+      this.yetiGroup.position.y = (yetiData.y || 0);
+      this.yetiGroup.rotation.x = -0.32; // Leaning back fighting pull
+      this.yetiGroup.rotation.y = Math.sin(t * 16) * 0.22;
+      this.yetiGroup.rotation.z = Math.sin(t * 8) * 0.08;
+
+      // Arms thrashing backward trying to reach the cable
+      if (this.yetiArmL) this.yetiArmL.rotation.x = -1.3 + Math.sin(t * 14) * 0.45;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = -1.3 - Math.sin(t * 14) * 0.45;
+      if (this.yetiLegL) this.yetiLegL.rotation.x = -0.4;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = 0.4;
+    } else {
+      // 🎿 RUNNING DOWNHILL / STALKING
+      this.yetiGroup.position.y = (yetiData.y || 0);
+      this.yetiGroup.rotation.x = 0.18; // Leaning forward running downhill
+      this.yetiGroup.rotation.y = Math.sin(t * 4) * 0.06;
+      this.yetiGroup.rotation.z = 0;
+
+      // Dynamic running gait
+      const stride = Math.sin(t * 8.5);
+      if (this.yetiArmL) this.yetiArmL.rotation.x = stride * 0.9;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = -stride * 0.9;
+      if (this.yetiLegL) this.yetiLegL.rotation.x = -stride * 0.75;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = stride * 0.75;
+      if (this.yetiTorso) this.yetiTorso.position.y = 3.6 + Math.abs(stride) * 0.3;
     }
   }
 
