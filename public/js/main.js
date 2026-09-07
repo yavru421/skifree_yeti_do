@@ -77,68 +77,15 @@ class GameApp {
   }
 
   setupUI() {
-    // 1. Difficulty Buttons
-    document.querySelectorAll(".diff-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        document.querySelectorAll(".diff-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        const diff = btn.getAttribute("data-diff");
-        this.playerPhysics.setDifficulty(diff);
-        if (this.hudManager.diffBadge) {
-          this.hudManager.diffBadge.textContent = `DIFF: ${diff.toUpperCase()}`;
-        }
-      });
-    });
-
-    // 2. Mode Buttons
-    const btnHunt = document.getElementById("btn-mode-hunt");
-    const btnSlalom = document.getElementById("btn-mode-slalom");
-    if (btnHunt && btnSlalom) {
-      btnHunt.addEventListener("click", () => {
-        btnHunt.classList.add("active");
-        btnSlalom.classList.remove("active");
-        this.gameMode = "hunt";
-      });
-      btnSlalom.addEventListener("click", () => {
-        btnSlalom.classList.add("active");
-        btnHunt.classList.remove("active");
-        this.gameMode = "slalom";
+    // 1. Ready & Start Buttons
+    const btnStart = document.getElementById("btn-start");
+    if (btnStart) {
+      btnStart.addEventListener("click", () => {
+        this.audioSystem.unlockAndStart();
+        this.startGame();
       });
     }
 
-    // 3. Track Selection Buttons
-    document.querySelectorAll(".track-select-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        document.querySelectorAll(".track-select-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        const trackId = btn.getAttribute("data-track");
-        const newTrack = this.trackManager.setTrack(trackId);
-        this.sceneManager.applyTrack(newTrack);
-        this.hudManager.addCombatLog(`Track Loaded: ${newTrack.name}`, "#00f0ff");
-      });
-    });
-
-    // 4. Rider Class Toggle (Skier vs Snowboarder)
-    const btnSkier = document.getElementById("btn-class-skier");
-    const btnBoarder = document.getElementById("btn-class-boarder");
-    if (btnSkier && btnBoarder) {
-      btnSkier.addEventListener("click", () => {
-        btnSkier.classList.add("active");
-        btnBoarder.classList.remove("active");
-        this.playerPhysics.setRiderClass("skier");
-        this.hudManager.addCombatLog("Rider Class: SKIER (Speed & Slalom)", "#39ff14");
-      });
-      btnBoarder.addEventListener("click", () => {
-        btnBoarder.classList.add("active");
-        btnSkier.classList.remove("active");
-        this.playerPhysics.setRiderClass("snowboarder");
-        this.hudManager.addCombatLog("Rider Class: SNOWBOARDER (Air Pop & Tricks)", "#00f0ff");
-      });
-    }
-
-    // 5. Ready & Start Buttons
     const btnReady = document.getElementById("btn-ready");
     if (btnReady) {
       btnReady.addEventListener("click", () => {

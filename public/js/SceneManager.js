@@ -1142,12 +1142,22 @@ export class SceneManager {
     if (this.yetiTexture) {
       const state = yetiData.state || "STALKING_NPCS";
       const frameTick = Math.floor((performance.now() * 0.006) % 4);
-      if (state === "BAYED_UP" || state === "DEFENSIVE") {
+      if (state === "DRAGGED_DOWN") {
+        // Tumbled face-first into snow! Knocked prone on the slope
+        this.yetiTexture.offset.set(frameTick * 0.25, 0.0);
+        this.yetiSprite.material.rotation = Math.PI / 2;
+        this.yetiSprite.position.y = (yetiData.y || 0) + 1.2;
+      } else if (state === "BAYED_UP" || state === "DEFENSIVE") {
+        // Thrashing against tension cable
         this.yetiTexture.offset.set(frameTick * 0.25, 0.25);
+        this.yetiSprite.material.rotation = Math.sin(performance.now() * 0.03) * 0.18;
+        this.yetiSprite.position.x += Math.sin(performance.now() * 0.06) * 0.4;
       } else if (state === "CHARGING" || state === "EATING_NPC") {
         this.yetiTexture.offset.set(frameTick * 0.25, 0.0);
+        this.yetiSprite.material.rotation = 0;
       } else {
         this.yetiTexture.offset.set(frameTick * 0.25, 0.75);
+        this.yetiSprite.material.rotation = 0;
       }
     }
   }

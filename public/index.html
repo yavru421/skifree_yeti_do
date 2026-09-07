@@ -704,59 +704,27 @@
 
   <!-- Chalet Modal Wrapper -->
   <div id="modal-backdrop">
-    <div id="start-modal">
-      <div class="modal-title">🎿 SKIFREE 2: ALPINE ARENA</div>
-      
-      <!-- Mountain Course / Biome Select -->
-      <div style="font-size:10px; color:#88a0c0; font-weight:bold; margin-top:2px;">SELECT MOUNTAIN COURSE:</div>
-      <div class="track-select-group" style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:4px 0;">
-        <button class="track-select-btn active" data-track="alpine" type="button">🏔️ ALPS 1991</button>
-        <button class="track-select-btn" data-track="avalanche" type="button">⚠️ AVALANCHE</button>
-        <button class="track-select-btn" data-track="neon_glacier" type="button">🌌 NEON GLACIER</button>
-        <button class="track-select-btn" data-track="terrain_park" type="button">🛹 TERRAIN PARK</button>
+    <div id="start-modal" style="max-width:460px; text-align:center; padding:24px;">
+      <div class="modal-title" style="font-size:clamp(22px, 4.8vw, 34px); color:#00f0ff; text-shadow:0 0 25px rgba(0,240,255,0.85); margin-bottom:8px;">🎿 SKIFREE 2: HARPOON HUNT</div>
+      <div style="font-size:12px; color:#88a0c0; line-height:1.5; margin-bottom:14px;">
+        First-Person Steam Harpoon & Winch Takedown.<br>
+        Impale the Alpine Yeti, tension the steel cable, and drag the beast down into the snow!
       </div>
 
-      <!-- Rider Class Select -->
-      <div style="font-size:10px; color:#88a0c0; font-weight:bold; margin-top:4px;">RIDER CLASS:</div>
-      <div class="class-select-group" style="display:flex; gap:6px; margin:4px 0;">
-        <button class="class-btn active" id="btn-class-skier" type="button">⛷️ SKIER (Speed & Slalom)</button>
-        <button class="class-btn" id="btn-class-boarder" type="button">🏂 BOARDER (Pop & Tricks)</button>
+      <div style="background:rgba(0, 240, 255, 0.08); border:1px solid #00f0ff; border-radius:8px; padding:12px; margin-bottom:16px; text-align:left; font-size:11px; line-height:1.7; color:#fff;">
+        <div>🚀 <span style="color:#00f0ff; font-weight:bold;">SPACEBAR or [FIRE HARPOON]</span> : Launch Harpoon Cannon</div>
+        <div>⛓️ <span style="color:#39ff14; font-weight:bold;">WINCH TETHER</span> : Auto-tethers on hit • Slows & drags beast</div>
+        <div>⛷️ <span style="color:#ffff00; font-weight:bold;">A / D</span> : Flank sideways to trip & drag down the Yeti</div>
+        <div>✂️ <span style="color:#ff007f; font-weight:bold;">R</span> : Cut tether cable</div>
       </div>
 
-      <div class="modal-grid-2col" style="margin-top:6px;">
-        <!-- Column 1: Mode & Callsign -->
-        <div>
-          <div style="font-size:10px; color:#88a0c0; font-weight:bold;">GAME MODE:</div>
-          <div class="mode-select-group">
-            <button class="mode-btn active" id="btn-mode-hunt" data-mode="hunt" type="button">👹 YETI HUNT</button>
-            <button class="mode-btn" id="btn-mode-slalom" data-mode="slalom" type="button">⏱️ SLALOM</button>
-          </div>
-          <input type="text" id="player-callsign" class="input-field" placeholder="Enter Hunter Callsign..." maxlength="12" value="YetiSlayer">
-        </div>
-
-        <!-- Column 2: Difficulty & Launch -->
-        <div>
-          <div style="font-size:10px; color:#88a0c0; font-weight:bold;">SPEED DIFFICULTY:</div>
-          <div class="difficulty-group">
-            <button class="diff-btn" data-diff="easy" type="button">🟢 EASY</button>
-            <button class="diff-btn active" data-diff="medium" type="button">🟡 MED</button>
-            <button class="diff-btn" data-diff="pro" type="button">🔴 PRO</button>
-          </div>
-          <div style="display:flex; gap:6px; margin-top:6px;">
-            <button class="modal-btn modal-btn-ready" id="btn-ready" style="flex:1;" type="button">READY 🎿</button>
-            <button class="modal-btn" id="btn-start" style="flex:1;" type="button">DROP 🚀</button>
-          </div>
-        </div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <input type="text" id="player-callsign" class="input-field" placeholder="Hunter Callsign..." maxlength="12" value="YetiSlayer" style="flex:2; margin:0;">
+        <button class="modal-btn modal-btn-ready" id="btn-start" style="flex:3; font-size:16px; padding:12px; margin:0;" type="button">🚀 DROP IN & HUNT</button>
       </div>
 
-      <!-- Quick Arcade Controls Guide -->
-      <div style="font-size:9px; color:#88a0c0; text-align:center; margin-top:6px; line-height:1.4;">
-        <span style="color:#00f0ff;">A/D</span> Carve & Air Spins • <span style="color:#00f0ff;">W/S</span> Tuck / Flips • <span style="color:#00f0ff;">J/Z</span> Jump • <span style="color:#00f0ff;">SHIFT/N</span> Nitro<br>
-        <span style="color:#39ff14; font-weight:bold;">SPACEBAR or [🚀 FIRE HARPOON] BUTTON</span>: Launch Harpoon & Tether Beast • <span style="color:#ffff00;">R</span> Cut Tether • <span style="color:#ffaa00;">E</span> Flare • <span style="color:#ff007f;">B</span> Bait
-      </div>
-
-      <div style="text-align:center; margin-top:4px;">
-        <button id="btn-toggle-fullscreen" style="background:none; border:1px solid #00f0ff; color:#00f0ff; font-size:9px; padding:3px 8px; border-radius:4px; cursor:pointer; touch-action:manipulation;" type="button">⛶ FULLSCREEN</button>
+      <div style="text-align:center; margin-top:6px;">
+        <button id="btn-toggle-fullscreen" style="background:none; border:1px solid #00f0ff; color:#00f0ff; font-size:10px; padding:4px 10px; border-radius:4px; cursor:pointer; touch-action:manipulation;" type="button">⛶ FULLSCREEN</button>
       </div>
     </div>
 

@@ -442,16 +442,6 @@ export class PlayerPhysics {
         }
       }
     }
-        if (onEvent) {
-          onEvent({
-            type: "TRICK_LANDED",
-            score: trickScore,
-            trickName,
-            isBoarder
-          });
-        }
-      }
-    }
 
     this.airYaw = 0;
     this.airPitch = 0;

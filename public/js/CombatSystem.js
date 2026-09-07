@@ -141,8 +141,17 @@ export class CombatSystem {
   handleHarpoonHit(beast, targetSegment = 0) {
     this.isTethered = true;
     this.tetheredSegment = targetSegment;
+    this.dragTime = 0;
+    this.dragTripAccumulator = 0;
+    this.tetherTension = 0.5;
+
     const player = window.__playerPhysics;
     const netSync = window.__networkSync;
+    const sceneMgr = window.__sceneManager;
+
+    if (sceneMgr && typeof sceneMgr.addTrauma === "function") {
+      sceneMgr.addTrauma(0.4);
+    }
 
     if (player && typeof player.setTowedState === "function") {
       player.setTowedState(true, { name: "Yeti", id: targetSegment });
@@ -154,7 +163,8 @@ export class CombatSystem {
       window.__onGameEvent({
         type: "HARPOON_LOCKED",
         segment: targetSegment,
-        segmentName: "Frost Yeti"
+        segmentName: "Frost Yeti",
+        message: "⛓️ HARPOON IMPALED! WINCH CABLE LOCKED ON YETI!"
       });
     }
   }
@@ -197,5 +207,69 @@ export class CombatSystem {
   update(dt) {
     if (this.harpoonCooldown > 0) this.harpoonCooldown -= dt;
     if (this.flareCooldown > 0) this.flareCooldown -= dt;
+
+    // ─── ACTIVE YETI DRAG DOWN & TETHER DYNAMICS ─────────────────────────
+    if (this.isTethered) {
+      const player = window.__playerPhysics;
+      const yeti = window.__yetiPredator || window.__yetiEntity;
+      const sceneMgr = window.__sceneManager;
+
+      if (player && yeti && yeti.hp > 0) {
+        this.dragTime += dt;
+        const dx = player.x - yeti.x;
+        const dz = player.z - yeti.z;
+        const dist = Math.hypot(dx, dz);
+
+        // Calculate Cable Tension (0.0 to 1.0)
+        this.tetherTension = Math.min(1.0, Math.max(0.2, dist / 35.0));
+
+        // 1. Momentum Drag: Player pulls Yeti forward / slows downhill runaway
+        if (dz > 0) {
+          yeti.speed = Math.max(8.0, (yeti.speed || 24.0) - (22.0 * dt));
+        }
+
+        // 2. Lateral Carve Flank Drag: Player banks sideways with skis
+        const steerForce = Math.abs(player.steer || 0);
+        if (steerForce > 0.08) {
+          const pullDir = Math.sign(dx);
+          yeti.x += pullDir * (steerForce * 18.0 * dt);
+          this.dragTripAccumulator += steerForce * dt * 1.6;
+
+          // Continuous friction sawing damage
+          const frictionDmg = Math.round(90 * dt);
+          yeti.hp = Math.max(0, yeti.hp - frictionDmg);
+        }
+
+        // 3. Yeti Thrash Animation & Cable Strain
+        if (yeti.state !== "DRAGGED_DOWN") {
+          yeti.state = "BAYED_UP";
+        }
+
+        // 4. CRITICAL TRIP / DRAG DOWN EVENT:
+        // Accumulating enough lateral steer torque trips the beast into the snow!
+        if (this.dragTripAccumulator >= 2.0 || this.dragTime >= 4.0) {
+          this.dragTripAccumulator = 0;
+          this.dragTime = 0;
+
+          // Trip the Yeti!
+          yeti.state = "DRAGGED_DOWN";
+          yeti.staggerTimer = 4.5;
+          const critDmg = 2500;
+          yeti.hp = Math.max(0, yeti.hp - critDmg);
+
+          if (sceneMgr && sceneMgr.addTrauma) {
+            sceneMgr.addTrauma(0.65); // Massive screen impact
+          }
+
+          if (window.__onGameEvent) {
+            window.__onGameEvent({
+              type: "YETI_DRAGGED_DOWN",
+              damage: critDmg,
+              message: "💥 YETI DRAGGED DOWN! CRASHED INTO SNOW (-2,500 CRIT)!"
+            });
+          }
+        }
+      }
+    }
   }
 }
