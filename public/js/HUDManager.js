@@ -104,6 +104,35 @@ export class HUDManager {
     }, 1400);
   }
 
+  showLevelCompleteBanner(completedLevel, nextLevel, nextLevelName) {
+    let banner = document.getElementById("level-complete-banner");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "level-complete-banner";
+      banner.style.cssText = "position:absolute; top:38%; left:50%; transform:translate(-50%, -50%); display:flex; flex-direction:column; align-items:center; gap:8px; z-index:250; pointer-events:none; transition:all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275); text-align:center;";
+      document.body.appendChild(banner);
+    }
+    banner.innerHTML = `
+      <div style="font-family:'Impact', 'Arial Black', sans-serif; font-size:clamp(30px, 6.5vw, 52px); font-weight:900; letter-spacing:3px; color:#39ff14; text-shadow:0 0 24px #00ff66, 3px 3px 0 #000;">
+        🏆 LEVEL ${completedLevel} COMPLETE!
+      </div>
+      <div style="font-family:'Impact', 'Arial Black', sans-serif; font-size:clamp(18px, 3.8vw, 28px); font-weight:bold; letter-spacing:2px; color:#00f0ff; text-shadow:0 0 16px #00c8ff, 2px 2px 0 #000;">
+        🐾 YETI IMPALED & DOWN!
+      </div>
+      <div style="font-family:'Courier New', monospace; font-size:clamp(12px, 2.2vw, 16px); font-weight:900; letter-spacing:1.5px; color:#ffcc00; background:rgba(10,20,35,0.94); padding:6px 18px; border-radius:6px; border:2px solid #ffaa00; box-shadow:0 0 18px rgba(255,170,0,0.6); margin-top:6px;">
+        ⚠️ NEXT LEVEL ${nextLevel}: ${nextLevelName}
+      </div>
+    `;
+    banner.style.opacity = "1";
+    banner.style.transform = "translate(-50%, -50%) scale(1.1)";
+    setTimeout(() => {
+      if (banner) {
+        banner.style.opacity = "0";
+        banner.style.transform = "translate(-50%, -50%) scale(0.8)";
+      }
+    }, 2800);
+  }
+
   update(playerPhysics, combatSystem, yetiPredator, gameMode, raceElapsedSec, currentTrack) {
     // 1. Speedometer & Score
     if (this.speedEl && playerPhysics) {
@@ -257,37 +286,44 @@ export class HUDManager {
       }
     }
 
-    // 7. Boss Health & Radar
-    if (yetiPredator) {
-      if (this.bossHpFill) {
-        const hpPercent = Math.max(0, (yetiPredator.hp / yetiPredator.maxHp) * 100);
-        this.bossHpFill.style.width = `${hpPercent}%`;
-      }
+    // 4. Boss HP & Tier Bar (Yeti Predator / Leviathan)
+    if (this.bossHpFill && yetiPredator) {
+      const maxHp = yetiPredator.maxHp || 8000;
+      const hp = Math.max(0, yetiPredator.hp || 0);
+      const pct = Math.min(100, Math.max(0, (hp / maxHp) * 100));
+      this.bossHpFill.style.width = `${pct}%`;
+
       if (this.bossHpText) {
-        this.bossHpText.textContent = `${yetiPredator.hp.toLocaleString()} / ${yetiPredator.maxHp.toLocaleString()} HP`;
-      }
-      if (this.bossWaveTitle) {
-        let stateTag = "";
-        if (yetiPredator.state === "BURNING_PANIC") {
-          stateTag = " [🔥 BURNING PANIC]";
-        } else if (yetiPredator.state === "STAGGERED") {
-          stateTag = " [⚡ STAGGERED]";
-        }
-        this.bossWaveTitle.textContent = `👹 ALPINE YETI (W${yetiPredator.wave})${stateTag}`;
+        this.bossHpText.textContent = `${hp.toLocaleString()} / ${maxHp.toLocaleString()} HP`;
       }
 
-      if (this.radarEl && playerPhysics) {
-        const dist = Math.hypot(yetiPredator.x - playerPhysics.x, yetiPredator.z - playerPhysics.z);
-        if (dist < 45 && yetiPredator.hp > 0) {
-          this.radarEl.style.opacity = "1";
-          if (yetiPredator.state === "BAYED_UP") {
-            this.radarEl.innerHTML = `<span style="color:#ffff00; font-weight:900;">🐻 YETI BAYED UP! SQUAD PINNING IT • FLANK TO STRIKE!</span>`;
-          } else {
-            this.radarEl.textContent = `👹 YETI ${Math.round(dist)}M [PURSUING WITH PACK]`;
-          }
+      const tierLabel = document.getElementById("boss-tier-label");
+      if (tierLabel && yetiPredator.tierData) {
+        tierLabel.textContent = `TIER ${yetiPredator.tierData.id}: ${yetiPredator.tierData.name}`;
+      }
+    }
+
+    if (this.bossWaveTitle && yetiPredator) {
+      let stateTag = "";
+      if (yetiPredator.state === "BURNING_PANIC") {
+        stateTag = " [🔥 BURNING PANIC]";
+      } else if (yetiPredator.state === "STAGGERED") {
+        stateTag = " [⚡ STAGGERED]";
+      }
+      this.bossWaveTitle.textContent = `👹 ALPINE YETI (W${yetiPredator.wave || 1})${stateTag}`;
+    }
+
+    if (this.radarEl && playerPhysics) {
+      const dist = Math.hypot(yetiPredator.x - playerPhysics.x, yetiPredator.z - playerPhysics.z);
+      if (dist < 45 && yetiPredator.hp > 0) {
+        this.radarEl.style.opacity = "1";
+        if (yetiPredator.state === "BAYED_UP") {
+          this.radarEl.innerHTML = `<span style="color:#ffff00; font-weight:900;">🐻 YETI BAYED UP! SQUAD PINNING IT • FLANK TO STRIKE!</span>`;
         } else {
-          this.radarEl.style.opacity = "0";
+          this.radarEl.textContent = `👹 YETI ${Math.round(dist)}M [PURSUING WITH PACK]`;
         }
+      } else {
+        this.radarEl.style.opacity = "0";
       }
     }
 

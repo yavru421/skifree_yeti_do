@@ -15,7 +15,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Content-Security-Policy":
-    "default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' ws: wss:; media-src 'self' blob:; img-src 'self' data: blob:;"
+    "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://yeti.dondlingergc.com; connect-src 'self' ws: wss: https:; media-src 'self' blob:; img-src 'self' data: blob:;"
 };
 
 function withSecurityHeaders(response: Response): Response {
@@ -130,6 +130,67 @@ export default {
       const landingReq = new Request(new URL("/landing.html", request.url), request);
       const res = await env.ASSETS.fetch(landingReq);
       return withSecurityHeaders(res);
+    }
+
+    // 4b. WebMCP / MCP Endpoint Protocol Handler
+    if (url.pathname === "/mcp" || url.pathname === "/mcp/") {
+      if (request.method === "OPTIONS") {
+        return withSecurityHeaders(new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization"
+          }
+        }));
+      }
+
+      if (request.method === "POST") {
+        try {
+          const body = (await request.json()) as { method?: string; id?: string | number };
+          if (body.method === "tools/list") {
+            return withSecurityHeaders(new Response(JSON.stringify({
+              jsonrpc: "2.0",
+              id: body.id ?? 1,
+              result: {
+                tools: [
+                  {
+                    name: "get_game_status",
+                    description: "Retrieve live alpine game status, active tier, and player telemetry",
+                    inputSchema: { type: "object", properties: {} }
+                  }
+                ]
+              }
+            }), {
+              headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+            }));
+          }
+          return withSecurityHeaders(new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            id: body.id ?? 1,
+            result: {}
+          }), {
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          }));
+        } catch (_) {
+          return withSecurityHeaders(new Response(JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            result: { tools: [] }
+          }), {
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+          }));
+        }
+      }
+
+      // Fallback GET on /mcp
+      return withSecurityHeaders(new Response(JSON.stringify({
+        name: "skifree-yeti-do-mcp",
+        version: "1.0.0",
+        status: "ACTIVE"
+      }), {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+      }));
     }
 
     // 5. Static Assets from public/

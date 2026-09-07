@@ -64,12 +64,16 @@ export class PlayerPhysics {
     this.towedTimer = 0;
     this.towedTickTimer = 0;
 
+    // Damage Invulnerability Cooldown (prevents frame-rate instant death loops)
+    this.invulnerableTimer = 0;
+
     this.setupKeyboardListeners();
   }
 
-  setTowedState(isTowed, segment) {
+  setTowedState(isTowed, segment, towSpeed = 1.2) {
     this.isTowed = !!isTowed;
     this.towedSegment = segment || null;
+    this.towSpeedMultiplier = typeof towSpeed === "number" ? towSpeed : 1.2;
     if (this.isTowed) {
       this.towedTimer = 0;
       this.towedTickTimer = 0;
@@ -189,6 +193,11 @@ export class PlayerPhysics {
     // Fixed Sub-Step Clamp
     dt = Math.min(0.033, Math.max(0.005, dt));
 
+    // Invulnerability Cooldown Decrement
+    if (this.invulnerableTimer > 0) {
+      this.invulnerableTimer = Math.max(0, this.invulnerableTimer - dt);
+    }
+
     const diff = this.difficultyPresets[this.currentDifficulty];
 
     // Class Modifiers
@@ -256,9 +265,12 @@ export class PlayerPhysics {
       targetSpeed += 26.0;
     }
 
-    // Frost Leviathan Towed Physics (80+ MPH Breakneck Speed)
+    // Frost Leviathan Towed Physics (Keeps player towed behind Yeti, never past it)
     if (this.isTowed) {
-      targetSpeed = Math.max(targetSpeed, 84.5);
+      const yeti = window.__yetiAI || window.__yetiPredator;
+      const combat = window.__combatSystem;
+      const yetiSpd = yeti && typeof yeti.speed === "number" ? yeti.speed : 58;
+      targetSpeed = Math.max(diff.cruiseSpeed, yetiSpd);
       this.towedTimer += dt;
       this.towedTickTimer += dt;
       if (this.towedTickTimer >= 0.1) {
@@ -266,6 +278,13 @@ export class PlayerPhysics {
         if (window.__networkSync && window.__networkSync.sendTowedTick) {
           window.__networkSync.sendTowedTick(this.speed);
         }
+      }
+
+      // Maintain cable tether positioning behind the Yeti during retraction
+      if (yeti && combat && combat.isTethered && combat.towPhase === "RETRACTING") {
+        const desiredZ = yeti.z - combat.cableLength;
+        // Smoothly pull player along to maintain cable length behind the beast
+        this.z += (desiredZ - this.z) * Math.min(1.0, 10.0 * dt);
       }
     }
 
@@ -287,6 +306,17 @@ export class PlayerPhysics {
     this.z += forwardStep;
     this.x += lateralStep;
     this.x = Math.max(-65, Math.min(65, this.x));
+
+    // HARD INVARIANT: Player can NEVER shoot forward beyond the Yeti!
+    const activeYeti = window.__yetiAI || window.__yetiPredator;
+    if (activeYeti && activeYeti.active && (activeYeti.state === "FALLEN" || activeYeti.state === "DRAGGED_DOWN" || activeYeti.state === "STAGGERED" || this.isTowed || window.__combatSystem?.isTethered)) {
+      const combat = window.__combatSystem;
+      const minBuffer = (combat && combat.isTethered && combat.towPhase === "RETRACTING") ? 5.5 : 12;
+      if (this.z > activeYeti.z - minBuffer) {
+        this.z = activeYeti.z - minBuffer;
+        this.speed = Math.min(this.speed, Math.max(8, (activeYeti.speed || 10) * 0.95));
+      }
+    }
 
     // 4. Air Physics & Landing Trick Stomp Evaluation (SSX 3 Arcade Floatiness)
     if (this.isAirborne) {
@@ -515,11 +545,18 @@ export class PlayerPhysics {
       sceneManager.crevasses.forEach((crev) => {
         const distZ = Math.abs(crev.z - this.z);
         if (distZ < crev.width * 0.5 && this.airY < 0.6) {
-          // Fallen into chasm!
-          this.speed = Math.max(4, this.speed * 0.2);
-          this.takeDamage(1);
-          if (audioSystem) audioSystem.playTreeThud();
-          if (onEvent) onEvent({ type: "CREVASSE_FALL", z: crev.z });
+          // Pop player safely airborne over the chasm to avoid being trapped in an infinite collision loop
+          this.isAirborne = true;
+          this.airVy = 13.5;
+          this.airY = 0.85;
+          this.speed = Math.max(14, this.speed * 0.55);
+
+          if (this.invulnerableTimer <= 0) {
+            this.takeDamage(1, onEvent);
+            if (audioSystem) audioSystem.playTreeThud();
+            if (sceneManager && sceneManager.addTrauma) sceneManager.addTrauma(0.5);
+            if (onEvent) onEvent({ type: "CREVASSE_FALL", z: crev.z });
+          }
         }
       });
     }
@@ -582,10 +619,15 @@ export class PlayerPhysics {
     }
   }
 
-  takeDamage(amount = 1) {
+  takeDamage(amount = 1, onEvent) {
+    if (this.invulnerableTimer > 0) return this.lives;
     this.lives = Math.max(0, this.lives - amount);
+    this.invulnerableTimer = 1.5; // 1.5s damage cooldown window
     if (this.lives <= 0) {
       this.isDead = true;
+      if (onEvent) {
+        onEvent({ type: "PLAYER_DEATH", lives: 0 });
+      }
     }
     return this.lives;
   }
@@ -598,6 +640,7 @@ export class PlayerPhysics {
     this.pitch = 0;
     this.lives = 3;
     this.isDead = false;
+    this.invulnerableTimer = 0;
     this.score = 0;
     this.maxSpeedAchieved = 0;
     this.isAirborne = false;

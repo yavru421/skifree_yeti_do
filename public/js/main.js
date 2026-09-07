@@ -6,6 +6,7 @@ import { SceneManager } from './SceneManager.js';
 import { PlayerPhysics } from './PlayerPhysics.js';
 import { FrostLeviathan } from './FrostLeviathan.js';
 import { CombatSystem } from './CombatSystem.js';
+import { YetiAI, YETI_TIERS } from './YetiAI.js';
 import { HUDManager } from './HUDManager.js';
 import { NetworkSync } from './NetworkSync.js';
 import { TrackManager } from './TrackManager.js';
@@ -18,16 +19,8 @@ class GameApp {
     this.sceneManager = new SceneManager(this.canvas);
     this.playerPhysics = new PlayerPhysics();
     this.frostLeviathan = new FrostLeviathan();
-    this.yetiPredator = {
-      x: 0,
-      y: 0,
-      z: 60,
-      hp: 8000,
-      maxHp: 8000,
-      state: "STALKING_NPCS",
-      active: true,
-      wave: 1
-    };
+    this.yetiAI = new YetiAI(0); // Start at Tier 1
+    this.yetiPredator = this.yetiAI; // Backwards-compat alias
     this.combatSystem = new CombatSystem();
     this.hudManager = new HUDManager();
     this.networkSync = new NetworkSync();
@@ -39,13 +32,15 @@ class GameApp {
 
     // Global pointers for event delegates
     window.__frostLeviathan = this.frostLeviathan;
-    window.__yetiEntity = this.yetiPredator; // Authoritative Yeti entity for combat
-    window.__yetiPredator = this.yetiPredator;
+    window.__yetiEntity = this.yetiAI;
+    window.__yetiPredator = this.yetiAI;
+    window.__yetiAI = this.yetiAI;
     window.__playerPhysics = this.playerPhysics;
     window.__combatSystem = this.combatSystem;
     window.__sceneManager = this.sceneManager;
     window.__audioSystem = this.audioSystem;
     window.__networkSync = this.networkSync;
+    window.__gameApp = this;
     window.__onGameEvent = (e) => this.handleGameEvent(e);
 
     this.gameState = "ACTIVE"; // Immediate active slope entry
@@ -77,7 +72,10 @@ class GameApp {
   setupPointerLock() {
     this.canvas.addEventListener("click", () => {
       if (document.pointerLockElement !== this.canvas) {
-        this.canvas.requestPointerLock();
+        try {
+          const req = this.canvas.requestPointerLock?.();
+          if (req && typeof req.catch === "function") req.catch(() => {});
+        } catch (e) {}
       }
     });
 
@@ -118,7 +116,10 @@ class GameApp {
     if (btnStart) {
       btnStart.addEventListener("click", () => {
         if (document.pointerLockElement !== this.canvas) {
-          this.canvas.requestPointerLock();
+          try {
+            const req = this.canvas.requestPointerLock?.();
+            if (req && typeof req.catch === "function") req.catch(() => {});
+          } catch (e) {}
         }
         this.audioSystem.unlockAndStart();
         this.startGame();
@@ -386,10 +387,7 @@ class GameApp {
     if (hudOverlay) hudOverlay.classList.remove("hidden");
 
     this.playerPhysics.respawn();
-    this.yetiPredator.hp = this.yetiPredator.maxHp;
-    this.yetiPredator.z = this.playerPhysics.z + 28;
-    this.yetiPredator.x = this.playerPhysics.x;
-    this.yetiPredator.state = "RUNNING_DOWNHILL";
+    this.yetiAI.respawnAtTier(this.playerPhysics.x, this.playerPhysics.z);
     this.raceStartTime = performance.now();
     this.raceElapsedSec = 0;
     this.gameState = "ACTIVE";
@@ -402,8 +400,58 @@ class GameApp {
 
   handleYetiDefeated(killerCallsign, takedownTimeSec, squadSize) {
     if (this.gameState === "YETI_DEFEATED") return;
-    this.gameState = "YETI_DEFEATED";
     this.lastTakedownTimeSec = takedownTimeSec || this.raceElapsedSec;
+
+    // ─── TIER PROGRESSION CHECK ──────────────────────────────
+    if (this.yetiAI && this.yetiAI.tierIndex < YETI_TIERS.length - 1) {
+      // Advance to next tier — not final boss yet
+      const prevTier = this.yetiAI.tierData;
+      this.yetiAI.advanceTier();
+      const nextTier = this.yetiAI.tierData;
+
+      // Brief victory pause then respawn upgraded yeti
+      this.playerPhysics.score += 1500 * prevTier.id;
+
+      this.hudManager.addCombatLog(
+        `🏆 LEVEL ${prevTier.id} COMPLETE! ${prevTier.name} DEFEATED! (+${1500 * prevTier.id} PTS)`,
+        "#39ff14"
+      );
+      this.hudManager.addCombatLog(
+        `⚠️ LEVEL ${nextTier.id}: ${nextTier.name} INCOMING!`,
+        "#ff4444"
+      );
+
+      // Show Grand Level Complete Banner
+      if (this.hudManager && typeof this.hudManager.showLevelCompleteBanner === "function") {
+        this.hudManager.showLevelCompleteBanner(prevTier.id, nextTier.id, nextTier.name);
+      }
+
+      if (this.audioSystem && this.audioSystem.playRescueFanfare) {
+        this.audioSystem.playRescueFanfare();
+      }
+
+      // Respawn upgraded yeti 2.5 seconds later down the slope ahead of player
+      setTimeout(() => {
+        if (this.gameState === "ACTIVE" || this.gameState === "YETI_DEFEATED") {
+          this.yetiAI.respawnAtTier(this.playerPhysics.x, this.playerPhysics.z);
+          this.gameState = "ACTIVE";
+
+          if (window.__onGameEvent) {
+            window.__onGameEvent({
+              type: "TIER_ADVANCE",
+              tier: nextTier.id,
+              name: nextTier.name,
+              message: `🐾 LEVEL ${nextTier.id}: ${nextTier.name} CHARGES DOWN THE MOUNTAIN!`
+            });
+          }
+        }
+      }, 2500);
+
+      return; // Don't show final victory modal yet
+    }
+
+    // ─── FINAL TIER 5 DEFEAT — TRUE VICTORY ─────────────────
+    this.gameState = "YETI_DEFEATED";
 
     const totalSec = Math.max(0, this.lastTakedownTimeSec);
     const mins = Math.floor(totalSec / 60);
@@ -480,8 +528,39 @@ class GameApp {
     } else if (e.type === "BAIT_DROPPED") {
       this.networkSync.sendDropBait();
       this.hudManager.addCombatLog("🥩 Meat Bait Dropped! Yeti Distracted.", "#ff007f");
-    } else if (e.type === "AVALANCHE_ENGULFED") {
+    } else if (e.type === "AVALANCHE_ENGULFED" || e.type === "PLAYER_DEATH") {
       this.handlePlayerDeath();
+
+    // ─── TACTILE TAKEDOWN EVENTS ─────────────────────────────
+    } else if (e.type === "HARPOON_LOCKED") {
+      this.hudManager.addCombatLog(e.message || "⛓️ HARPOON LOCKED!", "#00f0ff");
+    } else if (e.type === "TOW_PHASE_START") {
+      this.hudManager.addCombatLog(e.message, "#ffaa00");
+    } else if (e.type === "FINISH_STRIKE_READY") {
+      this.hudManager.addCombatLog(e.message, "#ffff00");
+    } else if (e.type === "FINISH_STRIKE") {
+      this.playerPhysics.score += e.damage;
+      this.hudManager.showFloatingDamage(window.innerWidth / 2, window.innerHeight / 2 - 40, e.damage, true);
+      this.hudManager.addCombatLog(e.message, "#ffff00");
+    } else if (e.type === "CABLE_SNAPPED") {
+      this.hudManager.addCombatLog(e.message, "#ff0033");
+    } else if (e.type === "YETI_BROKE_FREE") {
+      this.hudManager.addCombatLog(e.message, "#ff4444");
+    } else if (e.type === "EXPLOSIVE_HIT") {
+      this.playerPhysics.score += e.damage;
+      this.hudManager.showFloatingDamage(window.innerWidth / 2, window.innerHeight / 2 - 40, e.damage, false);
+      this.hudManager.addCombatLog(e.message || `💥 Explosive Hit! (-${e.damage})`, "#ff5500");
+    } else if (e.type === "TIER_ADVANCE") {
+      this.hudManager.addCombatLog(e.message, "#ff4444");
+      // Update boss HUD tier label
+      const tierLabel = document.getElementById("boss-tier-label");
+      if (tierLabel) tierLabel.textContent = `TIER ${e.tier}: ${e.name}`;
+    } else if (e.type === "YETI_DRAGGED_DOWN") {
+      this.playerPhysics.score += e.damage;
+      this.hudManager.showFloatingDamage(window.innerWidth / 2, window.innerHeight / 2 - 40, e.damage, true);
+      this.hudManager.addCombatLog(e.message, "#ffff00");
+    } else if (e.type === "CABLE_RELEASED") {
+      this.hudManager.addCombatLog("⛓️ Cable Released", "#888888");
     }
   }
 
@@ -639,7 +718,11 @@ class GameApp {
       );
     }
 
-    // 3. Yeti & Frost Leviathan State Update
+    // 3. Active Yeti Predator AI (Tier-Based Progressive Difficulty)
+    if (this.yetiAI && this.yetiAI.active && this.yetiAI.hp > 0) {
+      this.yetiAI.update(dt, this.playerPhysics);
+    }
+
     if (this.sceneManager && this.sceneManager.updateYeti) {
       this.sceneManager.updateYeti(this.yetiPredator, dt);
     }
@@ -736,12 +819,6 @@ class GameApp {
       // Check Frost Leviathan / Yeti Defeat in Hunt Mode
       if (this.gameMode === "hunt" && ((this.yetiPredator && this.yetiPredator.hp <= 0) || this.frostLeviathan.hp <= 0)) {
         this.handleYetiDefeated("You & Squad", this.raceElapsedSec, 1);
-      }
-
-      // Check Mountain Bottom Horror Failure
-      const finishDist = (currentTrack && currentTrack.finishDistance) || 1800;
-      if (this.gameMode === "hunt" && this.playerPhysics.z >= finishDist && this.yetiPredator && this.yetiPredator.hp > 0) {
-        this.triggerHorrorJumpscareDeath("YETI OVERTOOK AT BASE OF MOUNTAIN");
       }
 
       // 128Hz Fixed Physics Timestep Accumulator (7.8125ms per tick)

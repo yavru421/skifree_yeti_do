@@ -116,22 +116,38 @@ export class SceneManager {
     const positions = this.tetherLineMesh.geometry.attributes.position.array;
     const numPoints = positions.length / 3;
 
-    // Set material color based on staggered state
+    // Read tension from combat system for color coding
+    const combat = window.__combatSystem;
+    const tension = combat ? combat.cableTension : 0.5;
+
+    // Color zones based on tension
+    if (tension < 0.20 || tension > 0.80) {
+      // RED DANGER ZONE
+      this.tetherLineMesh.material.color.setHex(0xff0033);
+    } else if (tension < 0.35 || tension > 0.65) {
+      // YELLOW WARNING ZONE
+      this.tetherLineMesh.material.color.setHex(0xffaa00);
+    } else {
+      // GREEN SWEET SPOT
+      this.tetherLineMesh.material.color.setHex(0x39ff14);
+    }
+
+    // Override to red for stagger/dragged state
     if (isStaggered) {
       this.tetherLineMesh.material.color.setHex(0xff0055);
-    } else {
-      this.tetherLineMesh.material.color.setHex(0x00f0ff);
     }
 
     const p0 = new THREE.Vector3(playerPos.x, playerPos.y + 0.8, playerPos.z);
     const p1 = new THREE.Vector3(targetPos.x, Math.max(0, targetPos.y) + 1.2, targetPos.z);
 
+    // Vibration intensity scales with how far from green zone
+    const tensionStress = Math.max(Math.abs(tension - 0.5) - 0.15, 0) * 4.0;
+
     for (let i = 0; i < numPoints; i++) {
       const t = i / (numPoints - 1);
-      // Interpolate with dynamic catenary sag & high-speed vibration
       const x = p0.x + (p1.x - p0.x) * t;
-      const sag = Math.sin(t * Math.PI) * -0.8;
-      const vibe = Math.sin(performance.now() * 0.04 + i) * 0.08;
+      const sag = Math.sin(t * Math.PI) * (-0.5 - tensionStress * 0.8);
+      const vibe = Math.sin(performance.now() * (0.04 + tensionStress * 0.08) + i) * (0.08 + tensionStress * 0.25);
       const y = p0.y + (p1.y - p0.y) * t + sag + vibe;
       const z = p0.z + (p1.z - p0.z) * t;
 
@@ -600,58 +616,84 @@ export class SceneManager {
   buildFpvHarpoonLauncher() {
     this.fpvLauncherGroup = new THREE.Group();
 
-    // 1. Heavy Steam Harpoon Cannon Barrel (Gunmetal Titanium, pointing down -Z into aim line)
-    const barrelGeo = new THREE.CylinderGeometry(0.065, 0.08, 1.15, 12);
+    // 1. Heavy Industrial Rifled Cannon Barrel (Machined Gunmetal Carbon-Titanium)
+    const barrelGeo = new THREE.CylinderGeometry(0.075, 0.092, 1.25, 16);
     barrelGeo.rotateX(-Math.PI / 2);
     const barrelMat = new THREE.MeshStandardMaterial({
-      color: 0x1c2430,
-      metalness: 0.92,
-      roughness: 0.22
+      color: 0x141a24,
+      metalness: 0.94,
+      roughness: 0.18,
+      bumpScale: 0.05
     });
     const barrel = new THREE.Mesh(barrelGeo, barrelMat);
-    barrel.position.set(0, 0, -0.4);
+    barrel.position.set(0, 0, -0.42);
     this.fpvLauncherGroup.add(barrel);
+
+    // Fluted heat ventilation shroud over barrel
+    const shroudGeo = new THREE.CylinderGeometry(0.105, 0.105, 0.65, 12, 1, true);
+    shroudGeo.rotateX(-Math.PI / 2);
+    const shroudMat = new THREE.MeshStandardMaterial({
+      color: 0x222a36,
+      metalness: 0.88,
+      roughness: 0.35,
+      wireframe: false
+    });
+    const shroud = new THREE.Mesh(shroudGeo, shroudMat);
+    shroud.position.set(0, 0, -0.4);
+    this.fpvLauncherGroup.add(shroud);
 
     // Muzzle anchor point for world projectile spawn
     this.harpoonMuzzleAnchor = new THREE.Object3D();
-    this.harpoonMuzzleAnchor.position.set(0, 0, -1.02);
+    this.harpoonMuzzleAnchor.position.set(0, 0.04, -1.05);
     this.fpvLauncherGroup.add(this.harpoonMuzzleAnchor);
 
-    // 2. High-Pressure Brass Steam Chamber
-    const chamberGeo = new THREE.CylinderGeometry(0.095, 0.095, 0.7, 12);
+    // 2. High-Pressure Steampunk Brass Steam Cylinder with Reinforcing Rings
+    const chamberGeo = new THREE.CylinderGeometry(0.108, 0.108, 0.72, 16);
     chamberGeo.rotateX(-Math.PI / 2);
     const brassMat = new THREE.MeshStandardMaterial({
-      color: 0xd49b38,
-      metalness: 0.88,
-      roughness: 0.2
+      color: 0xdfa038,
+      metalness: 0.9,
+      roughness: 0.16
     });
     const chamber = new THREE.Mesh(chamberGeo, brassMat);
-    chamber.position.set(0, -0.07, -0.15);
+    chamber.position.set(0, -0.075, -0.16);
     this.fpvLauncherGroup.add(chamber);
 
-    // 3. Glowing Cyan Steam Pressure Gauge
-    const gaugeGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.04, 10);
-    const gaugeMat = new THREE.MeshStandardMaterial({
-      color: 0x00ffff,
-      emissive: 0x00f0ff,
-      emissiveIntensity: 1.8,
-      roughness: 0.2
-    });
-    const gauge = new THREE.Mesh(gaugeGeo, gaugeMat);
-    gauge.position.set(0.08, 0.02, -0.2);
-    gauge.rotation.z = Math.PI / 2;
-    this.fpvLauncherGroup.add(gauge);
+    // Brass reinforcing bands
+    for (let b = -0.4; b <= 0.1; b += 0.22) {
+      const ringGeo = new THREE.TorusGeometry(0.114, 0.014, 8, 20);
+      const ringMat = new THREE.MeshStandardMaterial({ color: 0xffcc44, metalness: 0.95, roughness: 0.1 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.set(0, -0.075, b);
+      this.fpvLauncherGroup.add(ring);
+    }
 
-    // 4. Steel Winch Cable Spool with High-Tension Wire
-    const spoolGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.15, 12);
+    // 3. Glowing Analog Dial Steam Pressure Gauge
+    const gaugeFrameGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.04, 16);
+    gaugeFrameGeo.rotateZ(Math.PI / 2);
+    const gaugeFrameMat = new THREE.MeshStandardMaterial({ color: 0xd49b38, metalness: 0.9, roughness: 0.2 });
+    const gaugeFrame = new THREE.Mesh(gaugeFrameGeo, gaugeFrameMat);
+    gaugeFrame.position.set(0.1, 0.04, -0.22);
+    this.fpvLauncherGroup.add(gaugeFrame);
+
+    const gaugeFaceGeo = new THREE.CircleGeometry(0.046, 16);
+    gaugeFaceGeo.rotateY(Math.PI / 2);
+    const gaugeFaceMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const gaugeFace = new THREE.Mesh(gaugeFaceGeo, gaugeFaceMat);
+    gaugeFace.position.set(0.121, 0.04, -0.22);
+    this.fpvLauncherGroup.add(gaugeFace);
+
+    // 4. Heavy Steel Winch Cable Spool with High-Tension Wire
+    const spoolGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.18, 16);
     spoolGeo.rotateZ(Math.PI / 2);
     const spoolMat = new THREE.MeshStandardMaterial({
-      color: 0x334455,
-      metalness: 0.8,
-      roughness: 0.3
+      color: 0x2b3848,
+      metalness: 0.85,
+      roughness: 0.25
     });
     const spool = new THREE.Mesh(spoolGeo, spoolMat);
-    spool.position.set(0, -0.13, 0.12);
+    spool.position.set(0, -0.135, 0.12);
+    this.fpvLauncherGroup.add(spool);
     this.fpvLauncherGroup.add(spool);
 
     // 5. THE VISIBLE LOADED HOOK / SPEARHEAD STICKING PROMINENTLY OUT OF THE BARREL
@@ -1289,31 +1331,40 @@ export class SceneManager {
   buildYeti3DModel() {
     this.yetiGroup = new THREE.Group();
 
-    // Volumetric Fur Material (Snowy Shaggy Beast)
+    // Procedural High-Fidelity Organic Fur Shaders & PBR Beast Textures
     const furMat = new THREE.MeshStandardMaterial({
-      color: 0xebf2f8,
-      roughness: 0.88,
-      metalness: 0.04
+      color: 0xf0f6fc,
+      roughness: 0.96,
+      metalness: 0.08,
+      flatShading: true // Gives authentic faceted shaggy fur silhouette
+    });
+    const iceFrostMat = new THREE.MeshStandardMaterial({
+      color: 0x88ccff,
+      roughness: 0.22,
+      metalness: 0.45,
+      emissive: 0x004488,
+      emissiveIntensity: 0.35
     });
     const darkMuzzleMat = new THREE.MeshStandardMaterial({
-      color: 0x1f2937,
-      roughness: 0.95
+      color: 0x0e131d,
+      roughness: 0.85,
+      metalness: 0.2
     });
     const clawMat = new THREE.MeshStandardMaterial({
-      color: 0x0f172a,
-      roughness: 0.3,
-      metalness: 0.6
+      color: 0x080c14,
+      roughness: 0.18,
+      metalness: 0.85
     });
     const eyeMat = new THREE.MeshStandardMaterial({
-      color: 0xff0033,
+      color: 0xff0044,
       emissive: 0xff0033,
-      emissiveIntensity: 2.5,
-      roughness: 0.2
+      emissiveIntensity: 4.5,
+      roughness: 0.1
     });
     const fangMat = new THREE.MeshStandardMaterial({
-      color: 0xf8fafc,
-      roughness: 0.2,
-      metalness: 0.1
+      color: 0xffffff,
+      roughness: 0.12,
+      metalness: 0.25
     });
 
     // 1. Heavy Hunched Torso & Muscular Chest
@@ -1456,7 +1507,9 @@ export class SceneManager {
     }
     if (!this.yetiGroup) return;
 
-    if (typeof yetiData.hp === "number" && yetiData.hp <= 0) {
+    const state = yetiData.state || "RUNNING_DOWNHILL";
+
+    if (typeof yetiData.hp === "number" && yetiData.hp <= 0 && state !== "FALLEN" && state !== "DRAGGED_DOWN") {
       this.yetiGroup.visible = false;
       return;
     }
@@ -1466,43 +1519,113 @@ export class SceneManager {
     this.yetiGroup.position.z = yetiData.z || 0;
 
     const t = performance.now() * 0.001;
-    const state = yetiData.state || "RUNNING_DOWNHILL";
 
-    if (state === "DRAGGED_DOWN") {
-      // 💥 REALISTIC 3D DRAG-DOWN: Tumbled flat face-first into snow, skidding down the slope!
+    // Tier-based snow plume emission
+    const tierData = yetiData.tierData;
+    if (tierData && tierData.snowPlume > 0 && state !== "DRAGGED_DOWN" && state !== "FALLEN") {
+      if (Math.random() < tierData.snowPlume * 0.3) {
+        this.emitCarveSpray({ x: yetiData.x, y: (yetiData.y || 0), z: yetiData.z }, 0.4 * tierData.snowPlume);
+      }
+    }
+
+    if (state === "DRAGGED_DOWN" || state === "FALLEN") {
+      // 💥 REALISTIC 3D DRAG-DOWN / FALLEN: Tumbled flat face-first into snow
       this.yetiGroup.position.y = (yetiData.y || 0) + 0.6;
-      this.yetiGroup.rotation.x = Math.PI / 2 - 0.15; // Pitched flat on snow
+      this.yetiGroup.rotation.x = Math.PI / 2 - 0.15;
       this.yetiGroup.rotation.y = (yetiData.steer || 0) * 0.6 + Math.sin(t * 14) * 0.1;
       this.yetiGroup.rotation.z = Math.sin(t * 10) * 0.15;
 
-      // Arms flailed forward clawing at the snow
       if (this.yetiArmL) this.yetiArmL.rotation.x = 2.4;
       if (this.yetiArmR) this.yetiArmR.rotation.x = 2.4;
       if (this.yetiLegL) this.yetiLegL.rotation.x = 0.2;
       if (this.yetiLegR) this.yetiLegR.rotation.x = -0.2;
 
-      // Snow plume spray around dragging beast
       this.emitCarveSpray(this.yetiGroup.position, 0.5);
-    } else if (state === "BAYED_UP" || state === "DEFENSIVE") {
-      // ⚡ TETHERED & THRASHING: Straining back against cable tension
+
+    } else if (state === "STAGGERED") {
+      // ⚡ STAGGERED: Stumbling backward, arms flailing wildly
       this.yetiGroup.position.y = (yetiData.y || 0);
-      this.yetiGroup.rotation.x = -0.32; // Leaning back fighting pull
+      this.yetiGroup.rotation.x = -0.45 + Math.sin(t * 6) * 0.15;
+      this.yetiGroup.rotation.y = Math.sin(t * 8) * 0.35;
+      this.yetiGroup.rotation.z = Math.sin(t * 5) * 0.2;
+
+      // Arms flailing outward in shock
+      if (this.yetiArmL) this.yetiArmL.rotation.x = -2.0 + Math.sin(t * 12) * 0.8;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = -2.0 - Math.sin(t * 12) * 0.8;
+      if (this.yetiLegL) this.yetiLegL.rotation.x = -0.3 + Math.sin(t * 6) * 0.2;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = 0.3 - Math.sin(t * 6) * 0.2;
+
+      // Snow spray from stumble
+      this.emitCarveSpray(this.yetiGroup.position, 0.3);
+
+    } else if (state === "TOWED_THRASHING") {
+      // ⛓️ TOWED & THRASHING: Fighting the cable violently
+      this.yetiGroup.position.y = (yetiData.y || 0);
+      const thrashIntensity = tierData ? tierData.thrashIntensity : 0.5;
+      this.yetiGroup.rotation.x = -0.25 + Math.sin(t * 10 * thrashIntensity) * 0.12;
+      this.yetiGroup.rotation.y = Math.sin(t * (12 + thrashIntensity * 8)) * (0.15 + thrashIntensity * 0.2);
+      this.yetiGroup.rotation.z = Math.sin(t * 7) * 0.1;
+
+      // Arms reaching backward trying to grab cable
+      if (this.yetiArmL) this.yetiArmL.rotation.x = -1.5 + Math.sin(t * 16) * 0.6 * thrashIntensity;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = -1.5 - Math.sin(t * 16) * 0.6 * thrashIntensity;
+      // Legs still running forward
+      if (this.yetiLegL) this.yetiLegL.rotation.x = -Math.sin(t * 9) * 0.65;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = Math.sin(t * 9) * 0.65;
+
+      // Heavy snow spray from thrashing
+      this.emitCarveSpray(this.yetiGroup.position, 0.4 + thrashIntensity * 0.3);
+
+    } else if (state === "RECOVERING") {
+      // 🔥 RECOVERING: Enraged sprint — leaning far forward, arms pumping furiously
+      this.yetiGroup.position.y = (yetiData.y || 0);
+      this.yetiGroup.rotation.x = 0.35; // Aggressive forward lean
+      this.yetiGroup.rotation.y = Math.sin(t * 5) * 0.08;
+      this.yetiGroup.rotation.z = 0;
+
+      // Furious pumping stride
+      const rageStride = Math.sin(t * 12);
+      if (this.yetiArmL) this.yetiArmL.rotation.x = rageStride * 1.3;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = -rageStride * 1.3;
+      if (this.yetiLegL) this.yetiLegL.rotation.x = -rageStride * 1.0;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = rageStride * 1.0;
+      if (this.yetiTorso) this.yetiTorso.position.y = 3.6 + Math.abs(rageStride) * 0.5;
+
+      // Aggressive snow plume
+      this.emitCarveSpray(this.yetiGroup.position, 0.7);
+
+    } else if (state === "LEAPING") {
+      // 🦘 LEAPING: Airborne bound with arms spread
+      this.yetiGroup.position.y = (yetiData.y || 0);
+      this.yetiGroup.rotation.x = 0.3;
+      this.yetiGroup.rotation.y = Math.sin(t * 3) * 0.1;
+      this.yetiGroup.rotation.z = 0;
+
+      // Arms spread wide in mid-air
+      if (this.yetiArmL) this.yetiArmL.rotation.x = -1.2;
+      if (this.yetiArmR) this.yetiArmR.rotation.x = -1.2;
+      // Legs tucked for leap
+      if (this.yetiLegL) this.yetiLegL.rotation.x = 0.5;
+      if (this.yetiLegR) this.yetiLegR.rotation.x = 0.5;
+
+    } else if (state === "BAYED_UP" || state === "DEFENSIVE") {
+      // ⚡ TETHERED & THRASHING (legacy): Straining back against cable
+      this.yetiGroup.position.y = (yetiData.y || 0);
+      this.yetiGroup.rotation.x = -0.32;
       this.yetiGroup.rotation.y = Math.sin(t * 16) * 0.22;
       this.yetiGroup.rotation.z = Math.sin(t * 8) * 0.08;
 
-      // Arms thrashing backward trying to reach the cable
       if (this.yetiArmL) this.yetiArmL.rotation.x = -1.3 + Math.sin(t * 14) * 0.45;
       if (this.yetiArmR) this.yetiArmR.rotation.x = -1.3 - Math.sin(t * 14) * 0.45;
       if (this.yetiLegL) this.yetiLegL.rotation.x = -0.4;
       if (this.yetiLegR) this.yetiLegR.rotation.x = 0.4;
     } else {
-      // 🎿 RUNNING DOWNHILL / STALKING
+      // 🎿 RUNNING DOWNHILL / STALKING (default)
       this.yetiGroup.position.y = (yetiData.y || 0);
-      this.yetiGroup.rotation.x = 0.18; // Leaning forward running downhill
+      this.yetiGroup.rotation.x = 0.18;
       this.yetiGroup.rotation.y = Math.sin(t * 4) * 0.06;
       this.yetiGroup.rotation.z = 0;
 
-      // Dynamic running gait
       const stride = Math.sin(t * 8.5);
       if (this.yetiArmL) this.yetiArmL.rotation.x = stride * 0.9;
       if (this.yetiArmR) this.yetiArmR.rotation.x = -stride * 0.9;
@@ -1513,14 +1636,44 @@ export class SceneManager {
   }
 
   updateHarpoons(dt, yetiEntity, playerPos, onHitCallback) {
-    if (!this.activeHarpoons || this.activeHarpoons.length === 0) return;
+    if (!this.activeHarpoons || this.activeHarpoons.length === 0) {
+      // Ensure hook is loaded and visible in the barrel when no projectile is flying
+      if (this.loadedHookMesh) this.loadedHookMesh.visible = true;
+      return;
+    }
 
     for (let i = this.activeHarpoons.length - 1; i >= 0; i--) {
       const h = this.activeHarpoons[i];
       h.life -= dt;
+
+      if (h.state === "RETRACTING") {
+        // High-speed winch cable retraction pulling hook back to launcher
+        const retractTarget = new THREE.Vector3(playerPos.x + 0.35, playerPos.y + 0.9, playerPos.z + 0.5);
+        h.mesh.position.lerp(retractTarget, 0.28);
+
+        if (h.line && playerPos) {
+          const positions = h.line.geometry.attributes.position.array;
+          positions[0] = playerPos.x;
+          positions[1] = playerPos.y + 0.8;
+          positions[2] = playerPos.z;
+          positions[3] = h.mesh.position.x;
+          positions[4] = h.mesh.position.y;
+          positions[5] = h.mesh.position.z;
+          h.line.geometry.attributes.position.needsUpdate = true;
+        }
+
+        if (h.mesh.position.distanceTo(retractTarget) < 1.8 || h.life <= 0) {
+          if (h.mesh) this.scene.remove(h.mesh);
+          if (h.line) this.scene.remove(h.line);
+          this.activeHarpoons.splice(i, 1);
+          // Hook is fully winched back into the chamber - reload ready!
+          if (this.loadedHookMesh) this.loadedHookMesh.visible = true;
+        }
+        continue;
+      }
+
       const step = h.speed * dt;
       h.traveled += step;
-
       h.mesh.position.addScaledVector(h.dir, step);
 
       // Update trailing cable line
@@ -1555,9 +1708,9 @@ export class SceneManager {
       }
 
       if (hit || h.traveled >= h.maxDist || h.life <= 0) {
-        if (h.mesh) this.scene.remove(h.mesh);
-        if (h.line) this.scene.remove(h.line);
-        this.activeHarpoons.splice(i, 1);
+        // Begin rapid cable winch retraction back to player
+        h.state = "RETRACTING";
+        h.life = 0.35; // Fast snappy winch back
       }
     }
   }
