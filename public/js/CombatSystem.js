@@ -396,7 +396,6 @@ export class CombatSystem {
     setTimeout(() => {
       this.releaseHarpoon();
     }, 1500);
-    }, 2000);
   }
 
   releaseHarpoon() {
