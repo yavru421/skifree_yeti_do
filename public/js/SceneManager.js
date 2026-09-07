@@ -38,6 +38,7 @@ export class SceneManager {
     this.avalancheWallMesh = null;
     this.halfpipeMeshes = [];
     this.ghostSkiers = new Map();
+    this.npcSkiers = [];
     this.trauma = 0;
     this.activeHarpoons = [];
 
@@ -76,6 +77,7 @@ export class SceneManager {
     this.buildDistantMountainRange();
     this.buildSkierMesh();
     this.buildFpvHarpoonLauncher();
+    this.buildFpvKnifeViewmodel();
     this.buildContinuousSnowTerrain();
     this.buildSkiLiftSystem();
     this.buildSnowParticles();
@@ -83,79 +85,97 @@ export class SceneManager {
     this.buildNitroJetsSystem();
     this.buildTetherLine();
     this.loadYetiSprite();
+    this.buildNpcSkiers();
 
     window.addEventListener("resize", () => this.onWindowResize());
   }
 
   buildTetherLine() {
-    const numPoints = 20;
-    const points = [];
-    for (let i = 0; i < numPoints; i++) {
-      points.push(new THREE.Vector3(0, -999, 0));
-    }
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-    const lineMat = new THREE.LineBasicMaterial({
-      color: 0x00ffff,
-      linewidth: 3,
-      transparent: true,
-      opacity: 0.95
+    // 3D Volumetric Heavy-Duty Winch Cable (Never dips under snow!)
+    const cableGeo = new THREE.CylinderGeometry(0.08, 0.08, 1, 8);
+    cableGeo.rotateX(Math.PI / 2); // Align with Z axis for natural lookAt orientation
+
+    const cableMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 2.8,
+      roughness: 0.15,
+      metalness: 0.85
     });
-    this.tetherLineMesh = new THREE.Line(lineGeo, lineMat);
-    this.tetherLineMesh.visible = false;
-    this.scene.add(this.tetherLineMesh);
+
+    this.tetherCableMesh = new THREE.Mesh(cableGeo, cableMat);
+    this.tetherCableMesh.visible = false;
+    this.scene.add(this.tetherCableMesh);
+
+    // Keep legacy alias
+    this.tetherLineMesh = this.tetherCableMesh;
   }
 
   updateTether(playerPos, targetPos, isTethered, isStaggered) {
-    if (!this.tetherLineMesh) return;
+    if (!this.tetherCableMesh) return;
     if (!isTethered || !playerPos || !targetPos) {
-      this.tetherLineMesh.visible = false;
+      this.tetherCableMesh.visible = false;
       return;
     }
 
-    this.tetherLineMesh.visible = true;
-    const positions = this.tetherLineMesh.geometry.attributes.position.array;
-    const numPoints = positions.length / 3;
+    this.tetherCableMesh.visible = true;
 
-    // Read tension from combat system for color coding
+    // Anchor p0 at weapon muzzle in FPV, or chest in TPV — always ABOVE the snow
+    let p0;
+    if (this.isFPV && this.harpoonMuzzleAnchor) {
+      const muzzleWorld = new THREE.Vector3();
+      this.harpoonMuzzleAnchor.getWorldPosition(muzzleWorld);
+      p0 = muzzleWorld;
+    } else if (this.isFPV) {
+      p0 = new THREE.Vector3(playerPos.x + 0.28, (playerPos.y || 0) + 1.35, playerPos.z + 0.75);
+    } else {
+      p0 = new THREE.Vector3(playerPos.x, (playerPos.y || 0) + 1.15, playerPos.z + 0.35);
+    }
+
+    // Anchor p1 into Yeti's back socket if available, or elevated at 2.4m above ground
+    let p1;
+    if (this.yetiTetherSocket) {
+      const sockWorld = new THREE.Vector3();
+      this.yetiTetherSocket.getWorldPosition(sockWorld);
+      p1 = sockWorld;
+    } else {
+      p1 = new THREE.Vector3(targetPos.x, (targetPos.y || 0) + 2.4, targetPos.z - 0.4);
+    }
+
+    const dist = p0.distanceTo(p1);
+    if (dist < 0.2) {
+      this.tetherCableMesh.visible = false;
+      return;
+    }
+
+    // Midpoint positioning & lookAt orientation
+    const mid = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
+    // Guarantee mid.y is never under the snow plane!
+    const groundY = this.getTerrainHeight ? this.getTerrainHeight(mid.x, mid.z) : 0;
+    mid.y = Math.max(groundY + 0.45, mid.y);
+
+    this.tetherCableMesh.position.copy(mid);
+    this.tetherCableMesh.lookAt(p1);
+    this.tetherCableMesh.scale.set(1.4, 1.4, dist);
+
+    // Read tension for dynamic color coding
     const combat = window.__combatSystem;
     const tension = combat ? combat.cableTension : 0.5;
 
-    // Color zones based on tension
+    let cableColor = 0x00f0ff;
     if (tension < 0.20 || tension > 0.80) {
-      // RED DANGER ZONE
-      this.tetherLineMesh.material.color.setHex(0xff0033);
+      cableColor = 0xff0033; // Red Danger
     } else if (tension < 0.35 || tension > 0.65) {
-      // YELLOW WARNING ZONE
-      this.tetherLineMesh.material.color.setHex(0xffaa00);
+      cableColor = 0xffaa00; // Yellow Warning
     } else {
-      // GREEN SWEET SPOT
-      this.tetherLineMesh.material.color.setHex(0x39ff14);
+      cableColor = 0x39ff14; // Neon Green Sweet Spot
     }
 
-    // Override to red for stagger/dragged state
-    if (isStaggered) {
-      this.tetherLineMesh.material.color.setHex(0xff0055);
-    }
+    if (isStaggered) cableColor = 0xff0055;
 
-    const p0 = new THREE.Vector3(playerPos.x, playerPos.y + 0.8, playerPos.z);
-    const p1 = new THREE.Vector3(targetPos.x, Math.max(0, targetPos.y) + 1.2, targetPos.z);
-
-    // Vibration intensity scales with how far from green zone
-    const tensionStress = Math.max(Math.abs(tension - 0.5) - 0.15, 0) * 4.0;
-
-    for (let i = 0; i < numPoints; i++) {
-      const t = i / (numPoints - 1);
-      const x = p0.x + (p1.x - p0.x) * t;
-      const sag = Math.sin(t * Math.PI) * (-0.5 - tensionStress * 0.8);
-      const vibe = Math.sin(performance.now() * (0.04 + tensionStress * 0.08) + i) * (0.08 + tensionStress * 0.25);
-      const y = p0.y + (p1.y - p0.y) * t + sag + vibe;
-      const z = p0.z + (p1.z - p0.z) * t;
-
-      positions[i * 3] = x;
-      positions[i * 3 + 1] = y;
-      positions[i * 3 + 2] = z;
-    }
-    this.tetherLineMesh.geometry.attributes.position.needsUpdate = true;
+    this.tetherCableMesh.material.color.setHex(cableColor);
+    this.tetherCableMesh.material.emissive.setHex(cableColor);
+    this.tetherCableMesh.material.emissiveIntensity = 2.4 + Math.sin(performance.now() * 0.015) * 0.8;
   }
 
   setupLighting() {
@@ -297,21 +317,24 @@ export class SceneManager {
       snowCap.position.y = 7.3;
       treeGroup.add(snowCap);
 
-      // Distribute trees across the entire mountain corridor, including dense central slalom hazards
+      // Distribute trees across the curving mountain corridor relative to track spine
       const tz = minZ + (i / count) * (maxZ - minZ) + (Math.random() - 0.5) * 12;
+      const spineX = (window.__trackManager && window.__trackManager.getTrackSpineX)
+        ? window.__trackManager.getTrackSpineX(tz)
+        : (Math.sin(tz * 0.0078) * 18.0 + Math.sin(tz * 0.026) * 7.5);
       
       let tx;
       if (i % 3 === 0) {
         // Direct central slope slalom tree hazards (-22m to +22m)
-        tx = (Math.random() - 0.5) * 44;
+        tx = spineX + (Math.random() - 0.5) * 44;
       } else if (i % 3 === 1) {
         // Mid-slope flanking clusters (-38m to +38m)
         const s = Math.random() > 0.5 ? 1 : -1;
-        tx = s * (12 + Math.random() * 26);
+        tx = spineX + s * (14 + Math.random() * 26);
       } else {
         // Outer forest borders
         const s = Math.random() > 0.5 ? 1 : -1;
-        tx = s * (32 + Math.random() * 32);
+        tx = spineX + s * (32 + Math.random() * 32);
       }
 
       const sScale = 0.85 + Math.random() * 0.45;
@@ -341,7 +364,10 @@ export class SceneManager {
       const mesh = new THREE.Mesh(rampGeo, rampMat);
       mesh.rotation.x = -0.35;
       const kz = minZ + i * spacing + Math.random() * 15;
-      const kx = Math.sin(i * 1.4) * 24;
+      const spineX = (window.__trackManager && window.__trackManager.getTrackSpineX)
+        ? window.__trackManager.getTrackSpineX(kz)
+        : (Math.sin(kz * 0.0078) * 18.0 + Math.sin(kz * 0.026) * 7.5);
+      const kx = spineX + Math.sin(i * 1.4) * 20;
       mesh.position.set(kx, 0.85, kz);
       this.scene.add(mesh);
       this.kickers.push(mesh);
@@ -369,7 +395,10 @@ export class SceneManager {
       const mesh = new THREE.Mesh(railGeo, railMat);
       mesh.rotation.x = Math.PI / 2.2;
       const rz = minZ + i * spacing;
-      const rx = (i % 2 === 0 ? 15 : -15) + (Math.random() - 0.5) * 6;
+      const spineX = (window.__trackManager && window.__trackManager.getTrackSpineX)
+        ? window.__trackManager.getTrackSpineX(rz)
+        : (Math.sin(rz * 0.0078) * 18.0 + Math.sin(rz * 0.026) * 7.5);
+      const rx = spineX + (i % 2 === 0 ? 14 : -14) + (Math.random() - 0.5) * 6;
       mesh.position.set(rx, 1.0, rz);
       this.scene.add(mesh);
       this.grindRails.push(mesh);
@@ -498,8 +527,11 @@ export class SceneManager {
       const group = new THREE.Group();
       const isBlue = i % 2 === 0;
       const mat = isBlue ? blueMat : redMat;
-      const gateX = Math.sin(i * 0.58) * 22;
       const gateZ = minZ + i * spacing;
+      const spineX = (window.__trackManager && window.__trackManager.getTrackSpineX)
+        ? window.__trackManager.getTrackSpineX(gateZ)
+        : (Math.sin(gateZ * 0.0078) * 18.0 + Math.sin(gateZ * 0.026) * 7.5);
+      const gateX = spineX + Math.sin(i * 0.58) * 16;
 
       const leftPole = new THREE.Mesh(poleGeo, mat);
       leftPole.position.set(-width / 2, 1.9, 0);
@@ -761,6 +793,110 @@ export class SceneManager {
     this.camera.add(this.fpvLauncherGroup);
 
     return this.fpvLauncherGroup;
+  }
+
+  buildFpvKnifeViewmodel() {
+    this.fpvKnifeGroup = new THREE.Group();
+
+    // CS:GO Style Tactical Combat Knife / Ski-Pole Dagger
+    const knifeMat = new THREE.MeshStandardMaterial({
+      color: 0x18202c,
+      metalness: 0.96,
+      roughness: 0.14
+    });
+    const edgeMat = new THREE.MeshStandardMaterial({
+      color: 0xe0f0ff,
+      metalness: 0.98,
+      roughness: 0.08,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 0.4
+    });
+    const gripMat = new THREE.MeshStandardMaterial({
+      color: 0x0d1117,
+      roughness: 0.75,
+      metalness: 0.3
+    });
+
+    // 1. Blade Body (Sleek tactical Bowie / Karambit curve)
+    const bladeGeo = new THREE.BoxGeometry(0.016, 0.075, 0.38);
+    const blade = new THREE.Mesh(bladeGeo, knifeMat);
+    blade.position.set(0, 0.02, -0.26);
+    this.fpvKnifeGroup.add(blade);
+
+    // Razor Sharp Edge with Cyan Glint
+    const edgeGeo = new THREE.ConeGeometry(0.045, 0.18, 5);
+    edgeGeo.rotateX(-Math.PI / 2);
+    const edge = new THREE.Mesh(edgeGeo, edgeMat);
+    edge.position.set(0, 0.02, -0.48);
+    this.fpvKnifeGroup.add(edge);
+
+    // Glowing Plasma Fuller Groove
+    const grooveGeo = new THREE.BoxGeometry(0.02, 0.015, 0.28);
+    const grooveMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const groove = new THREE.Mesh(grooveGeo, grooveMat);
+    groove.position.set(0, 0.025, -0.26);
+    this.fpvKnifeGroup.add(groove);
+
+    // 2. Crossguard
+    const guardGeo = new THREE.BoxGeometry(0.035, 0.14, 0.025);
+    const guard = new THREE.Mesh(guardGeo, knifeMat);
+    guard.position.set(0, 0.01, -0.07);
+    this.fpvKnifeGroup.add(guard);
+
+    // 3. Ergonomic Tactical Grip
+    const gripGeo = new THREE.CylinderGeometry(0.025, 0.028, 0.22, 10);
+    gripGeo.rotateX(-Math.PI / 2);
+    const grip = new THREE.Mesh(gripGeo, gripMat);
+    grip.position.set(0, 0, 0.05);
+    this.fpvKnifeGroup.add(grip);
+
+    // 4. Skull-Crusher Pommel Ring
+    const pommelGeo = new THREE.TorusGeometry(0.032, 0.008, 8, 16);
+    const pommel = new THREE.Mesh(pommelGeo, knifeMat);
+    pommel.position.set(0, 0, 0.17);
+    this.fpvKnifeGroup.add(pommel);
+
+    // Poised Base Position (Lower right screen, held ready)
+    this.fpvKnifeBasePos = new THREE.Vector3(0.25, -0.20, -0.42);
+    this.fpvKnifeGroup.position.copy(this.fpvKnifeBasePos);
+    this.fpvKnifeGroup.rotation.set(0.2, -0.25, 0.1);
+    this.fpvKnifeGroup.scale.set(0.85, 0.85, 0.85);
+
+    this.fpvKnifeGroup.visible = false;
+    this.camera.add(this.fpvKnifeGroup);
+
+    this.knifeAnim = {
+      active: false,
+      timer: 0,
+      duration: 0.18,
+      type: "SLASH"
+    };
+
+    return this.fpvKnifeGroup;
+  }
+
+  triggerKnifeSlash(isHeavyBackstab = false) {
+    if (!this.fpvKnifeGroup) return;
+    this.fpvKnifeGroup.visible = true;
+    const duration = isHeavyBackstab ? 0.32 : 0.18;
+    this.knifeAnim = {
+      active: true,
+      timer: duration,
+      duration: duration,
+      type: isHeavyBackstab ? "BACKSTAB" : "SLASH"
+    };
+
+    // Camera trauma shake
+    this.addTrauma(isHeavyBackstab ? 0.85 : 0.45);
+
+    // Trigger visual screen slash overlay
+    const overlay = document.getElementById("knife-slash-overlay");
+    if (overlay) {
+      overlay.className = isHeavyBackstab ? "slash-backstab-active" : "slash-quick-active";
+      setTimeout(() => {
+        if (overlay) overlay.className = "";
+      }, isHeavyBackstab ? 350 : 200);
+    }
   }
 
   buildSkierMesh() {
@@ -1105,6 +1241,60 @@ export class SceneManager {
       }
       this.snowParticles.geometry.attributes.position.needsUpdate = true;
     }
+
+    // CS:GO Knife Viewmodel Animation & Visibility
+    if (this.fpvKnifeGroup) {
+      const yeti = window.__yetiAI || window.__yetiPredator;
+      const combat = window.__combatSystem;
+      let inPointBlank = false;
+      if (yeti && playerPos) {
+        const dx = (playerPos.x || 0) - yeti.x;
+        const dz = (playerPos.z || 0) - yeti.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist <= 6.8 || (combat && combat.towPhase === "FINISH_WINDOW")) {
+          inPointBlank = true;
+        }
+      }
+
+      if (this.knifeAnim && this.knifeAnim.active) {
+        this.knifeAnim.timer -= 0.016;
+        const progress = Math.min(1.0, Math.max(0, 1.0 - (this.knifeAnim.timer / this.knifeAnim.duration)));
+        if (this.knifeAnim.type === "SLASH") {
+          // Quick visceral diagonal swipe across screen
+          const swipe = Math.sin(progress * Math.PI);
+          this.fpvKnifeGroup.position.x = this.fpvKnifeBasePos.x - swipe * 0.45;
+          this.fpvKnifeGroup.position.y = this.fpvKnifeBasePos.y + swipe * 0.18;
+          this.fpvKnifeGroup.position.z = this.fpvKnifeBasePos.z - swipe * 0.16;
+          this.fpvKnifeGroup.rotation.z = 0.1 - swipe * 1.8;
+          this.fpvKnifeGroup.rotation.y = -0.25 - swipe * 0.8;
+        } else {
+          // Heavy CS:GO Backstab: draw back then violent lunge into screen center
+          if (progress < 0.28) {
+            const windup = progress / 0.28;
+            this.fpvKnifeGroup.position.z = this.fpvKnifeBasePos.z + windup * 0.14;
+            this.fpvKnifeGroup.rotation.x = 0.2 + windup * 0.45;
+          } else {
+            const thrust = (progress - 0.28) / 0.72;
+            const thrustPeak = Math.sin(thrust * Math.PI * 0.5);
+            this.fpvKnifeGroup.position.x = this.fpvKnifeBasePos.x - thrustPeak * 0.22;
+            this.fpvKnifeGroup.position.z = this.fpvKnifeBasePos.z - thrustPeak * 0.42;
+            this.fpvKnifeGroup.rotation.x = 0.65 - thrustPeak * 0.9;
+          }
+        }
+
+        if (this.knifeAnim.timer <= 0) {
+          this.knifeAnim.active = false;
+          this.fpvKnifeGroup.position.copy(this.fpvKnifeBasePos);
+          this.fpvKnifeGroup.rotation.set(0.2, -0.25, 0.1);
+        }
+      }
+
+      // Visible when in point-blank range or during animation in FPV
+      this.fpvKnifeGroup.visible = this.isFPV && (inPointBlank || (this.knifeAnim && this.knifeAnim.active));
+    }
+
+    // Dynamic NPC Skiers update
+    this.updateNpcSkiers(0.016, playerPos.z);
   }
 
   updateGhostSkiers(remotePlayers, localPlayerId) {
@@ -1146,6 +1336,69 @@ export class SceneManager {
       if (!activeIds.has(id)) {
         this.scene.remove(ghost.group);
         this.ghostSkiers.delete(id);
+      }
+    }
+  }
+
+  buildNpcSkiers() {
+    this.npcSkiers = [];
+    const colors = [0xff3355, 0x00f0ff, 0x39ff14, 0xffaa00, 0xcc00ff, 0xffff00, 0x0088ff, 0xff00aa];
+    for (let i = 0; i < 8; i++) {
+      const npcGroup = new THREE.Group();
+      const suitMat = new THREE.MeshStandardMaterial({ color: colors[i % colors.length], roughness: 0.5 });
+      const darkMat = new THREE.MeshStandardMaterial({ color: 0x111118, roughness: 0.8 });
+      const skiMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+
+      // Torso
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.45), suitMat);
+      torso.position.y = 1.0;
+      npcGroup.add(torso);
+
+      // Head with goggles
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), darkMat);
+      head.position.y = 1.6;
+      npcGroup.add(head);
+
+      // Skis
+      const skiL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 1.8), skiMat);
+      skiL.position.set(-0.24, 0.04, 0.1);
+      const skiR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 1.8), skiMat);
+      skiR.position.set(0.24, 0.04, 0.1);
+      npcGroup.add(skiL);
+      npcGroup.add(skiR);
+
+      const spawnX = (Math.random() - 0.5) * 55;
+      const spawnZ = 60 + i * 40;
+      npcGroup.position.set(spawnX, 0, spawnZ);
+      this.scene.add(npcGroup);
+
+      this.npcSkiers.push({
+        group: npcGroup,
+        x: spawnX,
+        z: spawnZ,
+        speed: 22 + Math.random() * 8,
+        freq: 1.0 + Math.random() * 0.8,
+        phase: Math.random() * Math.PI * 2,
+        amp: 6 + Math.random() * 8
+      });
+    }
+  }
+
+  updateNpcSkiers(dt, playerZ) {
+    if (!this.npcSkiers) return;
+    const t = performance.now() * 0.001;
+
+    for (const npc of this.npcSkiers) {
+      npc.z += npc.speed * 0.045 * dt * 60;
+      npc.x += Math.sin(t * npc.freq + npc.phase) * npc.amp * dt;
+      const groundY = this.getTerrainHeight ? this.getTerrainHeight(npc.x, npc.z) : 0;
+      npc.group.position.set(npc.x, groundY, npc.z);
+      npc.group.rotation.y = Math.cos(t * npc.freq + npc.phase) * 0.35;
+
+      // Recycle ahead down the mountain if player passes them by 30 meters
+      if (playerZ && npc.z < playerZ - 30) {
+        npc.z = playerZ + 140 + Math.random() * 120;
+        npc.x = (Math.random() - 0.5) * 55;
       }
     }
   }
@@ -1197,8 +1450,135 @@ export class SceneManager {
     pos[idx + 1] = playerPos.y + 0.1 + Math.random() * 0.25;
     pos[idx + 2] = playerPos.z - 0.4 - Math.random() * 0.8;
 
-      this.carveSprayIndex++;
+    this.carveSprayIndex++;
     this.carveParticlesMesh.geometry.attributes.position.needsUpdate = true;
+  }
+
+  buildFpvKnifeViewmodel() {
+    this.fpvKnifeGroup = new THREE.Group();
+    this.fpvKnifeBasePos = new THREE.Vector3(0.28, -0.22, -0.45);
+    this.fpvKnifeGroup.position.copy(this.fpvKnifeBasePos);
+    this.fpvKnifeGroup.rotation.set(0.15, -0.22, 0.12);
+
+    // Tactical CS:GO Combat Knife / Ski-Dagger Mesh
+    // 1. Double-edged titanium blade with drop point and serrated spine
+    const bladeGeo = new THREE.BoxGeometry(0.038, 0.28, 0.008);
+    const bladeMat = new THREE.MeshStandardMaterial({
+      color: 0xccddee,
+      metalness: 0.95,
+      roughness: 0.18
+    });
+    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+    blade.position.set(0, 0.16, 0);
+    this.fpvKnifeGroup.add(blade);
+
+    // Blade Tip (triangular point)
+    const tipGeo = new THREE.ConeGeometry(0.024, 0.08, 4);
+    const tip = new THREE.Mesh(tipGeo, bladeMat);
+    tip.position.set(0, 0.34, 0);
+    tip.rotation.y = Math.PI / 4;
+    this.fpvKnifeGroup.add(tip);
+
+    // Crossguard (blackened hardened steel)
+    const guardMat = new THREE.MeshStandardMaterial({
+      color: 0x18181f,
+      metalness: 0.8,
+      roughness: 0.4
+    });
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.03), guardMat);
+    guard.position.set(0, 0.02, 0);
+    this.fpvKnifeGroup.add(guard);
+
+    // Handle Grip (carbon-composite textured tactical handle)
+    const handleMat = new THREE.MeshStandardMaterial({
+      color: 0x22252a,
+      metalness: 0.2,
+      roughness: 0.7
+    });
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.18, 8), handleMat);
+    handle.position.set(0, -0.08, 0);
+    this.fpvKnifeGroup.add(handle);
+
+    // Pommel (steel skull-crusher butt)
+    const pommel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.024, 0.03, 8), guardMat);
+    pommel.position.set(0, -0.18, 0);
+    this.fpvKnifeGroup.add(pommel);
+
+    this.fpvKnifeGroup.visible = false;
+    this.camera.add(this.fpvKnifeGroup);
+    this.knifeAnimationTimer = 0;
+    this.isKnifeAttacking = false;
+    this.knifeAttackType = "none";
+  }
+
+  triggerKnifeSlash(isHeavy = true) {
+    if (!this.fpvKnifeGroup) return;
+    this.fpvKnifeGroup.visible = true;
+    this.isKnifeAttacking = true;
+    this.knifeAttackType = isHeavy ? "backstab" : "slash";
+    this.knifeAnimationTimer = isHeavy ? 0.36 : 0.20;
+    if (this.fpvLauncherGroup) {
+      this.fpvLauncherGroup.visible = false;
+    }
+  }
+
+  updateFpvKnifeViewmodel(dt) {
+    if (!this.fpvKnifeGroup) return;
+    const combat = window.__combatSystem;
+    const isTethered = combat && combat.isTethered;
+    const isClose = combat && (combat.cableLength <= 7.0 || combat.retractionTimer <= 0.5);
+
+    if (this.isFPV && (this.isKnifeAttacking || (isTethered && isClose))) {
+      this.fpvKnifeGroup.visible = true;
+      if (this.fpvLauncherGroup && !this.isKnifeAttacking) {
+        this.fpvLauncherGroup.visible = false;
+      }
+    } else {
+      if (!this.isKnifeAttacking) {
+        this.fpvKnifeGroup.visible = false;
+        if (this.isFPV && this.fpvLauncherGroup) {
+          this.fpvLauncherGroup.visible = true;
+        }
+      }
+    }
+
+    if (!this.fpvKnifeGroup.visible) return;
+
+    if (this.isKnifeAttacking && this.knifeAnimationTimer > 0) {
+      this.knifeAnimationTimer -= dt;
+      if (this.knifeAttackType === "backstab") {
+        const progress = 1 - (this.knifeAnimationTimer / 0.36);
+        if (progress < 0.4) {
+          const p = progress / 0.4;
+          this.fpvKnifeGroup.position.set(0.25 - p * 0.1, -0.15 + p * 0.12, -0.38 + p * 0.08);
+          this.fpvKnifeGroup.rotation.set(0.1 - p * 0.5, -0.2, 0.15 + p * 0.3);
+        } else if (progress < 0.75) {
+          const p = (progress - 0.4) / 0.35;
+          this.fpvKnifeGroup.position.set(0.15 - p * 0.12, -0.03 - p * 0.22, -0.30 - p * 0.35);
+          this.fpvKnifeGroup.rotation.set(-0.4 + p * 1.1, -0.2 - p * 0.1, 0.45 - p * 0.6);
+        } else {
+          const p = (progress - 0.75) / 0.25;
+          this.fpvKnifeGroup.position.lerp(this.fpvKnifeBasePos, p * 0.5);
+        }
+      } else {
+        const progress = 1 - (this.knifeAnimationTimer / 0.20);
+        const slashX = 0.35 - progress * 0.65;
+        const slashY = -0.18 + Math.sin(progress * Math.PI) * 0.15;
+        this.fpvKnifeGroup.position.set(slashX, slashY, -0.42);
+        this.fpvKnifeGroup.rotation.set(0.2, -0.4 + progress * 0.8, -0.3 + progress * 0.6);
+      }
+
+      if (this.knifeAnimationTimer <= 0) {
+        this.isKnifeAttacking = false;
+        this.fpvKnifeGroup.position.copy(this.fpvKnifeBasePos);
+        this.fpvKnifeGroup.rotation.set(0.15, -0.22, 0.12);
+      }
+    } else {
+      const t = performance.now() * 0.002;
+      this.fpvKnifeGroup.position.x = this.fpvKnifeBasePos.x + Math.sin(t * 1.8) * 0.004;
+      this.fpvKnifeGroup.position.y = this.fpvKnifeBasePos.y + Math.cos(t * 3.2) * 0.006;
+      this.fpvKnifeGroup.position.z = this.fpvKnifeBasePos.z;
+    }
   }
 
   spawnHarpoon(startPos, dir, speed = 88) {

@@ -406,6 +406,154 @@ export class AudioSystem {
     osc.stop(t + 0.9);
   }
 
+  playKnifeSlash() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+    // Metallic whoosh & blade slice
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(1400, t);
+    osc.frequency.exponentialRampToValueAtTime(320, t + 0.12);
+    gain.gain.setValueAtTime(0.7, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.14);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  }
+
+  playFleshImpactThud() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+    // Sub-bass heavy impact thud (65Hz -> 20Hz)
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = "sine";
+    subOsc.frequency.setValueAtTime(65, t);
+    subOsc.frequency.exponentialRampToValueAtTime(20, t + 0.35);
+    subGain.gain.setValueAtTime(1.0, t);
+    subGain.gain.exponentialRampToValueAtTime(0.01, t + 0.38);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(t);
+    subOsc.stop(t + 0.38);
+
+    // Bone crunch / meat slice noise transient
+    try {
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.12);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(800, t);
+      filter.Q.setValueAtTime(2.0, t);
+      const nGain = this.ctx.createGain();
+      nGain.gain.setValueAtTime(0.9, t);
+      nGain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+      noise.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(this.ctx.destination);
+      noise.start(t);
+      noise.stop(t + 0.12);
+    } catch (e) {}
+  }
+
+  playYetiDeathGroan() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.linearRampToValueAtTime(85, t + 0.4);
+    osc.frequency.exponentialRampToValueAtTime(25, t + 1.6);
+    gain.gain.setValueAtTime(0.9, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 1.7);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 1.7);
+  }
+
+  playFleshImpactThud() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+
+    // 1. Deep sub-bass visceral flesh impact (65Hz down to 24Hz)
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = "sine";
+    subOsc.frequency.setValueAtTime(65, t);
+    subOsc.frequency.exponentialRampToValueAtTime(24, t + 0.28);
+    subGain.gain.setValueAtTime(1.0, t);
+    subGain.gain.exponentialRampToValueAtTime(0.01, t + 0.32);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(t);
+    subOsc.stop(t + 0.32);
+
+    // 2. High-speed blade flesh tear / slice crunch
+    const sliceOsc = this.ctx.createOscillator();
+    const sliceGain = this.ctx.createGain();
+    sliceOsc.type = "sawtooth";
+    sliceOsc.frequency.setValueAtTime(320, t);
+    sliceOsc.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+    sliceGain.gain.setValueAtTime(0.85, t);
+    sliceGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+    sliceOsc.connect(sliceGain);
+    sliceGain.connect(this.ctx.destination);
+    sliceOsc.start(t);
+    sliceOsc.stop(t + 0.15);
+  }
+
+  playKnifeSlash() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+
+    // Sharp metallic blade whoosh
+    const whooshOsc = this.ctx.createOscillator();
+    const whooshGain = this.ctx.createGain();
+    whooshOsc.type = "triangle";
+    whooshOsc.frequency.setValueAtTime(880, t);
+    whooshOsc.frequency.exponentialRampToValueAtTime(260, t + 0.12);
+    whooshGain.gain.setValueAtTime(0.7, t);
+    whooshGain.gain.exponentialRampToValueAtTime(0.01, t + 0.14);
+    whooshOsc.connect(whooshGain);
+    whooshGain.connect(this.ctx.destination);
+    whooshOsc.start(t);
+    whooshOsc.stop(t + 0.14);
+  }
+
+  playYetiDeathGroan() {
+    if (!this.ctx || !this.isSoundOn) return;
+    this.unlockAndStart();
+    const t = this.ctx.currentTime;
+
+    const groanOsc = this.ctx.createOscillator();
+    const groanGain = this.ctx.createGain();
+    groanOsc.type = "sawtooth";
+    groanOsc.frequency.setValueAtTime(95, t);
+    groanOsc.frequency.linearRampToValueAtTime(45, t + 0.6);
+    groanOsc.frequency.exponentialRampToValueAtTime(18, t + 1.2);
+    groanGain.gain.setValueAtTime(1.0, t);
+    groanGain.gain.exponentialRampToValueAtTime(0.01, t + 1.25);
+    groanOsc.connect(groanGain);
+    groanGain.connect(this.ctx.destination);
+    groanOsc.start(t);
+    groanOsc.stop(t + 1.25);
+  }
+
   toggleSound() {
     this.isSoundOn = !this.isSoundOn;
     if (this.ctx) {

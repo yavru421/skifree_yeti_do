@@ -125,10 +125,24 @@ export class CombatSystem {
       bindHarpoonBtn();
     }
 
+    // Right-Click contextmenu prevention & secondary heavy backstab
+    window.addEventListener("contextmenu", (e) => {
+      if (this.isTethered && (this.cableLength <= 7.0 || this.retractionTimer <= 0.5)) {
+        e.preventDefault();
+        this.executeKnifeBackstab(true);
+      }
+    });
+
     // Instant screen tap / pointerdown weapon firing & takedown tapping
     window.addEventListener("pointerdown", (e) => {
       if (this.isTethered) {
-        // While tethered, tapping anywhere on screen registers a takedown tap!
+        // While tethered, check if at point-blank for knife strike
+        const isRightClick = e.button === 2;
+        if (this.cableLength <= 7.0 || this.retractionTimer <= 0.5) {
+          this.executeKnifeBackstab(isRightClick);
+          return;
+        }
+        // Otherwise, tap spools the winch
         this.handleTakedownTap();
         return;
       }
@@ -306,6 +320,12 @@ export class CombatSystem {
     const sceneMgr = window.__sceneManager;
     const audio = window.__audioSystem;
 
+    // If already in point-blank range or timer expired, execute knife backstab!
+    if (this.cableLength <= 7.0 || this.retractionTimer <= 0.5) {
+      this.executeKnifeBackstab(true);
+      return;
+    }
+
     this.tapTakedownCount++;
     // Rapid tap turbo-spools the winch: shave 0.25s per tap from the 10s timer
     if (this.towPhase === "RETRACTING" && this.retractionTimer > 0.5) {
@@ -323,6 +343,11 @@ export class CombatSystem {
     if (tapBtn) {
       tapBtn.style.transform = "scale(0.88)";
       setTimeout(() => { if (tapBtn) tapBtn.style.transform = "scale(1.0)"; }, 60);
+      if (this.cableLength <= 7.0 || this.retractionTimer <= 1.0) {
+        tapBtn.innerHTML = "<span>🗡️ BACKSTAB!</span>";
+        tapBtn.style.background = "radial-gradient(circle, #ff0055 0%, #aa0022 100%)";
+        tapBtn.style.boxShadow = "0 0 35px #ff0055";
+      }
     }
 
     // Small camera shake per tap
@@ -346,10 +371,62 @@ export class CombatSystem {
       }
     }
 
-    // Complete Takedown if timer expired or taps hit target
-    if (this.retractionTimer <= 0 || this.tapTakedownCount >= 30) {
-      this.executeFullTakedown();
+    // Complete Takedown if timer expired or taps hit target or point-blank reached
+    if (this.retractionTimer <= 0.5 || this.tapTakedownCount >= 30 || this.cableLength <= 7.0) {
+      this.executeKnifeBackstab(true);
     }
+  }
+
+  executeKnifeBackstab(isHeavy = true) {
+    const yeti = window.__yetiAI || window.__yetiPredator;
+    const sceneMgr = window.__sceneManager;
+    const audio = window.__audioSystem;
+
+    if (sceneMgr && sceneMgr.triggerKnifeSlash) {
+      sceneMgr.triggerKnifeSlash(isHeavy);
+    }
+    if (sceneMgr && sceneMgr.addTrauma) {
+      sceneMgr.addTrauma(isHeavy ? 1.0 : 0.6);
+    }
+
+    if (audio) {
+      if (audio.playKnifeSlash) audio.playKnifeSlash();
+      if (audio.playFleshImpactThud) audio.playFleshImpactThud();
+    }
+
+    // Trigger kinetic screen slash cut overlay
+    const slashOverlay = document.getElementById("knife-slash-overlay");
+    if (slashOverlay) {
+      slashOverlay.classList.remove("active");
+      void slashOverlay.offsetWidth;
+      slashOverlay.classList.add("active");
+      setTimeout(() => { if (slashOverlay) slashOverlay.classList.remove("active"); }, 400);
+    }
+
+    const tierData = yeti && yeti.tierData ? yeti.tierData : { id: 1, name: "YETI PRIME" };
+    const callsign = (window.__gameApp && window.__gameApp.callsign) || "HUNTER";
+
+    // CS:GO Style Killfeed Entry
+    const killfeed = document.getElementById("killfeed");
+    if (killfeed) {
+      const row = document.createElement("div");
+      row.className = "killfeed-entry";
+      row.style.cssText = "background: rgba(10,15,25,0.85); border-left: 3px solid #00f0ff; padding: 4px 8px; margin-bottom: 4px; font-family: monospace; font-size: 13px; color: #fff; text-shadow: 0 0 6px #00f0ff; border-radius: 2px;";
+      row.innerHTML = `<span style="color:#00f0ff; font-weight:bold;">${callsign}</span> <span style="color:#ffff00; font-weight:900; margin: 0 4px;">🗡️ [${isHeavy ? "BACKSTAB" : "KNIFE"}]</span> <span style="color:#ff0055; font-weight:bold;">${tierData.name}</span>`;
+      killfeed.appendChild(row);
+      setTimeout(() => { if (row.parentNode) row.parentNode.removeChild(row); }, 5000);
+    }
+
+    if (window.__onGameEvent) {
+      window.__onGameEvent({
+        type: "KNIFE_BACKSTAB",
+        isHeavy: isHeavy,
+        damage: 5000,
+        message: `⚔️ CS:GO ${isHeavy ? "HEAVY BACKSTAB" : "KNIFE SLASH"}! CRITICAL TAKEDOWN!`
+      });
+    }
+
+    this.executeFullTakedown();
   }
 
   executeFullTakedown() {
@@ -364,8 +441,9 @@ export class CombatSystem {
     if (sceneMgr && sceneMgr.addTrauma) {
       sceneMgr.addTrauma(1.0);
     }
-    if (audio && audio.playRescueFanfare) {
-      audio.playRescueFanfare();
+    if (audio) {
+      if (audio.playYetiDeathGroan) audio.playYetiDeathGroan();
+      if (audio.playRescueFanfare) audio.playRescueFanfare();
     }
 
     const tierData = yeti && yeti.tierData ? yeti.tierData : { id: 1, name: "YETI" };
@@ -374,15 +452,19 @@ export class CombatSystem {
       // Massive crit takedown: beast dragged down face first into the snow!
       const critDmg = 5000;
       yeti.hp = 0;
-      yeti.speed = 4; // Sliding into snow
+      yeti.speed = 0;
       yeti.state = "FALLEN";
-      yeti.staggerTimer = 4.5;
+      yeti.staggerTimer = 5.0;
+
+      if (typeof yeti.enterFallen === "function") {
+        yeti.enterFallen();
+      }
 
       if (window.__onGameEvent) {
         window.__onGameEvent({
           type: "YETI_DRAGGED_DOWN",
           damage: critDmg,
-          message: `🏆 10s RETRACTION COMPLETE! ${tierData.name} FELLED! LEVEL COMPLETE!`
+          message: `🏆 CS:GO KNIFE TAKEDOWN! ${tierData.name} FELLED! LEVEL COMPLETE!`
         });
       }
     }

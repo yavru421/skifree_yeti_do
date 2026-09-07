@@ -493,6 +493,63 @@
       100% { opacity: 1; transform: translateX(0); }
     }
 
+    /* CS:GO Kinetic Knife Slash Screen Cut Overlay */
+    #knife-slash-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 85;
+      opacity: 0;
+      overflow: hidden;
+      mix-blend-mode: screen;
+      transition: opacity 0.05s ease-in;
+    }
+    #knife-slash-overlay.active, #knife-slash-overlay.slash-quick-active {
+      opacity: 1;
+      animation: slash-quick-anim 0.22s ease-out forwards;
+    }
+    #knife-slash-overlay.slash-backstab-active {
+      opacity: 1;
+      animation: slash-heavy-anim 0.35s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+    }
+
+    @keyframes slash-quick-anim {
+      0% {
+        opacity: 1;
+        background: linear-gradient(135deg, transparent 46%, rgba(0, 240, 255, 0.95) 49%, rgba(255, 255, 255, 1) 50%, rgba(255, 0, 85, 0.95) 51%, transparent 54%);
+        transform: scale(1.02) rotate(-2deg);
+      }
+      50% {
+        opacity: 0.9;
+        background: linear-gradient(135deg, transparent 44%, rgba(0, 240, 255, 0.7) 48%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 0, 85, 0.7) 52%, transparent 56%);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.06) rotate(-4deg);
+      }
+    }
+
+    @keyframes slash-heavy-anim {
+      0% {
+        opacity: 1;
+        background: radial-gradient(circle at 50% 50%, rgba(255, 0, 55, 0.8) 0%, transparent 60%),
+                    linear-gradient(125deg, transparent 44%, rgba(255, 255, 0, 1) 48%, #ffffff 50%, rgba(255, 0, 55, 1) 52%, transparent 56%);
+        transform: scale(1.05);
+      }
+      40% {
+        opacity: 0.95;
+        background: radial-gradient(circle at 50% 50%, rgba(255, 0, 55, 0.5) 0%, transparent 70%),
+                    linear-gradient(125deg, transparent 42%, rgba(255, 255, 0, 0.8) 47%, #ffffff 50%, rgba(255, 0, 55, 0.8) 53%, transparent 58%);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(1.12);
+      }
+    }
+
     /* Modal Backdrop */
     #modal-backdrop {
       position: fixed;
@@ -682,6 +739,9 @@
   <div id="damage-flash"></div>
 
   <div id="floating-dmg-container"></div>
+
+  <!-- CS:GO Kinetic Knife Slash Screen Cut Overlay -->
+  <div id="knife-slash-overlay"></div>
 
   <!-- In-Game HUD -->
   <div id="hud-overlay" class="hidden">
@@ -888,6 +948,6 @@
   <audio id="bg-music-player" loop preload="auto" src="/assets/media/waltz_on_the_slope.mp3" style="display:none;"></audio>
 
   <!-- Boot Modular Game Application (Upright Alpine Skiing + Instant Takedown & Level Progression) -->
-  <script type="module" src="/js/main.js?v=20260907_gameapp_v15"></script>
+  <script type="module" src="/js/main.js?v=20260907_gameapp_v16"></script>
 </body>
 </html>

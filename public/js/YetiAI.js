@@ -146,25 +146,34 @@ export class YetiAI {
     return YETI_TIERS[this.tierIndex];
   }
 
-  setTier(tierIndex) {
+  setTier(tierIndex, forceState = false) {
     this.tierIndex = Math.max(0, Math.min(YETI_TIERS.length - 1, tierIndex));
     const tier = YETI_TIERS[this.tierIndex];
-    this.hp = tier.hp;
     this.maxHp = tier.hp;
     this.wave = tier.id;
-    this.state = "RUNNING_DOWNHILL";
-    this.staggerTimer = 0;
-    this.recoverTimer = 0;
-    this.leapTimer = 0;
-    this.leapCooldown = 0;
+    if (forceState || this.state !== "FALLEN") {
+      this.hp = tier.hp;
+      this.state = "RUNNING_DOWNHILL";
+      this.staggerTimer = 0;
+      this.recoverTimer = 0;
+      this.leapTimer = 0;
+      this.leapCooldown = 0;
+    }
   }
 
   advanceTier() {
     if (this.tierIndex < YETI_TIERS.length - 1) {
-      this.setTier(this.tierIndex + 1);
+      this.setTier(this.tierIndex + 1, false);
       return true;
     }
     return false; // Already at max tier
+  }
+
+  enterFallen() {
+    this.state = "FALLEN";
+    this.hp = 0;
+    this.speed = 0;
+    this.staggerTimer = 5.0;
   }
 
   respawnAtTier(playerX, playerZ) {

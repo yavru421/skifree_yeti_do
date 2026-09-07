@@ -40,6 +40,7 @@ class GameApp {
     window.__sceneManager = this.sceneManager;
     window.__audioSystem = this.audioSystem;
     window.__networkSync = this.networkSync;
+    window.__trackManager = this.trackManager;
     window.__gameApp = this;
     window.__onGameEvent = (e) => this.handleGameEvent(e);
 
@@ -399,17 +400,20 @@ class GameApp {
   }
 
   handleYetiDefeated(killerCallsign, takedownTimeSec, squadSize) {
-    if (this.gameState === "YETI_DEFEATED") return;
+    if (this.gameState === "YETI_DEFEATED" || this.gameState === "LEVEL_VICTORY_PAUSE") return;
     this.lastTakedownTimeSec = takedownTimeSec || this.raceElapsedSec;
+    this.gameState = "LEVEL_VICTORY_PAUSE";
 
     // ─── TIER PROGRESSION CHECK ──────────────────────────────
     if (this.yetiAI && this.yetiAI.tierIndex < YETI_TIERS.length - 1) {
-      // Advance to next tier — not final boss yet
       const prevTier = this.yetiAI.tierData;
-      this.yetiAI.advanceTier();
-      const nextTier = this.yetiAI.tierData;
+      const nextTier = YETI_TIERS[this.yetiAI.tierIndex + 1];
 
-      // Brief victory pause then respawn upgraded yeti
+      // Keep Yeti down in snow!
+      if (this.yetiAI) {
+        this.yetiAI.enterFallen();
+      }
+
       this.playerPhysics.score += 1500 * prevTier.id;
 
       this.hudManager.addCombatLog(
@@ -417,11 +421,11 @@ class GameApp {
         "#39ff14"
       );
       this.hudManager.addCombatLog(
-        `⚠️ LEVEL ${nextTier.id}: ${nextTier.name} INCOMING!`,
+        `⚠️ LEVEL ${nextTier.id}: ${nextTier.name} INCOMING IN 4s!`,
         "#ff4444"
       );
 
-      // Show Grand Level Complete Banner
+      // Show Grand Level Complete Banner with countdown
       if (this.hudManager && typeof this.hudManager.showLevelCompleteBanner === "function") {
         this.hudManager.showLevelCompleteBanner(prevTier.id, nextTier.id, nextTier.name);
       }
@@ -430,9 +434,23 @@ class GameApp {
         this.audioSystem.playRescueFanfare();
       }
 
-      // Respawn upgraded yeti 2.5 seconds later down the slope ahead of player
+      // Switch tracks in TrackManager & advance tier AFTER the 4-second victory window
       setTimeout(() => {
-        if (this.gameState === "ACTIVE" || this.gameState === "YETI_DEFEATED") {
+        if (this.gameState === "LEVEL_VICTORY_PAUSE") {
+          // Advance Tier now!
+          this.yetiAI.advanceTier();
+
+          // Switch Track environment
+          const tracks = ["peak_backcountry", "neon_ruins", "alpine_hunt"];
+          const nextTrackId = tracks[this.yetiAI.tierIndex % tracks.length];
+          if (this.trackManager) {
+            const nextTrack = this.trackManager.setTrack(nextTrackId);
+            if (this.sceneManager && this.sceneManager.applyTrack) {
+              this.sceneManager.applyTrack(nextTrack);
+            }
+          }
+
+          // Respawn upgraded yeti down the new slope ahead of player
           this.yetiAI.respawnAtTier(this.playerPhysics.x, this.playerPhysics.z);
           this.gameState = "ACTIVE";
 
@@ -445,7 +463,7 @@ class GameApp {
             });
           }
         }
-      }, 2500);
+      }, 4000);
 
       return; // Don't show final victory modal yet
     }
@@ -725,6 +743,11 @@ class GameApp {
 
     if (this.sceneManager && this.sceneManager.updateYeti) {
       this.sceneManager.updateYeti(this.yetiPredator, dt);
+    }
+
+    // Update Dynamic NPC Skiers
+    if (this.sceneManager && this.sceneManager.updateNpcSkiers) {
+      this.sceneManager.updateNpcSkiers(dt, this.playerPhysics.z);
     }
     this.frostLeviathan.update(dt, this.networkSync.whaleState);
 

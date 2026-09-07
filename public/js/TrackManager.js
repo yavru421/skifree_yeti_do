@@ -137,4 +137,17 @@ export class TrackManager {
   listTracks() {
     return Object.values(TRACK_MANIFESTS);
   }
+
+  getTrackSpineX(z) {
+    // Natural alpine valley S-curves + slalom chicanes
+    const k1 = 0.0078; // ~800m wavelength valley turn
+    const k2 = 0.026;  // ~240m wavelength slalom chicane
+    return Math.sin(z * k1) * 18.0 + Math.sin(z * k2) * 7.5;
+  }
+
+  getTrackHeading(z) {
+    // Tangent angle of the track spine for natural orientation
+    const dx = Math.cos(z * 0.0078) * 18.0 * 0.0078 + Math.cos(z * 0.026) * 7.5 * 0.026;
+    return Math.atan2(dx, 1.0);
+  }
 }
