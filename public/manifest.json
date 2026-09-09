@@ -1,20 +1,15 @@
 {
-  "name": "SkiFree 2: The Hunt for the Yeti",
+  "name": "SkiFree 2: Yeti Hunt",
   "short_name": "SkiFree 2",
-  "description": "3D FPV Alpine Carving, Slalom Time-Trials, and Co-Op Yeti Boss Battles",
-  "start_url": "/?pwa=1",
-  "scope": "/",
+  "start_url": "/",
   "display": "fullscreen",
-  "orientation": "landscape",
-  "background_color": "#0a0e1a",
+  "background_color": "#080c16",
   "theme_color": "#0a0e1a",
-  "categories": ["games", "sports", "action"],
   "icons": [
     {
       "src": "/assets/yeti_v2.jpg",
-      "sizes": "192x192 512x512",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
+      "sizes": "512x512",
+      "type": "image/jpeg"
     }
   ]
 }

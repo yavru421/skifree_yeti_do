@@ -27,7 +27,7 @@ if (!fs.existsSync("public/dist")) {
   fs.mkdirSync("public/dist", { recursive: true });
 }
 fs.copyFileSync("public/bundle.js", "public/dist/bundle.js");
-if (fs.existsSync("public/bundle.js.map")) {
-  fs.copyFileSync("public/bundle.js.map", "public/dist/bundle.js.map");
+if (fs.existsSync("public/HavokPhysics.wasm")) {
+  fs.copyFileSync("public/HavokPhysics.wasm", "public/dist/HavokPhysics.wasm");
 }
 console.log("✅ [Build] Clean bundle compiled to public/bundle.js without dynamic requires!");

@@ -17,7 +17,7 @@ export class PhysicsSystem {
   public async init(): Promise<HavokPlugin> {
     try {
       const havokInstance = await HavokPhysics({
-        locateFile: () => "/dist/HavokPhysics.wasm"
+        locateFile: () => "/HavokPhysics.wasm"
       });
       this.plugin = new HavokPlugin(true, havokInstance);
       this.scene.enablePhysics(new Vector3(0, -9.81, -4.2), this.plugin);
