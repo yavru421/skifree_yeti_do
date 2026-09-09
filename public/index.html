@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Frost Leviathan: Harpoon Hunt</title>
+  <title>SkiFree 2: Yeti Hunt</title>
 
   <!-- PWA & Native Mobile WebApp Tags -->
   <link rel="manifest" href="/manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Frost Leviathan">
+  <meta name="apple-mobile-web-app-title" content="SkiFree 2">
   <meta name="theme-color" content="#0a0e1a">
   <link rel="apple-touch-icon" href="/assets/yeti_v2.jpg">
 
@@ -111,26 +111,28 @@
     /* Top Strip / Boss HUD */
     #boss-hud {
       position: absolute;
-      top: clamp(6px, 1.5vh, 12px);
+      top: clamp(6px, 1.2vh, 10px);
       left: 50%;
       transform: translateX(-50%);
-      width: min(520px, 85vw);
-      background: rgba(10, 20, 35, 0.94);
-      border: 2px solid #ff0033;
+      width: min(480px, 80vw);
+      background: rgba(10, 20, 35, 0.45);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 0, 51, 0.6);
       border-radius: 8px;
-      padding: 5px 14px;
-      box-shadow: 0 0 18px rgba(255, 0, 50, 0.5);
+      padding: 4px 12px;
+      box-shadow: 0 0 14px rgba(255, 0, 50, 0.25);
       text-align: center;
+      pointer-events: none;
     }
     .boss-label {
-      font-size: clamp(10px, 2vw, 13px);
+      font-size: clamp(10px, 1.8vw, 12px);
       font-weight: 900;
       letter-spacing: 1px;
       color: #ff0033;
       text-shadow: 0 0 8px #ff0033;
       display: flex;
       justify-content: space-between;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .hp-bar-bg {
       width: 100%;
@@ -422,7 +424,6 @@
       left: 19px;
       box-shadow: 0 0 2px #000;
     }
-
     /* CS:GO Tactical Bottom HUD */
     #csgo-tactical-hud {
       position: absolute;
@@ -557,17 +558,21 @@
       left: 0;
       width: 100vw;
       height: 100vh;
-      display: flex;
+      display: none;
       justify-content: center;
       align-items: center;
       z-index: 100;
       padding: clamp(6px, 2vh, 14px);
-      background: rgba(4, 8, 16, 0.85);
+      background: rgba(4, 8, 16, 0.65);
+      backdrop-filter: blur(4px);
       overflow-y: auto;
+    }
+    #modal-backdrop:not(.hidden) {
+      display: flex;
     }
 
     #start-modal, #death-modal, #menu-modal, #claim-score-modal {
-      background: rgba(10, 18, 32, 0.96);
+      background: rgba(10, 18, 32, 0.94);
       border: 2px solid #00f0ff;
       border-radius: 12px;
       padding: clamp(10px, 2vh, 18px) clamp(12px, 2.5vw, 22px);
@@ -653,11 +658,19 @@
     }
     .hidden { display: none !important; }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-  <!-- Fixed Three.js Game Viewport Canvas -->
-  <canvas id="game-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; display:block;"></canvas>
+  <!-- Teaser Trailer Cinematic Intro Overlay -->
+  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9000; background:#000; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+    <video id="intro-video" src="/assets/media/teaser_trailer.mp4" autoplay muted playsinline loop style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;"></video>
+    <div style="position:absolute; bottom:36px; left:50%; transform:translateX(-50%); display:flex; gap:16px; z-index:9001;">
+      <button id="btn-unmute-intro" style="background:rgba(0,0,0,0.75); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-size:14px; padding:10px 22px; border-radius:8px; cursor:pointer; font-family:inherit; backdrop-filter:blur(4px);">🔊 UNMUTE</button>
+      <button id="btn-skip-intro" style="background:#ff0055; border:2px solid #ff3377; color:#fff; font-weight:900; font-size:16px; padding:12px 30px; border-radius:8px; cursor:pointer; font-family:inherit; box-shadow:0 0 25px #ff0055; cursor:pointer;">ENTER THE MOUNTAIN [SPACE] ⛷️</button>
+    </div>
+  </div>
+
+  <!-- Babylon.js WebGPU / WebGL2 Viewport Canvas -->
+  <canvas id="renderCanvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; display:block; touch-action:none; outline:none;"></canvas>
 
   <!-- Network Reconnection Toast -->
   <div id="network-toast" style="display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(255,0,85,0.92); border:2px solid #ff0033; border-radius:8px; color:#fff; font-weight:900; font-size:12px; padding:6px 16px; z-index:9999;">⚠️ RECONNECTING TO ALPINE LOBBY...</div>
@@ -708,7 +721,20 @@
       <div>⚡ TOP SPEED: <span id="takedown-speed" style="color:#ffff00; font-weight:bold;">0 MPH</span></div>
     </div>
     <button class="modal-btn modal-btn-ready" id="btn-takedown-claim" style="max-width:280px; margin:auto; display:block;" type="button">SUBMIT TO LEADERBOARD 🏆</button>
-    <button class="modal-btn" id="btn-hunt-again" style="max-width:280px; margin:8px auto 0 auto; display:block; background:#1a2a44;" type="button">HUNT AGAIN 🌲</button>
+  <!-- Cinematic Letterbox Black Bars (Takedown Scene) -->
+  <div id="cinematic-bars" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:92; display:flex; flex-direction:column; justify-content:space-between;">
+    <div id="cinematic-bar-top" style="height:12vh; background:#000; width:100%; transition:transform 0.4s ease-out; transform:translateY(-100%);"></div>
+    <div id="cinematic-bar-bottom" style="height:12vh; background:#000; width:100%; transition:transform 0.4s ease-out; transform:translateY(100%);"></div>
+  </div>
+
+  <!-- Epic 3D Takedown Banner Overlay -->
+  <div id="takedown-cinematic-overlay" class="hidden" style="position:fixed; top:36%; left:50%; transform:translate(-50%, -50%); text-align:center; z-index:95; pointer-events:none; transition:opacity 0.3s ease-out; width:90%; max-width:700px;">
+    <div id="takedown-cinematic-title" style="font-family:'Impact', 'Arial Black', sans-serif; font-size:clamp(32px, 7vw, 64px); font-weight:900; letter-spacing:3px; color:#39ff14; text-shadow:0 0 30px #00ff66, 0 0 60px rgba(57,255,20,0.8), 3px 3px 0 #000; animation:pulse-takedown-glow 0.3s infinite alternate;">
+      🏆 YETI TAKEDOWN!
+    </div>
+    <div id="takedown-cinematic-sub" style="font-size:clamp(14px, 3vw, 22px); font-weight:900; color:#ffff00; text-shadow:0 0 16px #ff7700, 2px 2px 0 #000; letter-spacing:2px; margin-top:8px;">
+      🗡️ CRITICAL IMPALE • BEAST FELLED!
+    </div>
   </div>
 
   <!-- CS:GO Dynamic Crosshair -->
@@ -887,8 +913,8 @@
   </div>
 
   <!-- Chalet Modal Wrapper -->
-  <div id="modal-backdrop" class="hidden">
-    <div id="start-modal" style="max-width:460px; text-align:center; padding:24px;">
+  <div id="modal-backdrop" class="hidden" style="display: none !important;">
+    <div id="start-modal" class="hidden" style="max-width:460px; text-align:center; padding:24px; display: none !important;">
       <div class="modal-title" style="font-size:clamp(22px, 4.8vw, 34px); color:#00f0ff; text-shadow:0 0 25px rgba(0,240,255,0.85); margin-bottom:8px;">🎿 SKIFREE 2: HARPOON HUNT</div>
       <div style="font-size:12px; color:#88a0c0; line-height:1.5; margin-bottom:14px;">
         First-Person Steam Harpoon & Winch Takedown.<br>
@@ -967,7 +993,28 @@
   <!-- Master Soundtrack Audio Stream Player -->
   <audio id="bg-music-player" loop preload="auto" src="/assets/media/waltz_on_the_slope.mp3" style="display:none;"></audio>
 
-  <!-- Boot Modular Game Application (Upright Alpine Skiing + Instant Takedown & Level Progression) -->
-  <script type="module" src="/js/main.js?v=20260907_dsmt_v19"></script>
+  <!-- Intro Cinematic Overlay (autoplay muted, skips to lobby on any interaction) -->
+  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:9998; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;">
+    <video id="intro-video" autoplay muted playsinline loop
+      style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;"
+      src="/assets/media/teaser_trailer.mp4">
+    </video>
+    <div style="position:relative; z-index:1; text-align:center; pointer-events:none;">
+      <div style="font-size:clamp(28px,6vw,56px); font-weight:900; color:#00f0ff; text-shadow:0 0 30px #00f0ff; letter-spacing:4px;">SKIFREE 2</div>
+      <div style="font-size:clamp(12px,2.4vw,18px); color:#ffff00; font-weight:bold; margin-top:8px; text-shadow:0 0 12px #ff7700;">ALPINE YETI HUNT</div>
+    </div>
+    <div style="position:relative; z-index:1; margin-top:32px; display:flex; gap:14px; pointer-events:auto;">
+      <button id="btn-skip-intro" style="background:rgba(10,20,35,0.92); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 24px; border-radius:8px; cursor:pointer; box-shadow:0 0 14px rgba(0,240,255,0.5); touch-action:manipulation;" type="button">
+        ▶ ENTER THE MOUNTAIN
+      </button>
+      <button id="btn-unmute-intro" style="background:rgba(10,20,35,0.92); border:2px solid #ffff00; color:#ffff00; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 18px; border-radius:8px; cursor:pointer; touch-action:manipulation;" type="button">
+        🔊 UNMUTE
+      </button>
+    </div>
+    <div style="position:relative; z-index:1; margin-top:14px; font-size:11px; color:rgba(255,255,255,0.45); pointer-events:none;">Press SPACE or click to skip</div>
+  </div>
+
+  <!-- Boot TypeScript + Babylon.js Game Engine -->
+  <script type="module" src="/dist/bundle.js"></script>
 </body>
 </html>
