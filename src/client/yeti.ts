@@ -54,6 +54,9 @@ export class YetiEntity {
   private runCycle: number = 0;
   private isNetControlled: boolean = false;
   private netTargetPos: Vector3 = new Vector3(0, 0, -32);
+  private sprintCooldownTimer: number = 0;
+  private isSprinting: boolean = false;
+  private sprintDuration: number = 0;
 
   // Skeletal Transform Nodes for Organic Bone Kinematics
   private hipsNode: TransformNode | null = null;
@@ -174,6 +177,7 @@ export class YetiEntity {
     this.snowFootParticles = new ParticleSystem("yetiFootSnow", 160, this.scene);
     this.snowFootParticles.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
     this.snowFootParticles.emitter = this.rootMesh;
+    this.snowFootParticles.isLocal = true;
     this.snowFootParticles.color1 = new Color3(1.0, 1.0, 1.0).toColor4(0.9);
     this.snowFootParticles.color2 = new Color3(0.8, 0.9, 1.0).toColor4(0.4);
     this.snowFootParticles.minSize = 0.35;
@@ -181,8 +185,8 @@ export class YetiEntity {
     this.snowFootParticles.minLifeTime = 0.4;
     this.snowFootParticles.maxLifeTime = 0.9;
     this.snowFootParticles.emitRate = 35;
-    this.snowFootParticles.direction1 = new Vector3(-1.5, 0.8, 1.5);
-    this.snowFootParticles.direction2 = new Vector3(1.5, 1.8, 2.5);
+    this.snowFootParticles.direction1 = new Vector3(-1.5, 0.8, -1.5);
+    this.snowFootParticles.direction2 = new Vector3(1.5, 1.8, -2.5);
     this.snowFootParticles.gravity = new Vector3(0, -5.0, 0);
     this.snowFootParticles.start();
 
@@ -190,6 +194,7 @@ export class YetiEntity {
     this.breathParticles = new ParticleSystem("yetiBreath", 80, this.scene);
     this.breathParticles.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
     this.breathParticles.emitter = this.rootMesh;
+    this.breathParticles.isLocal = true;
     this.breathParticles.color1 = new Color3(0.7, 0.9, 1.0).toColor4(0.6);
     this.breathParticles.color2 = new Color3(0.4, 0.6, 0.9).toColor4(0.0);
     this.breathParticles.minSize = 0.4;
@@ -212,18 +217,23 @@ export class YetiEntity {
 
   public startLevel(wave: number, playerZ: number): void {
     this.wave = wave;
-    this.maxHp = 3000 + (wave - 1) * 1200;
+    // Progressive HP scaling: L1=3000, L2=5500, L3=8500, L4=12000, L5=16000
+    this.maxHp = Math.round(3000 + (wave - 1) * 2500 + Math.max(0, wave - 2) * 800);
     this.hp = this.maxHp;
-    this.baseSpeed = 38 + (wave - 1) * 4.0;
+    // Progressive base speed: L1=36, L2=46, L3=56, L4=66, L5=76 MPH
+    this.baseSpeed = Math.min(76, 36 + (wave - 1) * 10.0);
     this.dragSpeed = this.baseSpeed;
     this.state = YetiAIState.CHARGING;
+    this.sprintCooldownTimer = 0;
+    this.isSprinting = false;
+    this.sprintDuration = 0;
 
-    // Spawn beast 26m ahead down the slope (-Z)
+    // Spawn beast 26m ahead down the slope (-Z) facing DOWNHILL (Math.PI)
     this.rootMesh.position.set(0, 0, playerZ - 26);
-    this.rootMesh.rotation.set(0, 0, 0);
+    this.rootMesh.rotation.set(0, Math.PI, 0);
 
     // Dynamic scale progression per level
-    const scale = Math.min(1.35, 1.0 + (wave - 1) * 0.10);
+    const scale = Math.min(1.45, 1.0 + (wave - 1) * 0.12);
     this.rootMesh.scaling.set(scale, scale, scale);
 
     // Restart foot snow kickup & breath
@@ -236,7 +246,9 @@ export class YetiEntity {
 
   public applyDrag(dragReduction: number, deltaTime: number): void {
     // Player is braking ('S') and carving, applying massive drag torque through the steel towline!
-    this.dragSpeed = Math.max(9.0, this.dragSpeed - dragReduction * deltaTime * 3.8);
+    // On higher levels, the beast resists the towline drag!
+    const dragResist = 1.0 + (this.wave - 1) * 0.35;
+    this.dragSpeed = Math.max(9.0, this.dragSpeed - (dragReduction / dragResist) * deltaTime * 3.8);
   }
 
   public update(playerPos: Vector3, deltaTime: number, terrainHeightFn?: (x: number, z: number) => number): void {
@@ -244,31 +256,53 @@ export class YetiEntity {
     // 1. KINEMATICS & INDEPENDENT FORWARD VELOCITY (-Z DOWNHILL)
     // =========================================================================
     if (this.state !== YetiAIState.DEAD) {
-      // Forward motion is purely integrated from physical dragSpeed (MPH -> scene units)
-      const forwardSpeedUnitsPerSec = (this.dragSpeed * 0.44704) * 2.2;
-      this.rootMesh.position.z -= forwardSpeedUnitsPerSec * deltaTime;
-
-      // Elastic dynamic leash boundary (keeps beast within reachable combat envelope)
       const distZ = playerPos.z - this.rootMesh.position.z;
-      if (distZ > 42) {
-        // Beast is pulling too far ahead down the slope; cable tension slows it
-        this.rootMesh.position.z = playerPos.z - 42;
-        this.dragSpeed = Math.min(this.dragSpeed, 35);
-      } else if (distZ < 7) {
-        // Skier is right on the beast's tail; push beast forward with an aggressive surge
-        this.rootMesh.position.z = playerPos.z - 7;
-        this.dragSpeed = Math.max(this.dragSpeed, 28);
+
+      // Sprint burst mechanic (Level >= 2): beast surges ahead when skier approaches
+      if (this.wave >= 2) {
+        this.sprintCooldownTimer += deltaTime;
+        if (!this.isSprinting && this.sprintCooldownTimer > 7.0 && distZ < 28 && distZ > 6) {
+          this.isSprinting = true;
+          this.sprintDuration = 0;
+          this.sprintCooldownTimer = 0;
+        }
+        if (this.isSprinting) {
+          this.sprintDuration += deltaTime;
+          if (this.sprintDuration > 1.8) {
+            this.isSprinting = false;
+          }
+        }
+      } else {
+        this.isSprinting = false;
       }
 
-      // Natural mountain corridor weaving (uncoupled from rigid player stick)
-      const weaveFreq = 0.55 * (1 + (this.wave - 1) * 0.15);
-      const weaveAmp = Math.min(22, 10 + (this.wave - 1) * 2.5);
+      // Forward motion integrated from dragSpeed + sprint surge
+      const sprintBonus = this.isSprinting ? Math.min(22, 10 + (this.wave - 1) * 3.5) : 0;
+      const effectiveMph = this.dragSpeed + sprintBonus;
+      const forwardSpeedUnitsPerSec = (effectiveMph * 0.44704) * 2.2;
+      this.rootMesh.position.z -= forwardSpeedUnitsPerSec * deltaTime;
+
+      // Elastic dynamic leash boundary (scales with wave so beast does not throttle to 35 MPH)
+      const maxLeashDist = 55 + (this.wave - 1) * 15;
+      if (distZ > maxLeashDist) {
+        // Beast is pulling too far ahead down the slope; cable tension slows it to base speed
+        this.rootMesh.position.z = playerPos.z - maxLeashDist;
+        this.dragSpeed = Math.min(this.dragSpeed, this.baseSpeed);
+      } else if (distZ < 5) {
+        // Skier right on beast's tail; surge forward downhill
+        this.rootMesh.position.z = playerPos.z - 5;
+        this.dragSpeed = Math.max(this.dragSpeed, this.baseSpeed + 8);
+      }
+
+      // Natural mountain corridor weaving (scales with level difficulty)
+      const weaveFreq = 0.55 * (1 + (this.wave - 1) * 0.22);
+      const weaveAmp = Math.min(30, 10 + (this.wave - 1) * 4.0);
       const targetX = Math.sin(this.runCycle * weaveFreq) * weaveAmp;
-      this.rootMesh.position.x = Scalar.Lerp(this.rootMesh.position.x, targetX, deltaTime * 2.5);
+      this.rootMesh.position.x = Scalar.Lerp(this.rootMesh.position.x, targetX, deltaTime * (2.5 + (this.wave - 1) * 0.4));
       this.rootMesh.position.x = Scalar.Clamp(this.rootMesh.position.x, -120, 120);
 
       // Stride cadence dynamically scaled to downhill velocity
-      const strideCadence = Math.max(3.6, (this.dragSpeed / 38) * 5.8);
+      const strideCadence = Math.max(3.6, (effectiveMph / 38) * 5.8);
       this.runCycle += deltaTime * strideCadence;
 
       // =======================================================================
@@ -287,6 +321,7 @@ export class YetiEntity {
 
       // Distance to skier
       const distToSkier = Math.hypot(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
+      const isAttackingClose = (isPouncing || isSwiping || isRoaring || distToSkier < 6.5);
 
       // Trigger pounce lunge or claw swipe when skier gets within striking range
       if (this.state === YetiAIState.CHARGING && distToSkier < 15.0) {
@@ -315,9 +350,20 @@ export class YetiEntity {
       const targetY = groundY + 0.12 + pawPlantCompression + pounceLeapY;
       this.rootMesh.position.y = Scalar.Lerp(this.rootMesh.position.y, targetY, Math.min(1.0, deltaTime * 12.0));
 
+      if (isPouncing) {
+        // Explosive forward & lateral pounce leap directly at skier to close distance for maul takedown
+        this.rootMesh.position.x = Scalar.Lerp(this.rootMesh.position.x, playerPos.x, deltaTime * 5.0);
+        const pounceSurge = (this.baseSpeed + 24) * 0.44704 * 2.2;
+        if (playerPos.z < this.rootMesh.position.z) {
+          this.rootMesh.position.z -= pounceSurge * deltaTime * 0.75;
+        } else {
+          this.rootMesh.position.z += pounceSurge * deltaTime * 0.75;
+        }
+      }
+
       // 2b. Forward Charging & Stalking Posture (Pitch on X)
       // Low stalking center of gravity that deepens dynamically with speed
-      let targetPitch = 0.16 + (this.dragSpeed / 65) * 0.09;
+      let targetPitch = 0.16 + (effectiveMph / 65) * 0.09;
       if (this.state === YetiAIState.BERSERK || isPouncing) {
         targetPitch += 0.22; // Aggressive predatory pounce lunge forward
       } else if (isRoaring) {
@@ -336,23 +382,36 @@ export class YetiEntity {
       const targetRoll = turnBank + shoulderSway + (isSwiping ? (lateralDelta > 0 ? 0.15 : -0.15) : 0);
       this.rootMesh.rotation.z = Scalar.Lerp(this.rootMesh.rotation.z, targetRoll, Math.min(1.0, deltaTime * 4.5));
 
-      // 2d. Smooth Predatory Tracking Uphill toward Skier (Yaw on Y)
-      const targetAngle = Math.atan2(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
+      // 2d. Downhill Forward Facing & Attack Orientation (Yaw on Y)
+      // When running downhill, face along -Z (Math.PI) angled into the lateral weave;
+      // when counter-attacking or extremely close, face uphill toward skier!
+      let targetAngle: number;
+      if (isAttackingClose) {
+        targetAngle = Math.atan2(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
+      } else {
+        const lateralSpeed = (targetX - this.rootMesh.position.x) * 2.5;
+        targetAngle = Math.PI + Math.atan2(-lateralSpeed, forwardSpeedUnitsPerSec);
+      }
+
       let diffAngle = targetAngle - this.rootMesh.rotation.y;
       while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
       while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
-      this.rootMesh.rotation.y += diffAngle * Math.min(1.0, deltaTime * 4.2);
+      this.rootMesh.rotation.y += diffAngle * Math.min(1.0, deltaTime * (isAttackingClose ? 8.0 : 4.5));
 
       // 2e. Native Skeletal Animation Blending & Speed Tracking
       if (this.animGroups.length > 0) {
-        const animRate = Scalar.Clamp(this.dragSpeed / 25, 0.85, 2.2);
-        this.animGroups[0].speedRatio = (isPouncing || isSwiping) ? animRate * 1.5 : animRate;
+        const animRate = Scalar.Clamp(effectiveMph / 25, 0.85, 2.4);
+        this.animGroups[0].speedRatio = (isPouncing || isSwiping || this.isSprinting) ? animRate * 1.5 : animRate;
       }
 
-      // 2f. Skeletal Node Articulation (Head lock, arm reach, visceral claw swat)
+      // 2f. Skeletal Node Articulation (Head glance at pursuer, arm reach, visceral claw swat)
       if (this.headNode) {
         const headPitch = isRoaring ? -0.35 : 0;
-        this.headNode.rotation.y = Scalar.Lerp(this.headNode.rotation.y, diffAngle * 0.35, Math.min(1.0, deltaTime * 5.0));
+        const lookAtSkierAngle = Math.atan2(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
+        let lookYaw = lookAtSkierAngle - this.rootMesh.rotation.y;
+        while (lookYaw < -Math.PI) lookYaw += Math.PI * 2;
+        while (lookYaw > Math.PI) lookYaw -= Math.PI * 2;
+        this.headNode.rotation.y = Scalar.Lerp(this.headNode.rotation.y, Scalar.Clamp(lookYaw * 0.45, -0.9, 0.9), Math.min(1.0, deltaTime * 5.5));
         this.headNode.rotation.x = headPitch;
       }
       if (this.leftArmNode && this.rightArmNode) {
@@ -384,17 +443,17 @@ export class YetiEntity {
 
       // Volumetric Breath Mist Boost during Roar & Pounce
       if (this.breathParticles) {
-        this.breathParticles.emitRate = isRoaring ? 95 : (isPouncing ? 50 : 18);
+        this.breathParticles.emitRate = isRoaring ? 95 : (isPouncing || this.isSprinting ? 50 : 18);
       }
       if (this.eyeLightL && this.eyeLightR) {
-        const eyeIntensity = (isRoaring || this.state === YetiAIState.BERSERK) ? 6.5 : 3.5;
+        const eyeIntensity = (isRoaring || this.state === YetiAIState.BERSERK || this.isSprinting) ? 6.5 : 3.5;
         this.eyeLightL.intensity = eyeIntensity;
         this.eyeLightR.intensity = eyeIntensity;
       }
 
       // Alternating paw snow kickup on stride downbeats
       if (Math.sin(this.runCycle) < -0.85 && this.snowFootParticles) {
-        this.snowFootParticles.manualEmitCount = isPouncing ? 16 : 6;
+        this.snowFootParticles.manualEmitCount = (isPouncing || this.isSprinting) ? 16 : 6;
       }
     } else {
       // =======================================================================
@@ -402,8 +461,9 @@ export class YetiEntity {
       // =======================================================================
       this.dragSpeed = 0; // FULL STOP! No sliding down the hill!
 
-      // Topple flat forward and slightly rolled on the snow surface
+      // Topple flat forward face-down down the slope
       this.rootMesh.rotation.x = Scalar.Lerp(this.rootMesh.rotation.x, Math.PI / 2.15, deltaTime * 8.0);
+      this.rootMesh.rotation.y = Scalar.Lerp(this.rootMesh.rotation.y, Math.PI, deltaTime * 8.0);
       this.rootMesh.rotation.z = Scalar.Lerp(this.rootMesh.rotation.z, 0.42, deltaTime * 8.0);
       let groundY = 0;
       if (terrainHeightFn) {
@@ -426,7 +486,8 @@ export class YetiEntity {
     // =========================================================================
     if (this.state !== YetiAIState.DEAD) {
       this.flankTimer += deltaTime;
-      if (this.flankTimer > 4.5) {
+      const maxFlankDuration = Math.max(1.8, 4.5 - (this.wave - 1) * 0.85);
+      if (this.flankTimer > maxFlankDuration) {
         this.switchVulnerableFlank();
       }
 
@@ -522,6 +583,16 @@ export class YetiEntity {
         isCritical: true,
         damage: 850,
         message: `💥 CRITICAL HIT! ${this.vulnerableFlank === "LEFT" ? "RIGHT" : "LEFT"} FLANK PIERCED! (-850 HP)`
+      };
+    }
+
+    // Direct center spine armor at higher levels
+    if (Math.abs(deltaX) < 0.55 && this.wave >= 2) {
+      return {
+        isPenetrating: true,
+        isCritical: false,
+        damage: 200,
+        message: `🛡️ ARMORED SPINE DEFLECTION! (-200 HP) • CARVE HARD [A / D] FOR WEAK-SPOT CRITICALS!`
       };
     }
 

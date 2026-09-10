@@ -44,10 +44,14 @@ export class SkiFreeApp {
   private isBraking: boolean = false;
   private isTakedownTriggered: boolean = false;
   private isWaitingForDropIn: boolean = false;
+  private takedownTapProgress: number = 0;
+  private isPlayerDead: boolean = false;
   private lastSteerDir: number = 0;
   private currentLevel: number = 1;
   private totalScore: number = 0;
   private nextLevelTimeout: number | null = null;
+  private takedownCountdownInterval: number | null = null;
+  private dropInCountdownInterval: number | null = null;
   private limbStatus: LimbStatus = LimbStatus.FULL;
   private callsign: string = "Skier_" + Math.floor(1000 + Math.random() * 9000);
   private roomId: string = "alpine-lodge-1";
@@ -64,7 +68,24 @@ export class SkiFreeApp {
 
     // 1. URL Params Setup (Callsign, Room, Difficulty)
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("callsign")) this.callsign = urlParams.get("callsign")!;
+    const storedCallsign = typeof localStorage !== "undefined" ? localStorage.getItem("skifree_callsign") : null;
+    const callsignEl = document.getElementById("callsign-input") as HTMLInputElement | null;
+    const inputVal = callsignEl?.value?.trim();
+
+    if (urlParams.get("callsign")) {
+      this.callsign = urlParams.get("callsign")!;
+    } else if (inputVal && inputVal.length > 0 && inputVal !== "SKIER_PRO") {
+      this.callsign = inputVal;
+    } else if (storedCallsign && storedCallsign.length > 0) {
+      this.callsign = storedCallsign;
+    }
+
+    if (callsignEl) {
+      callsignEl.value = this.callsign;
+    }
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("skifree_callsign", this.callsign);
+    }
     if (urlParams.get("room")) this.roomId = urlParams.get("room")!;
 
     // 2. Engine & Scene Setup
@@ -130,6 +151,13 @@ export class SkiFreeApp {
         if (gauge) gauge.classList.remove("hidden");
         if (prompt) prompt.classList.remove("hidden");
 
+        // Reveal Rapid-Tap Takedown UI!
+        this.takedownTapProgress = 0;
+        const tapContainer = document.getElementById("takedown-tap-container");
+        const tapProgressEl = document.getElementById("takedown-tap-progress");
+        if (tapContainer) tapContainer.classList.remove("hidden");
+        if (tapProgressEl) tapProgressEl.textContent = "0%";
+
         // Apply Harpoon Damage Directly to Yeti!
         const dmg = packet.damage || 400;
         const isFelled = this.yetiEntity.takeDamage(dmg);
@@ -167,23 +195,10 @@ export class SkiFreeApp {
   }
 
   private setupIntroOverlay(): void {
-    const overlay = document.getElementById("intro-overlay");
     const skipBtn = document.getElementById("btn-skip-intro");
-    const unmuteBtn = document.getElementById("btn-unmute-intro");
-    const video = document.getElementById("intro-video") as HTMLVideoElement | null;
     const hudOverlay = document.getElementById("hud-overlay");
 
-    // Enforce video autoplay policy workaround: muted + playsInline + explicit play invocation
-    if (video) {
-      video.muted = true;
-      video.defaultMuted = true;
-      video.playsInline = true;
-      video.currentTime = 0.05;
-      video.play().catch(() => {});
-    }
-
     const dismiss = () => {
-      if (overlay) overlay.style.display = "none";
       if (hudOverlay) hudOverlay.classList.remove("hidden");
       this.audioSystem.startBGM();
       this.showLevelSplash(this.currentLevel);
@@ -199,18 +214,7 @@ export class SkiFreeApp {
       });
     }
 
-    if (unmuteBtn && video) {
-      unmuteBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        video.muted = !video.muted;
-        unmuteBtn.textContent = video.muted ? "🔊 UNMUTE" : "🔇 MUTE";
-      });
-    }
-
     window.addEventListener("keydown", (e) => {
-      if (e.code === "Space" && overlay && overlay.style.display !== "none") {
-        dismiss();
-      }
       if ((e.code === "Space" || e.code === "Enter") && (this.isWaitingForDropIn || this.isTakedownTriggered)) {
         this.executeDropIn();
       }
@@ -244,16 +248,108 @@ export class SkiFreeApp {
     }
   }
 
+  private handleTakedownTap(): void {
+    if (!this.steamHarpoon || !this.steamHarpoon.isTethered || this.isTakedownTriggered || this.isPlayerDead) return;
+
+    // Tap step scales down with level: L1=+16%, L2=+10%, L3=+7%, L4=+5%
+    const tapStep = Math.max(5, Math.round(16 - (this.currentLevel - 1) * 3.5));
+    this.takedownTapProgress = Math.min(100, this.takedownTapProgress + tapStep);
+    const tapProgressEl = document.getElementById("takedown-tap-progress");
+    if (tapProgressEl) tapProgressEl.textContent = `${this.takedownTapProgress}%`;
+
+    // Reel in the Yeti with drag and damage calibrated to health pool
+    this.yetiEntity.applyDrag(35, 0.25);
+    const burstDmg = Math.round(350 + (this.currentLevel - 1) * 75);
+    const isFelled = this.yetiEntity.takeDamage(burstDmg);
+    this.totalScore += 300;
+    this.cameraRig.addImpactShake(0.14);
+    this.audioSystem.playSkiCarve(1.0);
+
+    const bossHpFill = document.getElementById("boss-hp-fill");
+    if (bossHpFill) {
+      const hpPct = Math.max(0, (this.yetiEntity.hp / this.yetiEntity.maxHp) * 100);
+      bossHpFill.style.width = `${hpPct}%`;
+    }
+
+    const towPrompt = document.getElementById("tow-action-prompt");
+    if (towPrompt) {
+      towPrompt.classList.remove("hidden");
+      towPrompt.innerHTML = `⚡ <b>WINCH REEL TURBO!</b> DRAGGING YETI! <span style="color:#ff0055;">-${burstDmg} HP</span> (${this.takedownTapProgress}%)`;
+    }
+
+    if (this.takedownTapProgress >= 100 || isFelled || this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) {
+      const tapContainer = document.getElementById("takedown-tap-container");
+      if (tapContainer) tapContainer.classList.add("hidden");
+      this.triggerYetiTakedown();
+    }
+  }
+
+  private triggerPlayerMauledByYeti(): void {
+    if (this.isPlayerDead || this.isTakedownTriggered) return;
+    this.isPlayerDead = true;
+    this.speedMph = 0;
+
+    console.log("[SkiFree] YETI TAKEDOWN ON SKIER! RUN FAILED!");
+
+    if (this.steamHarpoon) {
+      this.steamHarpoon.detachTowline();
+    }
+    const tapContainer = document.getElementById("takedown-tap-container");
+    if (tapContainer) tapContainer.classList.add("hidden");
+
+    this.yetiEntity.state = YetiAIState.ROAR_STORM;
+    this.cameraRig.addImpactShake(3.0);
+    this.audioSystem.playWipeout();
+
+    const clawOverlay = document.getElementById("claw-overlay");
+    if (clawOverlay) {
+      clawOverlay.classList.add("slash-active");
+      clawOverlay.style.display = "block";
+    }
+
+    const dmgFlash = document.getElementById("damage-flash");
+    if (dmgFlash) {
+      dmgFlash.style.opacity = "0.9";
+      setTimeout(() => { if (dmgFlash) dmgFlash.style.opacity = "0"; }, 600);
+    }
+
+    const callsignInput = document.getElementById("callsign-input") as HTMLInputElement;
+    const callsign = callsignInput?.value || this.callsign;
+    if (this.hudSystem && this.hudSystem.addKillfeedMessage) {
+      this.hudSystem.addKillfeedMessage(`☠️ ALPINE YETI <span style="color:#ff0033;">[MAULED]</span> ${callsign} (YETI TAKEDOWN)`);
+    }
+
+    setTimeout(() => {
+      const backdrop = document.getElementById("modal-backdrop");
+      const deathModal = document.getElementById("death-modal");
+      const deathTitle = document.getElementById("death-title");
+      const deathStat = document.getElementById("death-stat");
+
+      if (backdrop) backdrop.classList.remove("hidden");
+      if (deathModal) deathModal.classList.remove("hidden");
+      if (deathTitle) deathTitle.textContent = "💀 YETI TAKEDOWN! RUN FAILED";
+      if (deathStat) {
+        const distM = Math.abs(Math.round(this.playerPos.z));
+        deathStat.innerHTML = `THE ALPINE BEAST POUNCED DOWN THE FALL-LINE AND TOOK YOU DOWN!<br>DISTANCE: <b>${distM}M</b> • SCORE: <b>${this.totalScore.toLocaleString()} PTS</b>`;
+      }
+    }, 400);
+  }
+
   private setupSkierControls(): void {
     const keys: Record<string, boolean> = {};
 
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       keys[key] = true;
-      if (key === " ") {
-        e.preventDefault();
-        if (this.combatSystem && !this.isTakedownTriggered) {
-          this.combatSystem.tryFireHarpoon();
+      if (key === " " || key === "enter" || key === "f") {
+        if (this.steamHarpoon && this.steamHarpoon.isTethered && !this.isTakedownTriggered) {
+          e.preventDefault();
+          this.handleTakedownTap();
+        } else if (key === " ") {
+          e.preventDefault();
+          if (this.combatSystem && !this.isTakedownTriggered) {
+            this.combatSystem.tryFireHarpoon();
+          }
         }
       }
     });
@@ -261,6 +357,125 @@ export class SkiFreeApp {
     window.addEventListener("keyup", (e: KeyboardEvent) => {
       keys[e.key.toLowerCase()] = false;
     });
+
+    // Wire Rapid-Tap Takedown Button
+    const btnTakedownTap = document.getElementById("btn-takedown-tap");
+    if (btnTakedownTap) {
+      btnTakedownTap.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.handleTakedownTap();
+      });
+      btnTakedownTap.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.handleTakedownTap();
+      });
+    }
+
+    // Wire Death Respawn Button
+    const btnRespawn = document.getElementById("btn-respawn");
+    if (btnRespawn) {
+      btnRespawn.addEventListener("click", () => {
+        const backdrop = document.getElementById("modal-backdrop");
+        const deathModal = document.getElementById("death-modal");
+        const clawOverlay = document.getElementById("claw-overlay");
+        if (backdrop) backdrop.classList.add("hidden");
+        if (deathModal) deathModal.classList.add("hidden");
+        if (clawOverlay) {
+          clawOverlay.classList.remove("slash-active");
+          clawOverlay.style.display = "none";
+        }
+        this.isPlayerDead = false;
+        this.isTakedownTriggered = false;
+        this.takedownTapProgress = 0;
+        this.speedMph = 30;
+        this.yetiEntity.startLevel(this.currentLevel, this.playerPos.z);
+        this.audioSystem.startBGM();
+      });
+    }
+
+    // Wire Leaderboard Claim Buttons
+    const btnTakedownClaim = document.getElementById("btn-takedown-claim");
+    if (btnTakedownClaim) {
+      btnTakedownClaim.addEventListener("click", () => this.openClaimModal("victory"));
+    }
+
+    const btnDeathClaim = document.getElementById("btn-claim-from-death");
+    if (btnDeathClaim) {
+      btnDeathClaim.addEventListener("click", () => this.openClaimModal("death"));
+    }
+
+    const btnLevelClearClaim = document.getElementById("btn-level-clear-claim");
+    if (btnLevelClearClaim) {
+      btnLevelClearClaim.addEventListener("click", () => this.openClaimModal("level_clear"));
+    }
+
+    const btnSubmitClaim = document.getElementById("btn-submit-claim");
+    const btnSkipClaim = document.getElementById("btn-skip-claim");
+    if (btnSkipClaim) {
+      btnSkipClaim.addEventListener("click", () => {
+        document.getElementById("claim-score-modal")?.classList.add("hidden");
+        document.getElementById("modal-backdrop")?.classList.add("hidden");
+      });
+    }
+
+    if (btnSubmitClaim) {
+      btnSubmitClaim.addEventListener("click", async () => {
+        const claimCallsignInput = document.getElementById("claim-callsign-input") as HTMLInputElement | null;
+        const feedback = document.getElementById("claim-feedback-msg");
+        const chosen = (claimCallsignInput?.value?.trim() || this.callsign || "SKIER_PRO").slice(0, 16);
+        this.callsign = chosen;
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("skifree_callsign", chosen);
+        }
+        const callsignEl = document.getElementById("callsign-input") as HTMLInputElement | null;
+        if (callsignEl) callsignEl.value = chosen;
+
+        if (feedback) {
+          feedback.style.color = "#ffff00";
+          feedback.textContent = "TRANSMITTING TO EDGE LEADERBOARD...";
+        }
+
+        const elapsedMs = Math.max(1000, Date.now() - this.levelStartTime);
+        try {
+          const resp = await fetch("/api/scores", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callsign: chosen,
+              wave: this.currentLevel,
+              score: this.totalScore,
+              time_ms: elapsedMs
+            })
+          });
+          const resJson = (await resp.json()) as any;
+          if (resp.ok && resJson.success) {
+            if (feedback) {
+              feedback.style.color = "#39ff14";
+              feedback.textContent = `✅ PUBLISHED AS ${chosen}! SCORE: ${this.totalScore.toLocaleString()}`;
+            }
+            if (typeof (window as any).refreshLeaderboard === "function") {
+              (window as any).refreshLeaderboard();
+            }
+            setTimeout(() => {
+              document.getElementById("claim-score-modal")?.classList.add("hidden");
+              document.getElementById("modal-backdrop")?.classList.add("hidden");
+            }, 1200);
+          } else {
+            if (feedback) {
+              feedback.style.color = "#ff0055";
+              feedback.textContent = `ERROR: ${resJson.error || "Submission failed"}`;
+            }
+          }
+        } catch (err: any) {
+          if (feedback) {
+            feedback.style.color = "#ff0055";
+            feedback.textContent = `NETWORK ERROR: ${err.message}`;
+          }
+        }
+      });
+    }
 
     this.updateControls = () => {
       let steer = 0;
@@ -367,11 +582,9 @@ export class SkiFreeApp {
       statsEl.textContent = `${this.terrainSystem.currentTrack.mountainArea.toUpperCase()} • ELEV ${currentElev.toLocaleString()}' • ${this.terrainSystem.currentTrack.slopeGradeDeg}° PITCH`;
     }
 
-    // Check if Yeti is dead and skier has physically zoomed past the felled corpse
+    // Check if Yeti is dead -> trigger takedown immediately!
     if (this.yetiEntity.state === YetiAIState.DEAD && !this.isTakedownTriggered) {
-      if (this.playerPos.z < this.yetiEntity.rootMesh.position.z - 4) {
-        this.triggerYetiTakedown();
-      }
+      this.triggerYetiTakedown();
     }
 
     // Slalom Gates Crossing Check
@@ -448,14 +661,24 @@ export class SkiFreeApp {
       this.npcSystem.update(this.playerPos.z, this.yetiEntity.rootMesh.position, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
     }
 
-    // 3a. Yeti Attack Proximity & Screen Trauma
+    // 3a. Yeti Attack Proximity & Takedown Check
     const distToYeti = Math.hypot(this.playerPos.x - this.yetiEntity.rootMesh.position.x, this.playerPos.z - this.yetiEntity.rootMesh.position.z);
-    if ((this.yetiEntity.state === YetiAIState.POUNCE_CHARGE || this.yetiEntity.state === YetiAIState.CLAW_SWIPE) && distToYeti < 9.0) {
-      this.cameraRig.addImpactShake(0.85);
-      const clawOverlay = document.getElementById("claw-overlay");
-      if (clawOverlay && !clawOverlay.classList.contains("active")) {
-        clawOverlay.classList.add("active");
-        setTimeout(() => clawOverlay?.classList.remove("active"), 500);
+    if (this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
+      if (distToYeti < 3.8) {
+        this.triggerPlayerMauledByYeti();
+      } else if ((this.yetiEntity.state === YetiAIState.POUNCE_CHARGE || this.yetiEntity.state === YetiAIState.CLAW_SWIPE) && distToYeti < 9.0) {
+        this.cameraRig.addImpactShake(0.85);
+        const clawOverlay = document.getElementById("claw-overlay");
+        if (clawOverlay && !clawOverlay.classList.contains("slash-active")) {
+          clawOverlay.classList.add("slash-active");
+          clawOverlay.style.display = "block";
+          setTimeout(() => {
+            if (clawOverlay) {
+              clawOverlay.classList.remove("slash-active");
+              clawOverlay.style.display = "none";
+            }
+          }, 500);
+        }
       }
     }
 
@@ -479,7 +702,7 @@ export class SkiFreeApp {
         const currentSteerDir = Math.sign(this.steerInput);
         if (currentSteerDir !== 0 && currentSteerDir !== this.lastSteerDir && Math.abs(this.steerInput) > 0.3) {
           this.lastSteerDir = currentSteerDir;
-          const sawDmg = 450 + this.currentLevel * 90;
+          const sawDmg = Math.round(400 + (this.currentLevel - 1) * 80);
           const isFelled = this.yetiEntity.takeDamage(sawDmg);
           this.totalScore += 350;
           this.audioSystem.playSkiCarve(1.0);
@@ -535,7 +758,13 @@ export class SkiFreeApp {
       } else {
         // Not pressing 'S' - Yeti pulls ahead and recovers speed
         this.steamHarpoon.cableTension = 0.45;
-        this.yetiEntity.dragSpeed = Scalar.Lerp(this.yetiEntity.dragSpeed, 38, deltaTime * 1.5);
+        this.yetiEntity.dragSpeed = Scalar.Lerp(this.yetiEntity.dragSpeed, this.yetiEntity.baseSpeed, deltaTime * 1.5);
+        // Tension progress decays if not actively reeling on higher levels
+        if (this.currentLevel >= 2 && this.takedownTapProgress > 0) {
+          this.takedownTapProgress = Math.max(0, this.takedownTapProgress - (this.currentLevel - 1) * 2.0 * deltaTime);
+          const tapProgressEl = document.getElementById("takedown-tap-progress");
+          if (tapProgressEl) tapProgressEl.textContent = `${Math.round(this.takedownTapProgress)}%`;
+        }
         if (tensionLabel) tensionLabel.innerHTML = `<span>40% (SLACK)</span>`;
         if (towPrompt) {
           towPrompt.innerHTML = `⚠️ TOWLINE HOOKED! <b>HOLD [S]</b> & CARVE [A / D] TO SAW & DRAG DOWN YETI!`;
@@ -556,19 +785,27 @@ export class SkiFreeApp {
   private triggerYetiTakedown(): void {
     this.isTakedownTriggered = true;
     console.log(`[SkiFree] LEVEL ${this.currentLevel} YETI FELLED! HUNT COMPLETE!`);
-    
-    if (this.hudSystem && this.hudSystem.addKillfeedMessage) {
-      this.hudSystem.addKillfeedMessage(`🎯 SKIER_PRO <span style="color:#ff0055;">+</span> ALPINE YETI (CRITICAL IMPALE)`);
-    }
 
     // Detach harpoon towline immediately from the felled beast
     if (this.steamHarpoon) {
       this.steamHarpoon.detachTowline();
     }
 
+    // Hide active combat gauges & prompts during celebration
+    const gauge = document.getElementById("tension-gauge-container");
+    const prompt = document.getElementById("tow-action-prompt");
+    const tapContainer = document.getElementById("takedown-tap-container");
+    if (gauge) gauge.classList.add("hidden");
+    if (prompt) prompt.classList.add("hidden");
+    if (tapContainer) tapContainer.classList.add("hidden");
+
     // Audio & Screen FX
     this.cameraRig.addImpactShake(2.5);
     this.audioSystem.playRifleShot();
+
+    if (this.hudSystem && this.hudSystem.addKillfeedMessage) {
+      this.hudSystem.addKillfeedMessage(`🎯 SKIER_PRO <span style="color:#ff0055;">+</span> ALPINE YETI (CRITICAL IMPALE)`);
+    }
 
     // Calculate score & time
     const levelBonus = 10000 * this.currentLevel;
@@ -579,73 +816,142 @@ export class SkiFreeApp {
     const ms = Math.floor((takedownTimeMs % 1000) / 100).toString();
     const formattedTime = `${minutes}:${seconds}.${ms}`;
 
-    // Clear auto-timeout so player is in full control of next level drop-in
+    // Clear any previous transition timers
     if (this.nextLevelTimeout) {
       clearTimeout(this.nextLevelTimeout);
       this.nextLevelTimeout = null;
     }
+    if (this.takedownCountdownInterval) {
+      clearInterval(this.takedownCountdownInterval);
+      this.takedownCountdownInterval = null;
+    }
+    if (this.dropInCountdownInterval) {
+      clearInterval(this.dropInCountdownInterval);
+      this.dropInCountdownInterval = null;
+    }
+
+    // Skier keeps cruising downhill past the felled beast!
+    this.speedMph = Math.max(38, this.speedMph);
 
     // Show Takedown Cinematic Banners
     const bars = document.getElementById("cinematic-bars");
     const banner = document.getElementById("takedown-cinematic-overlay");
-    const gauge = document.getElementById("tension-gauge-container");
 
     if (bars) bars.classList.remove("hidden");
     if (banner) {
       banner.classList.remove("hidden");
       banner.style.opacity = "1";
       banner.innerHTML = `
-        <div style="font-size: clamp(22px, 4.5vw, 38px); font-weight: 900; color: #39ff14; text-shadow: 0 0 20px #39ff14; letter-spacing: 2px;">
-          RUN ${this.currentLevel} COMPLETE IN ${formattedTime}!
+        <div style="font-size: clamp(24px, 4.8vw, 42px); font-weight: 900; color: #39ff14; text-shadow: 0 0 25px #39ff14; letter-spacing: 2px;">
+          🏆 LEVEL ${this.currentLevel} COMPLETE!
         </div>
-        <div style="font-size: clamp(13px, 2.2vw, 18px); font-weight: 800; color: #ffff00; margin-top: 6px; text-shadow: 0 0 10px #ff0055;">
-          BEAST FELLED • +${levelBonus.toLocaleString()} PTS
+        <div style="font-size: clamp(14px, 2.5vw, 20px); font-weight: 800; color: #ffff00; margin-top: 6px; text-shadow: 0 0 12px #ff0055;">
+          BEAST FELLED • +${levelBonus.toLocaleString()} PTS • SKIING PAST DOWNED YETI
+        </div>
+        <div id="takedown-ski-countdown" style="font-size: clamp(13px, 2.2vw, 17px); font-weight: 900; color: #00f0ff; margin-top: 10px; letter-spacing: 1px; text-shadow: 0 0 10px #00f0ff;">
+          LEVEL SUMMARY IN 5.0s...
         </div>
       `;
     }
-    if (gauge) gauge.classList.add("hidden");
 
-    // Populate & Reveal the New Level Screen (Drop-In Modal)
-    const nextLevel = this.currentLevel + 1;
-    const nextTrack = getGranbyTrack(nextLevel);
-    const clearTitle = document.getElementById("clear-level-title");
-    const clearSubtitle = document.getElementById("clear-level-subtitle");
-    const nextRunName = document.getElementById("next-run-name");
-    const nextRunZone = document.getElementById("next-run-zone");
-    const nextRunDiff = document.getElementById("next-run-diff");
-    const nextRunElev = document.getElementById("next-run-elev");
-    const nextRunPitch = document.getElementById("next-run-pitch");
-    const nextRunDesc = document.getElementById("next-run-desc");
-    const nextRunYeti = document.getElementById("next-run-yeti");
-    const clearBonus = document.getElementById("clear-bonus");
-    const clearScore = document.getElementById("clear-score");
-    const clearSpeed = document.getElementById("clear-speed");
+    // 5-Second Celebration Countdown while skiing downhill past beast
+    const celebrationStart = Date.now();
+    this.takedownCountdownInterval = window.setInterval(() => {
+      const elapsed = (Date.now() - celebrationStart) / 1000;
+      const remaining = Math.max(0, 5.0 - elapsed);
+      const countdownEl = document.getElementById("takedown-ski-countdown");
+      if (countdownEl) {
+        countdownEl.textContent = `LEVEL SUMMARY IN ${remaining.toFixed(1)}s...`;
+      }
+      if (remaining <= 0 && this.takedownCountdownInterval) {
+        clearInterval(this.takedownCountdownInterval);
+        this.takedownCountdownInterval = null;
+      }
+    }, 100);
 
-    if (clearTitle) clearTitle.textContent = `BEAST DOWNED! RUN ${this.currentLevel} CLEARED`;
-    if (clearSubtitle) clearSubtitle.textContent = `GRANBY RANCH • ${getGranbyTrack(this.currentLevel).runName}`;
-    if (nextRunName) nextRunName.textContent = nextTrack.runName;
-    if (nextRunZone) nextRunZone.textContent = nextTrack.mountainArea.toUpperCase();
-    if (nextRunDiff) nextRunDiff.textContent = nextTrack.difficulty;
-    if (nextRunElev) nextRunElev.textContent = `${nextTrack.baseElevationFt.toLocaleString()}'`;
-    if (nextRunPitch) nextRunPitch.textContent = `${nextTrack.slopeGradeDeg}°`;
-    if (nextRunDesc) nextRunDesc.textContent = nextTrack.description;
-    if (nextRunYeti) nextRunYeti.textContent = nextTrack.yetiBehaviorDesc;
-    if (clearBonus) clearBonus.textContent = `+${levelBonus.toLocaleString()} PTS`;
-    if (clearScore) clearScore.textContent = `${this.totalScore.toLocaleString()} PTS`;
-    if (clearSpeed) clearSpeed.textContent = `${Math.round(this.speedMph)} MPH`;
+    // After 5 seconds: Reveal Level Complete Modal with a slight pause before next level
+    this.nextLevelTimeout = window.setTimeout(() => {
+      if (this.takedownCountdownInterval) {
+        clearInterval(this.takedownCountdownInterval);
+        this.takedownCountdownInterval = null;
+      }
 
-    // Show backdrop and modal after brief 250ms slow-mo takedown view
-    setTimeout(() => {
+      if (banner) {
+        banner.style.opacity = "0";
+        banner.classList.add("hidden");
+      }
+
+      // Populate Level Clear Modal
+      const nextLevel = this.currentLevel + 1;
+      const nextTrack = getGranbyTrack(nextLevel);
+      const clearTitle = document.getElementById("clear-level-title");
+      const clearSubtitle = document.getElementById("clear-level-subtitle");
+      const nextRunName = document.getElementById("next-run-name");
+      const nextRunZone = document.getElementById("next-run-zone");
+      const nextRunDiff = document.getElementById("next-run-diff");
+      const nextRunElev = document.getElementById("next-run-elev");
+      const nextRunPitch = document.getElementById("next-run-pitch");
+      const nextRunDesc = document.getElementById("next-run-desc");
+      const nextRunYeti = document.getElementById("next-run-yeti");
+      const clearBonus = document.getElementById("clear-bonus");
+      const clearScore = document.getElementById("clear-score");
+      const clearSpeed = document.getElementById("clear-speed");
+
+      if (clearTitle) clearTitle.textContent = `🏆 LEVEL ${this.currentLevel} COMPLETE!`;
+      if (clearSubtitle) clearSubtitle.textContent = `GRANBY RANCH • ${getGranbyTrack(this.currentLevel).runName} CLEARED IN ${formattedTime}`;
+      if (nextRunName) nextRunName.textContent = nextTrack.runName;
+      if (nextRunZone) nextRunZone.textContent = nextTrack.mountainArea.toUpperCase();
+      if (nextRunDiff) nextRunDiff.textContent = nextTrack.difficulty;
+      if (nextRunElev) nextRunElev.textContent = `${nextTrack.baseElevationFt.toLocaleString()}'`;
+      if (nextRunPitch) nextRunPitch.textContent = `${nextTrack.slopeGradeDeg}°`;
+      if (nextRunDesc) nextRunDesc.textContent = nextTrack.description;
+      if (nextRunYeti) nextRunYeti.textContent = nextTrack.yetiBehaviorDesc;
+      if (clearBonus) clearBonus.textContent = `+${levelBonus.toLocaleString()} PTS`;
+      if (clearScore) clearScore.textContent = `${this.totalScore.toLocaleString()} PTS`;
+      if (clearSpeed) clearSpeed.textContent = `${Math.round(this.speedMph)} MPH`;
+
+      // Show Backdrop & Level Clear Modal
       const backdrop = document.getElementById("modal-backdrop");
       const levelModal = document.getElementById("level-clear-modal");
       if (backdrop) backdrop.classList.remove("hidden");
       if (levelModal) levelModal.classList.remove("hidden");
       this.isWaitingForDropIn = true;
-    }, 250);
+
+      // Slight pause countdown (3 seconds) before auto-restarting at the next level
+      let pauseSeconds = 3;
+      const btnDropIn = document.getElementById("btn-drop-in");
+      if (btnDropIn) {
+        btnDropIn.innerHTML = `⛷️ NEXT RUN DROPPING IN: ${pauseSeconds}s... [SPACE TO DROP NOW]`;
+      }
+
+      this.dropInCountdownInterval = window.setInterval(() => {
+        pauseSeconds--;
+        if (btnDropIn && pauseSeconds > 0) {
+          btnDropIn.innerHTML = `⛷️ NEXT RUN DROPPING IN: ${pauseSeconds}s... [SPACE TO DROP NOW]`;
+        }
+        if (pauseSeconds <= 0) {
+          if (this.dropInCountdownInterval) {
+            clearInterval(this.dropInCountdownInterval);
+            this.dropInCountdownInterval = null;
+          }
+          if (this.isWaitingForDropIn) {
+            this.executeDropIn();
+          }
+        }
+      }, 1000);
+    }, 5000);
   }
 
   private executeDropIn(): void {
     if (!this.isWaitingForDropIn && !this.isTakedownTriggered) return;
+    if (this.dropInCountdownInterval) {
+      clearInterval(this.dropInCountdownInterval);
+      this.dropInCountdownInterval = null;
+    }
+    if (this.nextLevelTimeout) {
+      clearTimeout(this.nextLevelTimeout);
+      this.nextLevelTimeout = null;
+    }
     this.isWaitingForDropIn = false;
     this.isTakedownTriggered = false;
 
@@ -803,45 +1109,124 @@ export class SkiFreeApp {
       }, 4500);
     }
   }
+
+  public openClaimModal(source: "victory" | "death" | "level_clear"): void {
+    const backdrop = document.getElementById("modal-backdrop");
+    const claimModal = document.getElementById("claim-score-modal");
+    const deathModal = document.getElementById("death-modal");
+    const takedownModal = document.getElementById("takedown-modal");
+    const levelClearModal = document.getElementById("level-clear-modal");
+    const statSummary = document.getElementById("claim-stat-summary");
+    const callsignInput = document.getElementById("claim-callsign-input") as HTMLInputElement | null;
+    const feedback = document.getElementById("claim-feedback-msg");
+
+    if (deathModal) deathModal.classList.add("hidden");
+    if (takedownModal) takedownModal.classList.add("hidden");
+    if (levelClearModal) levelClearModal.classList.add("hidden");
+    if (backdrop) backdrop.classList.remove("hidden");
+    if (claimModal) claimModal.classList.remove("hidden");
+
+    if (callsignInput) {
+      callsignInput.value = this.callsign;
+    }
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.style.color = "#00f0ff";
+    }
+    const elapsedSec = ((Date.now() - this.levelStartTime) / 1000).toFixed(1);
+    if (statSummary) {
+      statSummary.innerHTML = `RUN ${this.currentLevel} • SCORE: <span style="color:#ff007f; font-weight:900;">${this.totalScore.toLocaleString()} PTS</span> • TIME: <span style="color:#00f0ff;">${elapsedSec}s</span>`;
+    }
+  }
 }
 
 // Deferred Engine Boot: Gated behind Lobby UI to prevent 350MB WebGPU/Havok startup penalty
 if (typeof window !== "undefined") {
   let currentLeaderboardLevel = 1;
 
+  // Initialize lobby callsign input from localStorage
+  const savedCallsign = localStorage.getItem("skifree_callsign");
+  const callsignInput = document.getElementById("callsign-input") as HTMLInputElement | null;
+  if (savedCallsign && callsignInput) {
+    callsignInput.value = savedCallsign;
+  }
+  if (callsignInput) {
+    callsignInput.addEventListener("input", () => {
+      const val = callsignInput.value.trim();
+      if (val) {
+        localStorage.setItem("skifree_callsign", val);
+      }
+    });
+  }
+
   async function fetchLeaderboard() {
     try {
-      const res = await fetch("/status");
-      if (!res.ok) throw new Error("Status API error");
-      const data = (await res.json()) as any;
+      let entries: any[] = [];
+      const res = await fetch("/api/scores");
+      if (res.ok) {
+        entries = (await res.json()) as any[];
+      } else {
+        const fallbackRes = await fetch("/status");
+        if (fallbackRes.ok) {
+          const fbData = (await fallbackRes.json()) as any;
+          entries = fbData.telemetry || [];
+        }
+      }
+
       const tbody = document.getElementById("leaderboard-body");
-      if (tbody && data.telemetry && data.telemetry.length > 0) {
-        tbody.innerHTML = "";
-        
-        // Filter by the currently selected level (wave)
-        const filtered = data.telemetry.filter((t: any) => t.wave === currentLeaderboardLevel).slice(0, 15);
-        
+      const huntRows = document.getElementById("hunt-leaderboard-rows");
+      const currentCallsign = (localStorage.getItem("skifree_callsign") || "").toUpperCase();
+
+      if (tbody) {
+        const filtered = entries.filter((t: any) => t.wave === currentLeaderboardLevel).slice(0, 15);
         if (filtered.length === 0) {
-           tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#88a0c0; font-style:italic;">No Standings for this Difficulty.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#88a0c0; font-style:italic;">No Standings for this Difficulty.</td></tr>`;
         } else {
+          tbody.innerHTML = "";
           filtered.forEach((t: any) => {
+            const isMe = currentCallsign && (t.callsign || "").toUpperCase() === currentCallsign;
             const tr = document.createElement("tr");
             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+            if (isMe) tr.style.background = "rgba(0, 240, 255, 0.15)";
             tr.innerHTML = `
-              <td style="padding:6px; color:#00f0ff;">${t.callsign || 'UNKNOWN'}</td>
-              <td style="padding:6px; text-align:right; color:#fff;">${t.time_ms ? (t.time_ms / 1000).toFixed(1) + 's' : '-'}</td>
-              <td style="padding:6px; text-align:right; color:#ff0055;">${t.score || 0}</td>
+              <td style="padding:6px; color:${isMe ? "#ffff00" : "#00f0ff"}; font-weight:${isMe ? "900" : "normal"};">
+                ${isMe ? "⭐ " : ""}${t.callsign || "UNKNOWN"}
+              </td>
+              <td style="padding:6px; text-align:right; color:#fff;">${t.time_ms ? (t.time_ms / 1000).toFixed(1) + "s" : "-"}</td>
+              <td style="padding:6px; text-align:right; color:#ff0055; font-weight:bold;">${t.score ? t.score.toLocaleString() : 0}</td>
             `;
             tbody.appendChild(tr);
           });
         }
-      } else if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#88a0c0; font-style:italic;">No Active Standings Found.</td></tr>`;
+      }
+
+      if (huntRows) {
+        const topEntries = entries.slice(0, 15);
+        if (topEntries.length === 0) {
+          huntRows.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:10px; color:#88a0c0;">No Edge Records Found.</td></tr>`;
+        } else {
+          huntRows.innerHTML = "";
+          topEntries.forEach((t: any, idx: number) => {
+            const isMe = currentCallsign && (t.callsign || "").toUpperCase() === currentCallsign;
+            const tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+            if (isMe) tr.style.background = "rgba(0, 240, 255, 0.15)";
+            tr.innerHTML = `
+              <td style="padding:4px; color:#88a0c0;">#${idx + 1}</td>
+              <td style="padding:4px; color:${isMe ? "#ffff00" : "#00f0ff"}; font-weight:${isMe ? "bold" : "normal"};">${isMe ? "⭐ " : ""}${t.callsign || "UNKNOWN"}</td>
+              <td style="padding:4px; color:#ff0055;">${t.score ? t.score.toLocaleString() : 0}</td>
+              <td style="padding:4px; color:#39ff14;">${t.time_ms ? (t.time_ms / 1000).toFixed(1) + "s" : "-"}</td>
+            `;
+            huntRows.appendChild(tr);
+          });
+        }
       }
     } catch (err) {
       console.warn("Could not fetch leaderboard:", err);
     }
   }
+
+  (window as any).refreshLeaderboard = fetchLeaderboard;
 
   fetchLeaderboard();
   setInterval(fetchLeaderboard, 15000); // Live poll every 15s
@@ -862,12 +1247,22 @@ if (typeof window !== "undefined") {
     });
   });
 
+  const introVideo = document.getElementById("intro-video") as HTMLVideoElement | null;
+
+  // Autoplay workaround: start muted immediately
+  if (introVideo) {
+    introVideo.muted = true;
+    introVideo.play().catch(() => {});
+  }
+
   const enterBtn = document.getElementById("btn-skip-intro");
   if (enterBtn) {
     enterBtn.addEventListener("click", () => {
-      // Hide Lobby UI, Destroy Video, Mount Canvas
+      // Hide Lobby UI, Destroy Videos, Mount Canvas
       document.getElementById("lobby-ui")?.classList.add("hidden");
-      document.getElementById("intro-video")?.remove();
+      document.getElementById("standings-modal")?.classList.add("hidden");
+      introVideo?.pause();
+      introVideo?.remove();
       const canvas = document.getElementById("renderCanvas");
       if (canvas) {
         canvas.classList.remove("hidden");
@@ -879,11 +1274,31 @@ if (typeof window !== "undefined") {
   }
 
   const unmuteBtn = document.getElementById("btn-unmute-intro");
-  const introVideo = document.getElementById("intro-video") as HTMLVideoElement;
-  if (unmuteBtn && introVideo) {
+  if (unmuteBtn) {
     unmuteBtn.addEventListener("click", () => {
-      introVideo.muted = !introVideo.muted;
-      unmuteBtn.textContent = introVideo.muted ? "🔊 UNMUTE LOBBY AUDIO" : "🔇 MUTE LOBBY AUDIO";
+      if (introVideo) {
+        introVideo.muted = !introVideo.muted;
+        if (!introVideo.muted) {
+          introVideo.play().catch(() => {});
+        }
+        unmuteBtn.textContent = introVideo.muted ? "🔊 UNMUTE AUDIO" : "🔇 MUTE AUDIO";
+      }
+    });
+  }
+
+  const standingsBtn = document.getElementById("btn-toggle-standings");
+  const standingsModal = document.getElementById("standings-modal");
+  const closeStandingsBtn = document.getElementById("btn-close-standings");
+
+  if (standingsBtn && standingsModal) {
+    standingsBtn.addEventListener("click", () => {
+      standingsModal.classList.toggle("hidden");
+      fetchLeaderboard();
+    });
+  }
+  if (closeStandingsBtn && standingsModal) {
+    closeStandingsBtn.addEventListener("click", () => {
+      standingsModal.classList.add("hidden");
     });
   }
 }

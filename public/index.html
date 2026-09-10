@@ -34,7 +34,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #080c16;
+      background: #000;
       font-family: 'Courier New', Courier, monospace;
       color: #fff;
       cursor: crosshair;
@@ -695,53 +695,64 @@
   </style>
 </head>
 <body>
-  <!-- Cinematic Background Video -->
-  <video id="intro-video" src="/assets/media/teaser_trailer.mp4" autoplay muted playsinline loop style="position:fixed; top:0; left:0; width:100vw; height:100vh; object-fit:cover; z-index:-1;"></video>
+  <!-- Cinematic Fullscreen Intro Video -->
+  <video id="intro-video" src="/assets/media/teaser_trailer.mp4" autoplay muted playsinline loop style="position:fixed; top:0; left:0; width:100vw; height:100vh; object-fit:cover; z-index:1; pointer-events:auto; cursor:pointer;"></video>
 
-  <!-- Glassmorphism Alpine Lobby UI -->
-  <div id="lobby-ui" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9000; display:flex; flex-direction:column; justify-content:center; align-items:center; background:rgba(4,8,16,0.65); backdrop-filter:blur(12px);">
-    <div style="text-align:center; margin-bottom: 40px;">
-      <h1 style="font-family:'Impact', 'Arial Black', sans-serif; font-size:clamp(48px, 10vw, 96px); font-weight:900; letter-spacing:4px; color:#39ff14; text-shadow:0 0 40px #00ff66, 0 0 80px rgba(57,255,20,0.8), 4px 4px 0 #000; margin:0;">SKI-FR33</h1>
-      <h2 style="font-size:clamp(16px, 3vw, 24px); font-weight:900; color:#ffff00; text-shadow:0 0 15px #ff7700, 2px 2px 0 #000; letter-spacing:8px; margin-top:-5px;">PHASE II</h2>
+  <!-- Clean Minimal Landing Page Overlay -->
+  <div id="lobby-ui" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:10; display:flex; flex-direction:column; justify-content:space-between; align-items:center; background:transparent; padding:clamp(20px, 5vh, 50px) 20px; pointer-events:none;">
+    
+    <!-- Top Branding -->
+    <div style="text-align:center; pointer-events:auto;">
+      <h1 style="font-family:'Impact', 'Arial Black', sans-serif; font-size:clamp(44px, 9vw, 92px); font-weight:900; letter-spacing:4px; color:#39ff14; text-shadow:0 0 40px #00ff66, 0 0 80px rgba(57,255,20,0.8), 4px 4px 0 #000; margin:0;">SKI-FR33</h1>
+      <h2 style="font-size:clamp(14px, 2.5vw, 24px); font-weight:900; color:#ffff00; text-shadow:0 0 16px #ff7700, 2px 2px 0 #000; letter-spacing:8px; margin-top:-4px;">PHASE II • THE YETI HUNT</h2>
     </div>
-    <div style="display:flex; flex-wrap:wrap; gap:32px; justify-content:center; align-items:flex-start; width:100%; max-width:900px;">
+
+    <!-- Bottom Sleek Control Bar -->
+    <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; background:rgba(6,12,24,0.88); backdrop-filter:blur(10px); padding:16px 26px; border:2px solid #00f0ff; border-radius:14px; box-shadow:0 0 40px rgba(0,240,255,0.4), 0 12px 30px rgba(0,0,0,0.85); pointer-events:auto; max-width:920px; width:90%;">
       
-      <!-- Action Panel -->
-      <div style="display:flex; flex-direction:column; gap:16px; align-items:center; flex:1; min-width:300px; background:rgba(10,20,35,0.85); padding:30px; border:2px solid #00f0ff; border-radius:12px; box-shadow:0 0 40px rgba(0,240,255,0.3);">
-        <input type="text" id="callsign-input" class="input-field" placeholder="ENTER CALLSIGN" maxlength="12" value="SKIER_PRO" style="font-size:24px; font-weight:900; text-transform:uppercase; letter-spacing:2px; padding:12px;">
-        <button id="btn-unmute-intro" style="background:transparent; border:1px solid #88a0c0; color:#88a0c0; font-weight:900; font-size:12px; padding:8px; border-radius:6px; cursor:pointer; width:100%;">🔊 UNMUTE LOBBY AUDIO</button>
-        <button id="btn-skip-intro" class="modal-btn modal-btn-ready" style="font-size:18px; padding:16px; margin-top:10px; box-shadow:0 0 25px #00f0ff; letter-spacing:1px;">ENTER THE MOUNTAIN ⛷️</button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:12px; font-weight:900; color:#00f0ff; letter-spacing:1px; white-space:nowrap;">🎿 CALLSIGN:</span>
+        <input type="text" id="callsign-input" class="input-field" placeholder="CALLSIGN" maxlength="12" value="SKIER_PRO" style="width:140px; font-size:16px; font-weight:900; text-transform:uppercase; letter-spacing:1px; padding:8px; margin:0;">
       </div>
 
-      <!-- Live Standings Panel -->
-      <div style="display:flex; flex-direction:column; gap:8px; flex:1; min-width:300px; max-height:400px; overflow-y:auto; background:rgba(10,14,24,0.92); padding:20px; border:1px solid #ff0055; border-radius:12px; box-shadow:0 0 30px rgba(255,0,85,0.25);">
-        <h3 style="color:#ff0055; font-size:18px; font-weight:900; letter-spacing:2px; text-shadow:0 0 10px #ff0055; margin-bottom:5px; text-align:center;">🏆 LIVE MOUNTAIN STANDINGS</h3>
-        
-        <!-- Difficulty Filters -->
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #334466; padding-bottom:8px;">
-          <button class="diff-btn active" data-level="1" style="background:transparent; color:#00ff66; border:1px solid #00ff66; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">🟢 Lvl 1</button>
-          <button class="diff-btn" data-level="2" style="background:transparent; color:#00aaff; border:1px solid #334466; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">🟦 Lvl 2</button>
-          <button class="diff-btn" data-level="3" style="background:transparent; color:#ffaa00; border:1px solid #334466; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">◆ Lvl 3</button>
-          <button class="diff-btn" data-level="4" style="background:transparent; color:#ff0033; border:1px solid #334466; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">◆◆ Lvl 4</button>
-        </div>
+      <button id="btn-unmute-intro" type="button" style="background:rgba(255,255,0,0.15); border:2px solid #ffff00; color:#ffff00; font-weight:900; font-size:13px; padding:10px 18px; border-radius:8px; cursor:pointer; letter-spacing:1px; box-shadow:0 0 16px rgba(255,255,0,0.3); touch-action:manipulation;">🔊 UNMUTE AUDIO</button>
 
-        <table style="width:100%; color:#fff; font-size:13px; font-weight:bold; border-collapse:collapse; text-align:left;">
-          <thead>
-            <tr style="color:#88a0c0; border-bottom:2px solid #334466;">
-              <th style="padding:6px;">CALLSIGN</th>
-              <th style="padding:6px; text-align:right;">TIME</th>
-              <th style="padding:6px; text-align:right;">SCORE</th>
-            </tr>
-          </thead>
-          <tbody id="leaderboard-body">
-            <tr>
-              <td colspan="3" style="text-align:center; padding:16px; color:#ffff00; font-style:italic;">Intercepting Sat-Link Telemetry...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <button id="btn-skip-intro" class="modal-btn modal-btn-ready" type="button" style="font-size:16px; padding:12px 28px; box-shadow:0 0 30px #00f0ff; letter-spacing:1px; cursor:pointer; width:auto;">ENTER THE MOUNTAIN ⛷️</button>
 
+      <button id="btn-toggle-standings" type="button" style="background:rgba(255,0,85,0.15); border:2px solid #ff0055; color:#ff0055; font-weight:900; font-size:13px; padding:10px 16px; border-radius:8px; cursor:pointer; letter-spacing:1px; box-shadow:0 0 16px rgba(255,0,85,0.3); touch-action:manipulation;">🏆 STANDINGS</button>
     </div>
+
+  </div>
+
+  <!-- Standings Modal (Opened via STANDINGS button) -->
+  <div id="standings-modal" class="hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:100; max-width:480px; width:90%; background:rgba(10,14,24,0.96); border:2px solid #ff0055; border-radius:12px; padding:20px; box-shadow:0 0 40px rgba(255,0,85,0.4);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="color:#ff0055; font-size:18px; font-weight:900; letter-spacing:2px; text-shadow:0 0 10px #ff0055; margin:0;">🏆 LIVE MOUNTAIN STANDINGS</h3>
+      <button id="btn-close-standings" style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer; font-weight:900;">✕</button>
+    </div>
+
+    <!-- Difficulty Filters -->
+    <div style="display:flex; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid #334466; padding-bottom:8px;">
+      <button class="diff-btn active" data-level="1" style="background:transparent; color:#00ff66; border:1px solid #00ff66; font-size:11px; font-weight:900; padding:4px 8px; cursor:pointer;">🟢 L1</button>
+      <button class="diff-btn" data-level="2" style="background:transparent; color:#00aaff; border:1px solid #334466; font-size:11px; font-weight:900; padding:4px 8px; cursor:pointer;">🟦 L2</button>
+      <button class="diff-btn" data-level="3" style="background:transparent; color:#ffaa00; border:1px solid #334466; font-size:11px; font-weight:900; padding:4px 8px; cursor:pointer;">◆ L3</button>
+      <button class="diff-btn" data-level="4" style="background:transparent; color:#ff0033; border:1px solid #334466; font-size:11px; font-weight:900; padding:4px 8px; cursor:pointer;">◆◆ L4</button>
+    </div>
+
+    <table style="width:100%; color:#fff; font-size:12px; font-weight:bold; border-collapse:collapse; text-align:left;">
+      <thead>
+        <tr style="color:#88a0c0; border-bottom:2px solid #334466;">
+          <th style="padding:6px;">CALLSIGN</th>
+          <th style="padding:6px; text-align:right;">TIME</th>
+          <th style="padding:6px; text-align:right;">SCORE</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body">
+        <tr>
+          <td colspan="3" style="text-align:center; padding:16px; color:#ffff00; font-style:italic;">Intercepting Sat-Link Telemetry...</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- Mobile Touch Controls (Visible only on touch devices via CSS) -->
@@ -973,6 +984,9 @@
       <button class="modal-btn modal-btn-ready" id="btn-drop-in" style="width:100%; font-size:clamp(15px, 2.8vw, 19px); padding:14px; letter-spacing:1px; animation: pulse-takedown-glow 0.6s infinite alternate;" type="button">
         ⛷️ DROP IN [SPACEBAR]
       </button>
+      <button class="modal-btn" id="btn-level-clear-claim" style="width:100%; margin-top:10px; background:rgba(0,240,255,0.18); border:1px solid #00f0ff; font-weight:bold;" type="button">
+        🏆 SUBMIT TO LEADERBOARD
+      </button>
     </div>
 
     <!-- Claim High Score Modal with PIN -->
@@ -1030,26 +1044,7 @@
   <!-- Master Soundtrack Audio Stream Player -->
   <audio id="bg-music-player" loop preload="auto" src="/assets/media/waltz_on_the_slope.mp3" style="display:none;"></audio>
 
-  <!-- Intro Cinematic Overlay (autoplay muted, skips to lobby on any interaction) -->
-  <div id="intro-overlay" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:#000; z-index:9998; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;">
-    <video id="intro-video" autoplay muted playsinline loop
-      style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0;"
-      src="/assets/media/teaser_trailer.mp4">
-    </video>
-    <div style="position:relative; z-index:1; text-align:center; pointer-events:none;">
-      <div style="font-size:clamp(28px,6vw,56px); font-weight:900; color:#00f0ff; text-shadow:0 0 30px #00f0ff; letter-spacing:4px;">SKIFREE 2</div>
-      <div style="font-size:clamp(12px,2.4vw,18px); color:#ffff00; font-weight:bold; margin-top:8px; text-shadow:0 0 12px #ff7700;">ALPINE YETI HUNT</div>
-    </div>
-    <div style="position:relative; z-index:1; margin-top:32px; display:flex; gap:14px; pointer-events:auto;">
-      <button id="btn-skip-intro" onclick="const o=document.getElementById('intro-overlay'); if(o) o.style.display='none'; const h=document.getElementById('hud-overlay'); if(h) h.classList.remove('hidden');" style="background:rgba(10,20,35,0.92); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 24px; border-radius:8px; cursor:pointer; box-shadow:0 0 14px rgba(0,240,255,0.5); touch-action:manipulation;" type="button">
-        ▶ ENTER THE MOUNTAIN
-      </button>
-      <button id="btn-unmute-intro" style="background:rgba(10,20,35,0.92); border:2px solid #ffff00; color:#ffff00; font-weight:900; font-family:inherit; font-size:clamp(11px,2.2vw,14px); padding:10px 18px; border-radius:8px; cursor:pointer; touch-action:manipulation;" type="button">
-        🔊 UNMUTE
-      </button>
-    </div>
-    <div style="position:relative; z-index:1; margin-top:14px; font-size:11px; color:rgba(255,255,255,0.45); pointer-events:none;">Press SPACE or click to skip</div>
-  </div>
+
 
   <!-- Boot TypeScript + Babylon.js Game Engine -->
   <script type="module" src="/bundle.js?v=2.3.0"></script>
