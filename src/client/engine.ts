@@ -13,7 +13,8 @@ import {
   Color4,
   HemisphericLight,
   DirectionalLight,
-  ShadowGenerator
+  ShadowGenerator,
+  DefaultRenderingPipeline
 } from "@babylonjs/core";
 
 export class EngineManager {
@@ -23,6 +24,7 @@ export class EngineManager {
   public sunLight: DirectionalLight;
   public ambientLight: HemisphericLight;
   public shadowGenerator: ShadowGenerator | null = null;
+  public pipeline: DefaultRenderingPipeline | null = null;
 
   private constructor(canvas: HTMLCanvasElement, engine: Engine | WebGPUEngine, scene: Scene) {
     this.canvas = canvas;
@@ -56,7 +58,21 @@ export class EngineManager {
       console.warn("Shadow generator fallback");
     }
 
-    // 5. Window Resize Handling
+    // 5. Alpine Post-Processing Pipeline (Bloom, Vignette, Visor Color Grading)
+    try {
+      this.pipeline = new DefaultRenderingPipeline("alpinePostPipeline", true, this.scene);
+      this.pipeline.bloomEnabled = true;
+      this.pipeline.bloomThreshold = 0.82;
+      this.pipeline.bloomWeight = 0.35;
+      this.pipeline.bloomKernel = 64;
+      this.pipeline.imageProcessing.vignetteEnabled = true;
+      this.pipeline.imageProcessing.vignetteWeight = 1.2;
+      this.pipeline.imageProcessing.vignetteStretch = 0.5;
+    } catch {
+      console.warn("Post-processing pipeline fallback");
+    }
+
+    // 6. Window Resize Handling
     window.addEventListener("resize", () => {
       this.engine.resize();
     });

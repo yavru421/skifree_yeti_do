@@ -8,11 +8,19 @@
   <!-- PWA & Native Mobile WebApp Tags -->
   <link rel="manifest" href="/manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SKI-FR33">
   <meta name="theme-color" content="#0a0e1a">
   <link rel="apple-touch-icon" href="/assets/yeti_v2.jpg">
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+          console.log('[PWA] Service Worker registered:', reg.scope);
+        }).catch(err => console.error('[PWA] Service Worker error:', err));
+      });
+    }
+  </script>
 
   <style>
     * {
@@ -707,7 +715,16 @@
 
       <!-- Live Standings Panel -->
       <div style="display:flex; flex-direction:column; gap:8px; flex:1; min-width:300px; max-height:400px; overflow-y:auto; background:rgba(10,14,24,0.92); padding:20px; border:1px solid #ff0055; border-radius:12px; box-shadow:0 0 30px rgba(255,0,85,0.25);">
-        <h3 style="color:#ff0055; font-size:18px; font-weight:900; letter-spacing:2px; text-shadow:0 0 10px #ff0055; margin-bottom:10px; text-align:center;">🏆 LIVE MOUNTAIN STANDINGS</h3>
+        <h3 style="color:#ff0055; font-size:18px; font-weight:900; letter-spacing:2px; text-shadow:0 0 10px #ff0055; margin-bottom:5px; text-align:center;">🏆 LIVE MOUNTAIN STANDINGS</h3>
+        
+        <!-- Difficulty Filters -->
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #334466; padding-bottom:8px;">
+          <button class="diff-btn active" data-level="1" style="background:transparent; color:#00ff66; border:1px solid #00ff66; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">🟢 Lvl 1</button>
+          <button class="diff-btn" data-level="2" style="background:transparent; color:#00aaff; border:1px solid #334466; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">🟦 Lvl 2</button>
+          <button class="diff-btn" data-level="3" style="background:transparent; color:#ffaa00; border:1px solid #334466; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">◆ Lvl 3</button>
+          <button class="diff-btn" data-level="4" style="background:transparent; color:#ff0033; border:1px solid #334466; font-size:10px; font-weight:900; padding:4px 8px; cursor:pointer;">◆◆ Lvl 4</button>
+        </div>
+
         <table style="width:100%; color:#fff; font-size:13px; font-weight:bold; border-collapse:collapse; text-align:left;">
           <thead>
             <tr style="color:#88a0c0; border-bottom:2px solid #334466;">
@@ -724,6 +741,20 @@
         </table>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Mobile Touch Controls (Visible only on touch devices via CSS) -->
+  <div id="mobile-controls" style="display:none; position:fixed; bottom:20px; left:0; width:100vw; z-index:8500; justify-content:space-between; padding:0 30px; touch-action:none; pointer-events:none;">
+    <!-- Left side: Steer -->
+    <div style="display:flex; gap:16px; pointer-events:auto;">
+      <button id="btn-touch-left" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#fff; font-weight:bold; font-size:24px; backdrop-filter:blur(4px);">◀</button>
+      <button id="btn-touch-right" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#fff; font-weight:bold; font-size:24px; backdrop-filter:blur(4px);">▶</button>
+    </div>
+    <!-- Right side: Actions -->
+    <div style="display:flex; gap:16px; pointer-events:auto;">
+      <button id="btn-touch-brake" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(255,0,85,0.2); border:2px solid #ff0055; color:#fff; font-weight:bold; font-size:24px; backdrop-filter:blur(4px);">▼</button>
+      <button id="btn-touch-fire" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(255,170,0,0.2); border:2px solid #ffaa00; color:#fff; font-weight:900; font-size:16px; backdrop-filter:blur(4px);">FIRE</button>
     </div>
   </div>
 

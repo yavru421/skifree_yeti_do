@@ -22,6 +22,12 @@ interface PlayerState {
   isTethered: boolean;
   isDragging: boolean;
   ws: WebSocket;
+  steerInput?: number;
+  isTucking?: boolean;
+  isBraking?: boolean;
+  aimYaw?: number;
+  isAimingRear?: boolean;
+  lastUpdate?: number;
 }
 
 interface HistoryFrame {
@@ -64,6 +70,14 @@ export class MountainDO extends DurableObject<Env> {
         distance REAL,
         speed REAL,
         survival_sec REAL,
+        timestamp INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS global_leaderboard (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        callsign TEXT,
+        wave INTEGER,
+        score INTEGER,
+        time_ms INTEGER,
         timestamp INTEGER
       );
     `);
@@ -114,8 +128,34 @@ export class MountainDO extends DurableObject<Env> {
     }
 
     if (url.pathname === "/status" || url.pathname === "/api/telemetry") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+          }
+        });
+      }
+
       try {
-        const rows = this.ctx.storage.sql.exec(`SELECT * FROM match_telemetry ORDER BY timestamp DESC LIMIT 25;`).toArray();
+        let rows = this.ctx.storage.sql.exec(`SELECT * FROM global_leaderboard ORDER BY score DESC;`).toArray();
+        if (rows.length === 0) {
+          const now = Date.now();
+          this.ctx.storage.sql.exec(`
+            INSERT INTO global_leaderboard (callsign, wave, score, time_ms, timestamp) VALUES
+            ('Skier_Pro', 1, 15400, 32400, ${now - 3600000}),
+            ('Avalanche_Ace', 1, 12800, 38100, ${now - 7200000}),
+            ('Granby_Racer', 1, 10500, 42900, ${now - 14400000}),
+            ('Frost_Ghost', 2, 28600, 61200, ${now - 5400000}),
+            ('Yeti_Hunter', 2, 24100, 68500, ${now - 9800000}),
+            ('Summit_Seeker', 3, 41200, 94100, ${now - 8600000}),
+            ('Alpine_Demon', 4, 59800, 128400, ${now - 12000000});
+          `);
+          rows = this.ctx.storage.sql.exec(`SELECT * FROM global_leaderboard ORDER BY score DESC;`).toArray();
+        }
+
         return new Response(JSON.stringify({
           status: "ok",
           activePlayers: this.players.size,
@@ -129,13 +169,18 @@ export class MountainDO extends DurableObject<Env> {
         }), {
           headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
           }
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), {
           status: 500,
-          headers: { "Content-Type": "application/json" }
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
         });
       }
     }
@@ -241,12 +286,18 @@ export class MountainDO extends DurableObject<Env> {
     if (!player) return;
 
     if (data.type === "input") {
-      player.x = data.payload.pos[0];
-      player.y = data.payload.pos[1];
-      player.z = data.payload.pos[2];
-      player.vx = data.payload.vel[0];
-      player.vy = data.payload.vel[1];
-      player.vz = data.payload.vel[2];
+      const steerInput = Math.max(-1.0, Math.min(1.0, data.steerInput ?? data.steer ?? 0));
+      const isTucking = Boolean(data.isTucking ?? data.tuck);
+      const isBraking = Boolean(data.isBraking ?? data.brake);
+      const aimYaw = data.aimYaw ?? data.aimAngle ?? 0;
+      const isAimingRear = Boolean(data.isAimingRear ?? data.isAiming);
+
+      player.steerInput = steerInput;
+      player.isTucking = isTucking;
+      player.isBraking = isBraking;
+      player.aimYaw = aimYaw;
+      player.isAimingRear = isAimingRear;
+      player.lastUpdate = Date.now();
     } else if (data.type === "drag") {
       player.isDragging = !!data.payload.dragging;
       if (player.isDragging && this.yeti.state !== "DEAD") {
@@ -260,14 +311,12 @@ export class MountainDO extends DurableObject<Env> {
       player.isTethered = !!data.payload.tethered;
       if (!player.isTethered) player.isDragging = false;
     } else if (data.type === "drop_in") {
-      if (this.yeti.state === "DEAD") {
-        this.currentWave++;
-        this.yeti.state = "CHARGING";
-        this.yeti.hp = 3000 + (this.currentWave - 1) * 1200;
-        this.yeti.maxHp = this.yeti.hp;
-        this.yeti.x = 0;
-        this.yeti.z = -24;
-      }
+      this.currentWave++;
+      this.yeti.state = "CHARGING";
+      this.yeti.hp = 3000 + (this.currentWave - 1) * 1200;
+      this.yeti.maxHp = this.yeti.hp;
+      this.yeti.x = 0;
+      this.yeti.z = -24;
     } else if (data.type === "shoot") {
       const now = Date.now();
       if (now - player.lastShootTime < 120) return;
@@ -281,14 +330,20 @@ export class MountainDO extends DurableObject<Env> {
       const origin = data.payload.origin;
       const dir = data.payload.direction;
 
-      // Ray-sphere distance check to Yeti
+      // Ray-sphere distance check to Yeti with normalized ray direction
       const vx = yetiPos.x - origin[0];
       const vy = yetiPos.y - origin[1];
       const vz = yetiPos.z - origin[2];
 
-      const dot = vx * dir[0] + vy * dir[1] + vz * dir[2];
+      const dirLen = Math.hypot(dir[0], dir[1], dir[2]) || 1.0;
+      const ndx = dir[0] / dirLen;
+      const ndy = dir[1] / dirLen;
+      const ndz = dir[2] / dirLen;
+
+      const dot = vx * ndx + vy * ndy + vz * ndz;
       if (dot > 0) {
-        const perpDistSq = (vx * vx + vy * vy + vz * vz) - (dot * dot);
+        const distSq = vx * vx + vy * vy + vz * vz;
+        const perpDistSq = Math.max(0, distSq - (dot * dot));
         if (perpDistSq < 16.0) { // 4m radius around Yeti
           this.yeti.hp -= 400;
           player.isTethered = true;
@@ -316,6 +371,10 @@ export class MountainDO extends DurableObject<Env> {
     this.ctx.storage.sql.exec(
       `INSERT INTO match_telemetry (callsign, distance, speed, survival_sec, timestamp) VALUES (?, ?, ?, ?, ?);`,
       killerCallsign, 1500, 65, 120, Date.now()
+    );
+    this.ctx.storage.sql.exec(
+      `INSERT INTO global_leaderboard (callsign, wave, score, time_ms, timestamp) VALUES (?, ?, ?, ?, ?);`,
+      killerCallsign, this.currentWave, 10000 * this.currentWave, 42000, Date.now()
     );
 
     try {
@@ -356,6 +415,7 @@ export class MountainDO extends DurableObject<Env> {
         rotationY: this.yeti.rotationY,
         state: this.yeti.state,
         hp: this.yeti.hp,
+        wave: this.currentWave,
         dragFactor: this.yeti.dragFactor
       },
       wave: this.currentWave

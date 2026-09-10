@@ -103,6 +103,10 @@ export class CombatSystem {
     });
   }
 
+  public tryFireHarpoon(): boolean {
+    return this.fire();
+  }
+
   public fire(): boolean {
     const now = performance.now();
     if (this.isReloading || this.currentAmmo <= 0 || now - this.lastShotTime < this.fireCooldownMs) {

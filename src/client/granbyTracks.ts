@@ -110,7 +110,7 @@ export const GRANBY_TRACKS: GranbyTrackConfig[] = [
     gateWidth: 8.0,
     gateIntervalZ: 85,
     baseSpeedMultiplier: 1.55,
-    fogDensity: 0.018,
+    fogDensity: 0.009,
     fogColor: new Color3(0.18, 0.22, 0.35),
     clearColor: new Color3(0.12, 0.15, 0.28), // Twilight alpine storm
     snowCorduroyScale: 30,
@@ -136,10 +136,10 @@ export const GRANBY_TRACKS: GranbyTrackConfig[] = [
     obstacleCountPerChunk: 56,
     rockRatio: 0.55,
     mogulCountPerChunk: 18,
-    gateWidth: 6.2,
-    gateIntervalZ: 65,
+    gateWidth: 8.5,
+    gateIntervalZ: 90,
     baseSpeedMultiplier: 1.9,
-    fogDensity: 0.026,
+    fogDensity: 0.013,
     fogColor: new Color3(0.15, 0.05, 0.10),
     clearColor: new Color3(0.08, 0.02, 0.06), // Whiteout blizzard abyss
     snowCorduroyScale: 20,

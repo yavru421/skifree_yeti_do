@@ -229,35 +229,35 @@ export class FPVSkis {
   }
 
   private initPowderParticles(): void {
-    // Left spray
-    this.powderParticlesLeft = new ParticleSystem("powderL", 180, this.scene);
+    // Left spray (Dynamic high-velocity rooster tail)
+    this.powderParticlesLeft = new ParticleSystem("powderL", 600, this.scene);
     this.powderParticlesLeft.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
     this.powderParticlesLeft.blendMode = ParticleSystem.BLENDMODE_ADD;
     this.powderParticlesLeft.emitter = this.leftSki;
-    this.powderParticlesLeft.minSize = 0.04;
-    this.powderParticlesLeft.maxSize = 0.16;
-    this.powderParticlesLeft.color1 = new Color3(1, 1, 1).toColor4(0.7);
-    this.powderParticlesLeft.color2 = new Color3(0.82, 0.92, 1).toColor4(0.2);
-    this.powderParticlesLeft.direction1 = new Vector3(-0.9, 0.6, -1.6);
-    this.powderParticlesLeft.direction2 = new Vector3(-0.2, 0.9, -0.6);
-    this.powderParticlesLeft.minLifeTime = 0.2;
-    this.powderParticlesLeft.maxLifeTime = 0.45;
+    this.powderParticlesLeft.minSize = 0.05;
+    this.powderParticlesLeft.maxSize = 0.28;
+    this.powderParticlesLeft.color1 = new Color3(1, 1, 1).toColor4(0.85);
+    this.powderParticlesLeft.color2 = new Color3(0.85, 0.94, 1).toColor4(0.25);
+    this.powderParticlesLeft.direction1 = new Vector3(-1.8, 0.8, -2.2);
+    this.powderParticlesLeft.direction2 = new Vector3(-0.4, 1.6, -0.4);
+    this.powderParticlesLeft.minLifeTime = 0.25;
+    this.powderParticlesLeft.maxLifeTime = 0.65;
     this.powderParticlesLeft.emitRate = 0;
     this.powderParticlesLeft.start();
 
-    // Right spray
-    this.powderParticlesRight = new ParticleSystem("powderR", 180, this.scene);
+    // Right spray (Dynamic high-velocity rooster tail)
+    this.powderParticlesRight = new ParticleSystem("powderR", 600, this.scene);
     this.powderParticlesRight.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
     this.powderParticlesRight.blendMode = ParticleSystem.BLENDMODE_ADD;
     this.powderParticlesRight.emitter = this.rightSki;
-    this.powderParticlesRight.minSize = 0.04;
-    this.powderParticlesRight.maxSize = 0.16;
-    this.powderParticlesRight.color1 = new Color3(1, 1, 1).toColor4(0.7);
-    this.powderParticlesRight.color2 = new Color3(0.82, 0.92, 1).toColor4(0.2);
-    this.powderParticlesRight.direction1 = new Vector3(0.2, 0.9, -0.6);
-    this.powderParticlesRight.direction2 = new Vector3(0.9, 0.6, -1.6);
-    this.powderParticlesRight.minLifeTime = 0.2;
-    this.powderParticlesRight.maxLifeTime = 0.45;
+    this.powderParticlesRight.minSize = 0.05;
+    this.powderParticlesRight.maxSize = 0.28;
+    this.powderParticlesRight.color1 = new Color3(1, 1, 1).toColor4(0.85);
+    this.powderParticlesRight.color2 = new Color3(0.85, 0.94, 1).toColor4(0.25);
+    this.powderParticlesRight.direction1 = new Vector3(0.4, 1.6, -0.4);
+    this.powderParticlesRight.direction2 = new Vector3(1.8, 0.8, -2.2);
+    this.powderParticlesRight.minLifeTime = 0.25;
+    this.powderParticlesRight.maxLifeTime = 0.65;
     this.powderParticlesRight.emitRate = 0;
     this.powderParticlesRight.start();
   }
@@ -322,12 +322,14 @@ export class FPVSkis {
       this.rightPoleRoot.rotation.x = -rightSwing * 0.25;
     }
 
-    // 5. Snow Powder Spray emission
+    // 5. High-Velocity Snow Powder Spray emission
     const carveIntensity = Math.abs(steerInput);
     if (this.powderParticlesLeft && this.powderParticlesRight) {
       if (speedMph > 14) {
-        this.powderParticlesLeft.emitRate = Math.round(steerInput > 0 ? carveIntensity * 90 : 30);
-        this.powderParticlesRight.emitRate = Math.round(steerInput < 0 ? carveIntensity * 90 : 30);
+        // Hurl high-velocity snow rooster tails outward on carving edges
+        const baseSpray = Math.round(25 + (speedMph / 40) * 35);
+        this.powderParticlesLeft.emitRate = Math.round(steerInput > 0 ? carveIntensity * 380 + baseSpray : baseSpray);
+        this.powderParticlesRight.emitRate = Math.round(steerInput < 0 ? carveIntensity * 380 + baseSpray : baseSpray);
       } else {
         this.powderParticlesLeft.emitRate = 0;
         this.powderParticlesRight.emitRate = 0;

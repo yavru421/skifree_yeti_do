@@ -17,6 +17,7 @@ import { NetworkSystem } from "./network";
 import { FPVSkis } from "./skis";
 import { SteamHarpoon } from "./harpoon";
 import { NPCSystem } from "./npcs";
+import { HUDManager } from "./hud";
 import { GameStatePacket, HitscanPacket, LimbStatus, YetiAIState, PowerUpType } from "./types";
 import { getGranbyTrack, GranbyTrackConfig } from "./granbyTracks";
 
@@ -32,6 +33,7 @@ export class SkiFreeApp {
   private fpvSkis!: FPVSkis;
   private steamHarpoon!: SteamHarpoon;
   private npcSystem!: NPCSystem;
+  private hudSystem!: HUDManager;
 
   // Skier State
   private playerPos: Vector3 = new Vector3(0, 0, 0);
@@ -88,12 +90,28 @@ export class SkiFreeApp {
     this.steamHarpoon = new SteamHarpoon(scene, this.cameraRig.camera);
     this.npcSystem = new NPCSystem(scene);
     this.npcSystem.init();
+    this.hudSystem = new HUDManager();
 
     // 7. Audio System
     this.audioSystem = new AudioSystem();
     this.audioSystem.init();
 
-    // 8. Precision Combat
+    // 8. Network System (20Hz WebSocket to MountainDO)
+    this.networkSystem = new NetworkSystem(this.callsign, this.roomId, (packet: any) => {
+      if (this.npcSystem && packet.skiers) {
+        this.npcSystem.updatePlayers(packet.skiers.filter((s: any) => s.callsign !== this.callsign));
+      }
+      if (this.yetiEntity && packet.yeti) {
+        this.yetiEntity.syncNetState(packet.yeti);
+        const serverWave = typeof packet.wave === "number" ? packet.wave : (packet.yeti && typeof packet.yeti.wave === "number" ? packet.yeti.wave : null);
+        if (serverWave !== null && serverWave > this.currentLevel && !this.isWaitingForDropIn && !this.isTakedownTriggered) {
+          this.switchTrack(serverWave);
+        }
+      }
+    });
+    this.networkSystem.connect();
+
+    // 9. Precision Combat
     this.combatSystem = new CombatSystem(
       scene,
       this.yetiEntity,
@@ -126,12 +144,12 @@ export class SkiFreeApp {
           this.triggerYetiTakedown();
         }
 
-        this.networkSystem.sendHitscan(packet);
+        if (this.networkSystem) {
+          this.networkSystem.sendHitscan(packet);
+        }
       },
       this.npcSystem
     );
-
-    this.networkSystem.connect();
 
     // 11. Skier Keyboard Controls
     this.setupSkierControls();
@@ -193,7 +211,7 @@ export class SkiFreeApp {
       if (e.code === "Space" && overlay && overlay.style.display !== "none") {
         dismiss();
       }
-      if ((e.code === "Space" || e.code === "Enter") && this.isWaitingForDropIn) {
+      if ((e.code === "Space" || e.code === "Enter") && (this.isWaitingForDropIn || this.isTakedownTriggered)) {
         this.executeDropIn();
       }
     });
@@ -210,10 +228,17 @@ export class SkiFreeApp {
       });
     }
 
-    // Handle New Level Screen Drop-In button
+    // Handle New Level Screen Drop-In button & modal click
     const btnDropIn = document.getElementById("btn-drop-in");
     if (btnDropIn) {
-      btnDropIn.addEventListener("click", () => {
+      btnDropIn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.executeDropIn();
+      });
+    }
+    const levelClearModal = document.getElementById("level-clear-modal");
+    if (levelClearModal) {
+      levelClearModal.addEventListener("click", () => {
         this.executeDropIn();
       });
     }
@@ -223,12 +248,13 @@ export class SkiFreeApp {
     const keys: Record<string, boolean> = {};
 
     window.addEventListener("keydown", (e: KeyboardEvent) => {
-      keys[e.key.toLowerCase()] = true;
-      if (this.isTakedownTriggered && (e.code === "Space" || e.code === "Enter")) {
-        this.executeDropIn();
-      }
-      if (["1", "2", "3", "4"].includes(e.key) && (e.target as HTMLElement)?.tagName !== "INPUT") {
-        this.switchTrack(Number(e.key));
+      const key = e.key.toLowerCase();
+      keys[key] = true;
+      if (key === " ") {
+        e.preventDefault();
+        if (this.combatSystem && !this.isTakedownTriggered) {
+          this.combatSystem.tryFireHarpoon();
+        }
       }
     });
 
@@ -236,9 +262,7 @@ export class SkiFreeApp {
       keys[e.key.toLowerCase()] = false;
     });
 
-    // Keyboard polling in tick loop
     this.updateControls = () => {
-      // Steer: A / D or ArrowLeft / ArrowRight
       let steer = 0;
       if (keys["a"] || keys["arrowleft"]) steer -= 1;
       if (keys["d"] || keys["arrowright"]) steer += 1;
@@ -247,12 +271,51 @@ export class SkiFreeApp {
       if (this.limbStatus === LimbStatus.LEFT_ARM_LOST && steer < 0) steer *= 0.8;
       if (this.limbStatus === LimbStatus.BOTH_ARMS_LOST) steer *= 0.5;
 
-      this.steerInput = steer;
+      // Update inputs (prioritize touch inputs if they exist)
+      if (this.steerInput === 0 || (!this.isMobileSteering)) {
+          this.steerInput = steer;
+      }
       this.isTucking = !!(keys["w"] || keys["arrowup"]);
-      this.isBraking = !!(keys["s"] || keys["arrowdown"]);
+      // Don't override touch brake
+      if (!this.isMobileBraking) {
+        this.isBraking = !!(keys["s"] || keys["arrowdown"]);
+      }
     };
+
+    // Mobile Touch Controls Wiring
+    const btnLeft = document.getElementById("btn-touch-left");
+    const btnRight = document.getElementById("btn-touch-right");
+    const btnBrake = document.getElementById("btn-touch-brake");
+    const btnFire = document.getElementById("btn-touch-fire");
+
+    if (btnLeft) {
+      btnLeft.addEventListener("touchstart", (e) => { e.preventDefault(); this.steerInput = -1.0; this.isMobileSteering = true; });
+      btnLeft.addEventListener("touchend", (e) => { e.preventDefault(); this.steerInput = 0; this.isMobileSteering = false; });
+    }
+    if (btnRight) {
+      btnRight.addEventListener("touchstart", (e) => { e.preventDefault(); this.steerInput = 1.0; this.isMobileSteering = true; });
+      btnRight.addEventListener("touchend", (e) => { e.preventDefault(); this.steerInput = 0; this.isMobileSteering = false; });
+    }
+    if (btnBrake) {
+      btnBrake.addEventListener("touchstart", (e) => { e.preventDefault(); this.isBraking = true; this.isMobileBraking = true; });
+      btnBrake.addEventListener("touchend", (e) => { e.preventDefault(); this.isBraking = false; this.isMobileBraking = false; });
+    }
+    if (btnFire) {
+      btnFire.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        if (this.combatSystem && !this.isTakedownTriggered) this.combatSystem.tryFireHarpoon();
+      });
+    }
+
+    // Unhide mobile controls if touch device
+    if (typeof window !== "undefined" && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+      const mobileUI = document.getElementById("mobile-controls");
+      if (mobileUI) mobileUI.style.display = "flex";
+    }
   }
 
+  private isMobileSteering: boolean = false;
+  private isMobileBraking: boolean = false;
   private updateControls: () => void = () => {};
 
   private handleNetworkState(packet: GameStatePacket): void {
@@ -269,7 +332,7 @@ export class SkiFreeApp {
     if (this.isTucking) {
       this.speedMph = Scalar.Lerp(this.speedMph, this.maxSpeedMph, deltaTime * 1.5);
     } else if (this.isBraking) {
-      this.speedMph = Scalar.Lerp(this.speedMph, 14, deltaTime * 3.0);
+      this.speedMph = Scalar.Lerp(this.speedMph, 8, deltaTime * 4.2);
     } else {
       this.speedMph = Scalar.Lerp(this.speedMph, 38, deltaTime * 0.8);
     }
@@ -277,9 +340,9 @@ export class SkiFreeApp {
     const forwardSpeedUnitsPerSec = (this.speedMph * 0.44704) * 2.2; // Convert MPH to scene units
     this.playerPos.z -= forwardSpeedUnitsPerSec * deltaTime;
 
-    // Lateral carving along X (looking downhill along -Z, +X is screen-left, -X is screen-right)
-    const steerSpeed = 22;
-    this.playerPos.x -= this.steerInput * steerSpeed * deltaTime;
+    // Progressive lateral carving speed scaled with forward velocity
+    const dynamicSteerSpeed = 14.0 + 0.22 * this.speedMph;
+    this.playerPos.x -= this.steerInput * dynamicSteerSpeed * deltaTime;
     const halfWidth = this.terrainSystem.currentTrack.trailWidth / 2;
     this.playerPos.x = Scalar.Clamp(this.playerPos.x, -halfWidth, halfWidth); // Bound within slope
 
@@ -385,6 +448,17 @@ export class SkiFreeApp {
       this.npcSystem.update(this.playerPos.z, this.yetiEntity.rootMesh.position, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
     }
 
+    // 3a. Yeti Attack Proximity & Screen Trauma
+    const distToYeti = Math.hypot(this.playerPos.x - this.yetiEntity.rootMesh.position.x, this.playerPos.z - this.yetiEntity.rootMesh.position.z);
+    if ((this.yetiEntity.state === YetiAIState.POUNCE_CHARGE || this.yetiEntity.state === YetiAIState.CLAW_SWIPE) && distToYeti < 9.0) {
+      this.cameraRig.addImpactShake(0.85);
+      const clawOverlay = document.getElementById("claw-overlay");
+      if (clawOverlay && !clawOverlay.classList.contains("active")) {
+        clawOverlay.classList.add("active");
+        setTimeout(() => clawOverlay?.classList.remove("active"), 500);
+      }
+    }
+
     // 3b. Harpoon Drag & Braking Tug-of-War (Hold 'S' to drag down Yeti)
     if (this.steamHarpoon && this.steamHarpoon.isTethered) {
       const tensionGauge = document.getElementById("tension-gauge-container");
@@ -433,10 +507,22 @@ export class SkiFreeApp {
           }
         }
 
-        // Update Tension Gauge & Prompts
-        const dragProgress = Math.min(100, Math.round(((this.yetiEntity.maxHp - this.yetiEntity.hp) / this.yetiEntity.maxHp) * 100));
-        if (tensionFill) tensionFill.style.width = `${dragProgress}%`;
-        if (tensionLabel) tensionLabel.innerHTML = `<span style="color:#ff0055;">PULLING! ${dragProgress}%</span>`;
+        // Update Tension Gauge & Prompts (Physical cable Hooke strain)
+        const distToBeast = Vector3.Distance(this.playerPos, this.yetiEntity.rootMesh.position);
+        const nominalDist = 32.0;
+        const strainRatio = Scalar.Clamp((distToBeast - nominalDist) / 22.0 + (this.isBraking ? 0.35 : 0.0), 0.05, 1.0);
+        this.steamHarpoon.cableTension = strainRatio;
+        const tensionPercent = Math.round(strainRatio * 100);
+        if (tensionFill) tensionFill.style.width = `${tensionPercent}%`;
+        if (tensionLabel) {
+          if (tensionPercent > 75) {
+            tensionLabel.innerHTML = `<span style="color:#ff0055; font-weight:900;">HIGH TENSION! ${tensionPercent}%</span>`;
+          } else if (tensionPercent > 40) {
+            tensionLabel.innerHTML = `<span style="color:#ffaa00;">OPTIMAL DRAG! ${tensionPercent}%</span>`;
+          } else {
+            tensionLabel.innerHTML = `<span style="color:#00f0ff;">SLACK ${tensionPercent}%</span>`;
+          }
+        }
         if (bossHpFill) {
           const hpPct = Math.max(0, (this.yetiEntity.hp / this.yetiEntity.maxHp) * 100);
           bossHpFill.style.width = `${hpPct}%`;
@@ -548,19 +634,20 @@ export class SkiFreeApp {
     if (clearScore) clearScore.textContent = `${this.totalScore.toLocaleString()} PTS`;
     if (clearSpeed) clearSpeed.textContent = `${Math.round(this.speedMph)} MPH`;
 
-    // Show backdrop and modal after brief 500ms slow-mo takedown view
+    // Show backdrop and modal after brief 250ms slow-mo takedown view
     setTimeout(() => {
       const backdrop = document.getElementById("modal-backdrop");
       const levelModal = document.getElementById("level-clear-modal");
       if (backdrop) backdrop.classList.remove("hidden");
       if (levelModal) levelModal.classList.remove("hidden");
       this.isWaitingForDropIn = true;
-    }, 500);
+    }, 250);
   }
 
   private executeDropIn(): void {
-    if (!this.isWaitingForDropIn) return;
+    if (!this.isWaitingForDropIn && !this.isTakedownTriggered) return;
     this.isWaitingForDropIn = false;
+    this.isTakedownTriggered = false;
 
     if (this.networkSystem) {
       this.networkSystem.sendDropIn();
@@ -575,10 +662,6 @@ export class SkiFreeApp {
     this.audioSystem.playDropIn();
     this.cameraRig.addImpactShake(1.6);
 
-    // Initial Drop-In Surge down the fall line
-    const nextTrack = getGranbyTrack(this.currentLevel + 1);
-    this.speedMph = Math.max(46, 36 * nextTrack.baseSpeedMultiplier);
-
     this.startNextLevel();
   }
 
@@ -590,6 +673,7 @@ export class SkiFreeApp {
 
     this.currentLevel++;
     this.isTakedownTriggered = false;
+    this.isWaitingForDropIn = false;
     this.levelStartTime = Date.now();
 
     // Reset cinematic bars & banner
@@ -639,8 +723,8 @@ export class SkiFreeApp {
     this.yetiEntity.startLevel(this.currentLevel, this.playerPos.z);
 
     // Audio cue & impact shake for roar
-    this.audioSystem.playRifleShot();
-    this.cameraRig.addImpactShake(1.4);
+    this.audioSystem.playYetiRoar();
+    this.cameraRig.addImpactShake(0.8);
 
     // Show Level Announcement HUD Banner & Update Granby Info
     this.showLevelSplash(this.currentLevel);
@@ -723,39 +807,60 @@ export class SkiFreeApp {
 
 // Deferred Engine Boot: Gated behind Lobby UI to prevent 350MB WebGPU/Havok startup penalty
 if (typeof window !== "undefined") {
+  let currentLeaderboardLevel = 1;
+
   async function fetchLeaderboard() {
     try {
-      // In dev this might fail due to CORS, but in prod it's same-origin on yeti.dondlingergc.com
       const res = await fetch("/status");
       if (!res.ok) throw new Error("Status API error");
-      const data = await res.json();
+      const data = (await res.json()) as any;
       const tbody = document.getElementById("leaderboard-body");
       if (tbody && data.telemetry && data.telemetry.length > 0) {
         tbody.innerHTML = "";
-        data.telemetry.forEach((t: any) => {
-          const tr = document.createElement("tr");
-          tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-          tr.innerHTML = `
-            <td style="padding:6px; color:#00f0ff;">${t.callsign || 'UNKNOWN'}</td>
-            <td style="padding:6px; text-align:right; color:#fff;">${t.time_ms ? (t.time_ms / 1000).toFixed(1) + 's' : '-'}</td>
-            <td style="padding:6px; text-align:right; color:#ff0055;">${t.score || 0}</td>
-          `;
-          tbody.appendChild(tr);
-        });
+        
+        // Filter by the currently selected level (wave)
+        const filtered = data.telemetry.filter((t: any) => t.wave === currentLeaderboardLevel).slice(0, 15);
+        
+        if (filtered.length === 0) {
+           tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#88a0c0; font-style:italic;">No Standings for this Difficulty.</td></tr>`;
+        } else {
+          filtered.forEach((t: any) => {
+            const tr = document.createElement("tr");
+            tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+            tr.innerHTML = `
+              <td style="padding:6px; color:#00f0ff;">${t.callsign || 'UNKNOWN'}</td>
+              <td style="padding:6px; text-align:right; color:#fff;">${t.time_ms ? (t.time_ms / 1000).toFixed(1) + 's' : '-'}</td>
+              <td style="padding:6px; text-align:right; color:#ff0055;">${t.score || 0}</td>
+            `;
+            tbody.appendChild(tr);
+          });
+        }
       } else if (tbody) {
         tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#88a0c0; font-style:italic;">No Active Standings Found.</td></tr>`;
       }
     } catch (err) {
       console.warn("Could not fetch leaderboard:", err);
-      const tbody = document.getElementById("leaderboard-body");
-      if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#ff3333; font-style:italic;">📡 Sat-Link Offline. Retry Later.</td></tr>`;
-      }
     }
   }
 
   fetchLeaderboard();
   setInterval(fetchLeaderboard, 15000); // Live poll every 15s
+
+  // Wire Difficulty Tabs
+  const diffBtns = document.querySelectorAll(".diff-btn");
+  diffBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      diffBtns.forEach(b => {
+        (b as HTMLElement).style.border = "1px solid #334466";
+        b.classList.remove("active");
+      });
+      const target = e.currentTarget as HTMLElement;
+      target.style.border = "1px solid #00ff66";
+      target.classList.add("active");
+      currentLeaderboardLevel = parseInt(target.getAttribute("data-level") || "1");
+      fetchLeaderboard(); // instant refresh
+    });
+  });
 
   const enterBtn = document.getElementById("btn-skip-intro");
   if (enterBtn) {

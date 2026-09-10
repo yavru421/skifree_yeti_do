@@ -113,7 +113,9 @@ console.log(`✅ [MessagePack] Packet encoding verified (${encoded.length} bytes
 console.log("⚡ [Test Engine] Testing authoritative 200ms hitscan rewind raycast math...");
 const yetiPos = { x: 0, y: 0, z: -50 };
 const origin = [0, 1.8, 0];
-const direction = [0, -0.03, -1.0]; // Direct aim downhill
+const rawDir = [0, -0.03, -1.0]; // Direct aim downhill
+const dirLen = Math.hypot(rawDir[0], rawDir[1], rawDir[2]) || 1.0;
+const direction = [rawDir[0] / dirLen, rawDir[1] / dirLen, rawDir[2] / dirLen];
 
 const vx = yetiPos.x - origin[0];
 const vy = yetiPos.y - origin[1];
@@ -121,7 +123,8 @@ const vz = yetiPos.z - origin[2];
 const dot = vx * direction[0] + vy * direction[1] + vz * direction[2];
 
 assert(dot > 0, "Aim direction must point toward target");
-const perpDistSq = (vx * vx + vy * vy + vz * vz) - (dot * dot);
+const distSq = vx * vx + vy * vy + vz * vz;
+const perpDistSq = Math.max(0, distSq - (dot * dot));
 assert(perpDistSq < 16.0, "Ray must intersect Yeti 4m hitbox");
 console.log(`✅ [Combat] Hitscan rewind ray-sphere intersection confirmed (dist: ${Math.sqrt(perpDistSq).toFixed(2)}m < 4.0m)`);
 

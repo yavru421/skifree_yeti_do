@@ -31,7 +31,17 @@ export default {
       });
     }
 
-    if (url.pathname === "/ws") {
+    if (url.pathname === "/ws" || url.pathname === "/status" || url.pathname === "/api/telemetry") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+          }
+        });
+      }
       const id = env.MOUNTAIN_DO.idFromName("global-mountain-lobby");
       const stub = env.MOUNTAIN_DO.get(id);
       return stub.fetch(request);

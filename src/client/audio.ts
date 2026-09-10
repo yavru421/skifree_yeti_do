@@ -34,8 +34,13 @@ export class AudioSystem {
     }
   }
 
+  private lastCarveTime: number = 0;
+
   public playSkiCarve(speedRatio: number): void {
     if (!this.ctx || this.isMuted) return;
+    const now = this.ctx.currentTime;
+    if (now - this.lastCarveTime < 0.08) return; // Throttle to max 12.5Hz to prevent WebAudio node flooding
+    this.lastCarveTime = now;
     try {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -48,15 +53,15 @@ export class AudioSystem {
       osc.type = "sawtooth";
       osc.frequency.value = 65 + speedRatio * 40;
 
-      gain.gain.setValueAtTime(0.04 * speedRatio, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.04 * speedRatio, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start();
-      osc.stop(this.ctx.currentTime + 0.18);
+      osc.stop(now + 0.18);
     } catch {
       // Ignore WebAudio dropouts
     }

@@ -19,7 +19,8 @@ import {
   Color3,
   Vector3,
   Mesh,
-  InstancedMesh
+  InstancedMesh,
+  ParticleSystem
 } from "@babylonjs/core";
 import { PowerUpType } from "./types";
 import { GranbyTrackConfig, getGranbyTrack } from "./granbyTracks";
@@ -72,18 +73,23 @@ export class TerrainSystem {
   public powerUps: PowerUpInstance[] = [];
   public currentTrack: GranbyTrackConfig = getGranbyTrack(1);
   private archwayCounter: number = 0;
+  private blizzardParticles: ParticleSystem | null = null;
+  private mountainDomeMesh: Mesh | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
   }
 
   public init(): void {
-    // 1. Snow Slope Material with Groomed Corduroy Texture
+    // 1. Snow Slope Material with Groomed Corduroy Texture & Specular Glint
     this.snowMat = new StandardMaterial("snowMat", this.scene);
     this.snowMat.diffuseTexture = new Texture("/assets/snow_texture.jpg", this.scene);
     (this.snowMat.diffuseTexture as Texture).uScale = 40;
     (this.snowMat.diffuseTexture as Texture).vScale = 40;
-    this.snowMat.specularColor = new Color3(0.2, 0.2, 0.25);
+    this.snowMat.bumpTexture = new Texture("/assets/ice_texture.jpg", this.scene);
+    (this.snowMat.bumpTexture as Texture).uScale = 40;
+    (this.snowMat.bumpTexture as Texture).vScale = 40;
+    this.snowMat.specularColor = new Color3(0.55, 0.6, 0.7);
     this.snowMat.ambientColor = new Color3(0.9, 0.95, 1.0);
 
     // 2. Build recycled ground chunks downhill along -Z
@@ -100,11 +106,45 @@ export class TerrainSystem {
       this.groundChunks.push(ground);
     }
 
-    // 3. Create template meshes for instancing
+    // 3. Distant Alpine Colorado Mountain Peaks Horizon
+    const mountainMat = new StandardMaterial("mountainHorizonMat", this.scene);
+    mountainMat.diffuseTexture = new Texture("/assets/mountain_horizon.jpg", this.scene);
+    mountainMat.emissiveTexture = mountainMat.diffuseTexture;
+    mountainMat.specularColor = new Color3(0.1, 0.1, 0.15);
+    mountainMat.backFaceCulling = false;
+
+    this.mountainDomeMesh = MeshBuilder.CreatePlane("mountainHorizon", { width: 2800, height: 750 }, this.scene);
+    this.mountainDomeMesh.material = mountainMat;
+    this.mountainDomeMesh.position.set(0, 180, -950);
+
+    // 4. Volumetric Blizzard Particle Squall
+    this.initBlizzardSystem();
+
+    // 5. Create template meshes for instancing
     this.createTemplateObstacles();
 
-    // 4. Apply initial Level 1 (Quick Draw) Atmosphere & Obstacles
+    // 6. Apply initial Level 1 (Quick Draw) Atmosphere & Obstacles
     this.applyTrack(this.currentTrack);
+  }
+
+  private initBlizzardSystem(): void {
+    this.blizzardParticles = new ParticleSystem("volumetricBlizzard", 2000, this.scene);
+    this.blizzardParticles.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
+    this.blizzardParticles.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+    this.blizzardParticles.emitter = new Vector3(0, 6, 0);
+    this.blizzardParticles.minSize = 0.05;
+    this.blizzardParticles.maxSize = 0.22;
+    this.blizzardParticles.color1 = new Color3(0.95, 0.98, 1.0).toColor4(0.38);
+    this.blizzardParticles.color2 = new Color3(0.80, 0.90, 1.0).toColor4(0.12);
+    this.blizzardParticles.minLifeTime = 0.6;
+    this.blizzardParticles.maxLifeTime = 1.4;
+    this.blizzardParticles.emitRate = 850;
+    this.blizzardParticles.direction1 = new Vector3(-8, -4, -32);
+    this.blizzardParticles.direction2 = new Vector3(8, -10, -55);
+    this.blizzardParticles.gravity = new Vector3(0, -9.81, 0);
+    this.blizzardParticles.minEmitBox = new Vector3(-55, -2, 18);
+    this.blizzardParticles.maxEmitBox = new Vector3(55, 25, 65);
+    this.blizzardParticles.start();
   }
 
   private createTemplateObstacles(): void {
@@ -573,7 +613,15 @@ export class TerrainSystem {
   }
 
   public update(playerZ: number, deltaTime: number = 0.016): void {
-    // Recalculate chunks relative to player downhill position (-Z)
+    // 1. Reposition volumetric blizzard squall & mountain horizon with player downhill progress (-Z)
+    if (this.blizzardParticles) {
+      this.blizzardParticles.emitter = new Vector3(0, 8, playerZ);
+    }
+    if (this.mountainDomeMesh) {
+      this.mountainDomeMesh.position.z = playerZ - 950;
+    }
+
+    // 2. Recalculate chunks relative to player downhill position (-Z)
     for (const chunk of this.groundChunks) {
       if (chunk.position.z > playerZ + this.chunkSize) {
         let minZ = chunk.position.z;

@@ -19,6 +19,8 @@ export class CameraRig {
   private baseFov: number = 0.85; // rad (~48 deg)
   private currentSpeed: number = 0;
   private shakeTrauma: number = 0;
+  public aimYawOffset: number = 0;
+  public aimPitchOffset: number = 0;
 
   constructor(scene: Scene, canvas: HTMLCanvasElement) {
     this.scene = scene;
@@ -34,6 +36,20 @@ export class CameraRig {
   }
 
   private setupInputListeners(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener("click", () => {
+      if (document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock?.();
+      }
+    });
+
+    window.addEventListener("mousemove", (e: MouseEvent) => {
+      if (document.pointerLockElement === canvas) {
+        const sens = 0.0018;
+        this.aimYawOffset = Scalar.Clamp(this.aimYawOffset - e.movementX * sens, -0.60, 0.60);
+        this.aimPitchOffset = Scalar.Clamp(this.aimPitchOffset - e.movementY * sens, -0.35, 0.40);
+      }
+    });
+
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Shift") {
         this.isAimingRear = true;
@@ -64,7 +80,7 @@ export class CameraRig {
   }
 
   public addImpactShake(amount: number = 1.0): void {
-    this.shakeTrauma = Math.min(2.5, this.shakeTrauma + amount);
+    this.shakeTrauma = Math.min(1.0, this.shakeTrauma + amount);
   }
 
   public update(
@@ -76,46 +92,53 @@ export class CameraRig {
   ): void {
     this.currentSpeed = speedMph;
 
-    // 1. Position camera at player's eye level
+    // 1. Position camera at player's eye level with dynamic mogul/bump compression
     const eyeHeight = 1.55;
-    this.camera.position.x = Scalar.Lerp(this.camera.position.x, playerPosition.x, 0.25);
-    this.camera.position.y = playerPosition.y + eyeHeight;
+    this.camera.position.x = Scalar.Lerp(this.camera.position.x, playerPosition.x, Math.min(1.0, deltaTime * 16.0));
+    
+    // High-speed mogul chatter & terrain compression
+    const speedRatio = Math.min(1.8, speedMph / 45);
+    const mogulChatter = Math.sin(Date.now() * 0.024) * 0.012 * speedRatio;
+    const targetY = playerPosition.y + eyeHeight + mogulChatter;
+    this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 14.0));
     this.camera.position.z = playerPosition.z;
 
-    // Calculate Screen Shake Trauma on Impact / Knockdowns
+    // Harmonic Screen Shake on Impact / Knockdowns (Zero high-frequency strobe)
     let shakeX = 0;
     let shakeY = 0;
     let shakeRoll = 0;
     if (this.shakeTrauma > 0.005) {
       const shakePower = this.shakeTrauma * this.shakeTrauma;
-      shakeX = (Math.random() - 0.5) * 0.35 * shakePower;
-      shakeY = (Math.random() - 0.5) * 0.25 * shakePower;
-      shakeRoll = (Math.random() - 0.5) * 0.07 * shakePower;
-      this.shakeTrauma = Math.max(0, this.shakeTrauma - deltaTime * 3.0);
+      const t = performance.now() * 0.001;
+      shakeX = Math.sin(t * 38.0) * 0.18 * shakePower;
+      shakeY = Math.cos(t * 46.0) * 0.14 * shakePower;
+      shakeRoll = Math.sin(t * 26.0) * 0.035 * shakePower;
+      this.shakeTrauma = Math.max(0, this.shakeTrauma - deltaTime * 2.8);
     }
     this.camera.position.x += shakeX;
     this.camera.position.y += shakeY;
 
-    // 2. Camera Bank / Roll on carving (set absolute angle, never accumulate!)
-    this.targetRoll = -steerInput * 0.08; // Subtle bank into turn (max ~4.5 deg)
-    this.currentRoll = Scalar.Lerp(this.currentRoll, this.targetRoll, 0.15);
+    // 2. Camera Bank / Roll on carving (-8° max banking into turns with helmet inertia)
+    this.targetRoll = -steerInput * 0.14; // Visceral bank into turn (~8 deg)
+    this.currentRoll = Scalar.Lerp(this.currentRoll, this.targetRoll, Math.min(1.0, deltaTime * 10.0));
     this.camera.rotation.z = this.currentRoll + shakeRoll;
 
-    // 3. Dynamic FOV based on downhill speed (speed warp sensation)
+    // 3. Dynamic FOV based on downhill speed (speed warp sensation: 0.85 -> 1.07 rad)
     const targetFov = this.baseFov + (speedMph / 100) * 0.22;
-    this.camera.fov = Scalar.Lerp(this.camera.fov, targetFov, 0.1);
+    this.camera.fov = Scalar.Lerp(this.camera.fov, targetFov, Math.min(1.0, deltaTime * 8.0));
 
-    // 4. Rearview / 180° Aim Interpolation
-    // When looking downhill, Math.PI faces downhill (-Z)
-    // Add subtle yaw into turns so skier looks in the direction they are carving
-    const carvingYawOffset = -steerInput * 0.06;
-    this.targetYaw = (this.isAimingRear ? 0 : Math.PI) + carvingYawOffset;
-    this.currentYaw = Scalar.Lerp(this.currentYaw, this.targetYaw, 0.18);
+    // 4. Rearview / 180° Aim Interpolation + Mouse Aim Offset
+    const carvingYawOffset = -steerInput * 0.09;
+    this.targetYaw = (this.isAimingRear ? 0 : Math.PI) + carvingYawOffset + this.aimYawOffset;
+    this.currentYaw = Scalar.Lerp(this.currentYaw, this.targetYaw, Math.min(1.0, deltaTime * 12.0));
     this.camera.rotation.y = this.currentYaw;
 
-    // Physical downhill slope pitch + subtle eye bob
-    const baseSlopeAngle = slopePitchRad * 0.35;
-    this.camera.rotation.x = this.isAimingRear ? -0.04 : (0.06 + baseSlopeAngle);
+    // Physical downhill slope pitch + subtle helmet forward lean on high velocity + pitch aim
+    const baseSlopeAngle = slopePitchRad * 0.40;
+    const speedPitchCompression = (speedMph / 80) * 0.05;
+    this.camera.rotation.x = this.isAimingRear 
+      ? -0.04 + this.aimPitchOffset 
+      : (0.07 + baseSlopeAngle + speedPitchCompression + this.aimPitchOffset);
   }
 
   public getForwardRay(): Vector3 {

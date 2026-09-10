@@ -19,13 +19,10 @@ import {
 } from "@babylonjs/core";
 
 export const NPC_COLORS = [
-  "#ff0055", // Neon Magenta
-  "#00f0ff", // Alpine Cyan
-  "#39ff14", // Acid Green
-  "#ffff00", // Retro Yellow
-  "#ff7700", // Blaze Orange
-  "#aa00ff", // Electric Purple
-  "#0088ff"  // Royal Blue
+  "#ffcc00", // Hazard Patrol Yellow
+  "#ffd700", // Alpine Gold Yellow
+  "#e6b800", // High-Vis Amber Yellow
+  "#ffea00"  // Radiant Tactical Yellow
 ];
 
 export interface DetachedGear {
@@ -75,6 +72,10 @@ export class NPCSystem {
     for (let i = 0; i < this.totalCount; i++) {
       this.spawnNPC(i, -25 - i * 22);
     }
+  }
+
+  public updatePlayers(_skiers: any[]): void {
+    // Hook for syncing remote network skiers
   }
 
   private initParticleSystems(): void {
@@ -416,8 +417,27 @@ export class NPCSystem {
     for (const npc of this.npcs) {
       if (!npc.isKnockedOver) {
         // -------------------------------------------------------------
-        // STATE A: STANDING & SKIING DOWNHILL
         // -------------------------------------------------------------
+        // STATE A: STANDING & SKIING DOWNHILL (WITH REACTIVE PANIC AI)
+        // -------------------------------------------------------------
+        // Yeti Proximity & Threat Perception (< 18m behind skier)
+        const distToYeti = Vector3.Distance(npc.mesh.position, yetiPos);
+        const isYetiPursuing = distToYeti < 18.0 && yetiPos.z > npc.z;
+
+        if (isYetiPursuing) {
+          // Threat detected: Lookback uphill at Yeti + Panic tuck + Evasive Carve
+          npc.headMesh.rotation.y = Scalar.Lerp(npc.headMesh.rotation.y, Math.PI * 0.9, dt * 8.0);
+          npc.bodyMesh.rotation.x = Scalar.Lerp(npc.bodyMesh.rotation.x, 0.32, dt * 6.0); // Deep aerodynamic speed tuck
+          npc.speed = Math.min(62, npc.speed + 14 * dt * 2.5); // Panic acceleration (+12-16 MPH)
+
+          // Desperate evasive carving away from Yeti's attack corridor
+          const evadeDir = npc.x > yetiPos.x ? 1 : -1;
+          npc.x += evadeDir * 12 * dt;
+        } else {
+          npc.headMesh.rotation.y = Scalar.Lerp(npc.headMesh.rotation.y, 0, dt * 4.0);
+          npc.bodyMesh.rotation.x = Scalar.Lerp(npc.bodyMesh.rotation.x, 0.12, dt * 4.0);
+        }
+
         const forwardUnits = (npc.speed * 0.44704) * 2.2;
         npc.z -= forwardUnits * dt;
         npc.x += Math.sin(npc.z * 0.05) * 8 * dt;
@@ -430,14 +450,12 @@ export class NPCSystem {
         npc.mesh.position.set(npc.x, npc.y, npc.z);
 
         // Dynamic carving tilt
-        npc.mesh.rotation.z = Math.sin(npc.z * 0.05) * 0.16;
-        npc.mesh.rotation.x = 0;
+        npc.mesh.rotation.z = Math.sin(npc.z * 0.05) * 0.18 + (isYetiPursuing ? (npc.x > yetiPos.x ? 0.15 : -0.15) : 0);
 
         // Yeti Proximity Check (< 3.8m from Yeti): Yeti Swat Knockdown!
-        const distToYeti = Vector3.Distance(npc.mesh.position, yetiPos);
         if (distToYeti < 3.8) {
-          const yetiSwipeVector = npc.mesh.position.subtract(yetiPos).normalize().scale(25);
-          yetiSwipeVector.y = 15;
+          const yetiSwipeVector = npc.mesh.position.subtract(yetiPos).normalize().scale(28);
+          yetiSwipeVector.y = 16;
           this.knockOver(npc, yetiSwipeVector, "yeti");
         }
 
