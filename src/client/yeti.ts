@@ -55,8 +55,9 @@ export class YetiEntity {
   private isNetControlled: boolean = false;
   private netTargetPos: Vector3 = new Vector3(0, 0, -32);
   private sprintCooldownTimer: number = 0;
-  private isSprinting: boolean = false;
+  public isSprinting: boolean = false;
   private sprintDuration: number = 0;
+  public onSprintStateChange?: (isSprinting: boolean) => void;
 
   // Skeletal Transform Nodes for Organic Bone Kinematics
   private hipsNode: TransformNode | null = null;
@@ -227,6 +228,7 @@ export class YetiEntity {
     this.sprintCooldownTimer = 0;
     this.isSprinting = false;
     this.sprintDuration = 0;
+    if (this.onSprintStateChange) this.onSprintStateChange(false);
 
     // Spawn beast 26m ahead down the slope (-Z) facing DOWNHILL (Math.PI)
     this.rootMesh.position.set(0, 0, playerZ - 26);
@@ -265,15 +267,20 @@ export class YetiEntity {
           this.isSprinting = true;
           this.sprintDuration = 0;
           this.sprintCooldownTimer = 0;
+          if (this.onSprintStateChange) this.onSprintStateChange(true);
         }
         if (this.isSprinting) {
           this.sprintDuration += deltaTime;
           if (this.sprintDuration > 1.8) {
             this.isSprinting = false;
+            if (this.onSprintStateChange) this.onSprintStateChange(false);
           }
         }
       } else {
-        this.isSprinting = false;
+        if (this.isSprinting) {
+          this.isSprinting = false;
+          if (this.onSprintStateChange) this.onSprintStateChange(false);
+        }
       }
 
       // Forward motion integrated from dragSpeed + sprint surge

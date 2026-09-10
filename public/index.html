@@ -705,10 +705,14 @@
     <div style="text-align:center; pointer-events:auto;">
       <h1 style="font-family:'Impact', 'Arial Black', sans-serif; font-size:clamp(44px, 9vw, 92px); font-weight:900; letter-spacing:4px; color:#39ff14; text-shadow:0 0 40px #00ff66, 0 0 80px rgba(57,255,20,0.8), 4px 4px 0 #000; margin:0;">SKI-FR33</h1>
       <h2 style="font-size:clamp(14px, 2.5vw, 24px); font-weight:900; color:#ffff00; text-shadow:0 0 16px #ff7700, 2px 2px 0 #000; letter-spacing:8px; margin-top:-4px;">PHASE II • THE YETI HUNT</h2>
+      <div style="display:inline-flex; align-items:center; gap:8px; margin-top:8px; padding:4px 16px; background:rgba(0, 240, 255, 0.12); border:1.5px solid #00f0ff; border-radius:20px; box-shadow:0 0 20px rgba(0,240,255,0.45); backdrop-filter:blur(6px);">
+        <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#39ff14; box-shadow:0 0 10px #39ff14; animation:pulse-takedown-glow 0.8s infinite alternate;"></span>
+        <span style="font-size:clamp(10px, 1.8vw, 13px); font-weight:900; letter-spacing:2px; color:#00f0ff; text-transform:uppercase;">⚡ OPEN BETA v2.4 • FEEDBACK DISPATCH ACTIVE</span>
+      </div>
     </div>
 
     <!-- Bottom Sleek Control Bar -->
-    <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; background:rgba(6,12,24,0.88); backdrop-filter:blur(10px); padding:16px 26px; border:2px solid #00f0ff; border-radius:14px; box-shadow:0 0 40px rgba(0,240,255,0.4), 0 12px 30px rgba(0,0,0,0.85); pointer-events:auto; max-width:920px; width:90%;">
+    <div style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; background:rgba(6,12,24,0.88); backdrop-filter:blur(10px); padding:16px 26px; border:2px solid #00f0ff; border-radius:14px; box-shadow:0 0 40px rgba(0,240,255,0.4), 0 12px 30px rgba(0,0,0,0.85); pointer-events:auto; max-width:960px; width:90%;">
       
       <div style="display:flex; align-items:center; gap:8px;">
         <span style="font-size:12px; font-weight:900; color:#00f0ff; letter-spacing:1px; white-space:nowrap;">🎿 CALLSIGN:</span>
@@ -720,8 +724,87 @@
       <button id="btn-skip-intro" class="modal-btn modal-btn-ready" type="button" style="font-size:16px; padding:12px 28px; box-shadow:0 0 30px #00f0ff; letter-spacing:1px; cursor:pointer; width:auto;">ENTER THE MOUNTAIN ⛷️</button>
 
       <button id="btn-toggle-standings" type="button" style="background:rgba(255,0,85,0.15); border:2px solid #ff0055; color:#ff0055; font-weight:900; font-size:13px; padding:10px 16px; border-radius:8px; cursor:pointer; letter-spacing:1px; box-shadow:0 0 16px rgba(255,0,85,0.3); touch-action:manipulation;">🏆 STANDINGS</button>
+
+      <button id="btn-toggle-feedback" type="button" style="background:rgba(0,240,255,0.18); border:2px solid #00f0ff; color:#00f0ff; font-weight:900; font-size:13px; padding:10px 16px; border-radius:8px; cursor:pointer; letter-spacing:1px; box-shadow:0 0 20px rgba(0,240,255,0.4); touch-action:manipulation; display:flex; align-items:center; gap:6px;">
+        <span>🐛</span>
+        <span>BETA FEEDBACK</span>
+      </button>
     </div>
 
+  </div>
+
+  <!-- Open Beta Feedback & Issue Modal -->
+  <div id="feedback-modal" class="hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:100; max-width:540px; width:92%; background:rgba(8,14,26,0.96); border:2px solid #00f0ff; border-radius:14px; padding:22px; box-shadow:0 0 45px rgba(0,240,255,0.45); backdrop-filter:blur(8px);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid #1a2f4c; padding-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:22px;">🎿</span>
+        <div>
+          <h3 style="color:#00f0ff; font-size:17px; font-weight:900; letter-spacing:1px; text-shadow:0 0 10px #00f0ff; margin:0;">OPEN BETA DISPATCH</h3>
+          <span style="font-size:10px; color:#ffff00; font-weight:bold; letter-spacing:1px;">PLAYER ISSUES & TUNING FEEDBACK</span>
+        </div>
+      </div>
+      <button id="btn-close-feedback" style="background:none; border:none; color:#fff; font-size:22px; cursor:pointer; font-weight:900; line-height:1; touch-action:manipulation;">✕</button>
+    </div>
+
+    <!-- Dual Tab Selector -->
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button id="tab-btn-submit-feedback" class="run-tab-btn active" style="flex:1; padding:8px; font-size:11px; text-transform:uppercase;">📝 SUBMIT REPORT</button>
+      <button id="tab-btn-view-feedback" class="run-tab-btn" style="flex:1; padding:8px; font-size:11px; text-transform:uppercase;">📡 COMMUNITY BOARD</button>
+    </div>
+
+    <!-- Tab 1: Submit Form -->
+    <div id="feedback-tab-submit">
+      <form id="beta-feedback-form" onsubmit="return false;" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; gap:10px;">
+          <div style="flex:1;">
+            <label style="display:block; font-size:10px; color:#88a0c0; font-weight:900; margin-bottom:3px; letter-spacing:1px;">SKIER CALLSIGN</label>
+            <input type="text" id="feedback-callsign" class="input-field" maxlength="16" placeholder="CALLSIGN" style="text-align:left; padding:8px; font-weight:bold; font-size:12px;">
+          </div>
+          <div style="flex:1;">
+            <label style="display:block; font-size:10px; color:#88a0c0; font-weight:900; margin-bottom:3px; letter-spacing:1px;">CATEGORY</label>
+            <select id="feedback-category" class="input-field" style="text-align:left; padding:8px; font-weight:bold; font-size:12px; background:#050a14; cursor:pointer;">
+              <option value="bug">🐛 Bug / Glitch</option>
+              <option value="balance">⚖️ Balance / Physics</option>
+              <option value="idea">💡 Gameplay Idea</option>
+              <option value="audio_visual">🎨 Audio / Visual</option>
+              <option value="other">💬 General Comment</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10px; color:#88a0c0; font-weight:900; margin-bottom:3px; letter-spacing:1px;">ISSUE SUMMARY / TITLE</label>
+          <input type="text" id="feedback-title" class="input-field" maxlength="100" placeholder="e.g. Yeti hit detection delayed on tree collision" style="text-align:left; padding:8px; font-size:12px;">
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10px; color:#88a0c0; font-weight:900; margin-bottom:3px; letter-spacing:1px;">DETAILS & REPRODUCTION STEPS</label>
+          <textarea id="feedback-details" class="input-field" rows="4" maxlength="1500" placeholder="Describe what happened, what you expected, or your idea for making the game better..." style="text-align:left; padding:8px; font-size:12px; resize:vertical; min-height:80px;"></textarea>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#6b85a3;">
+          <span id="feedback-device-tag">💻 Auto-tagging hardware/browser telemetry</span>
+          <span id="feedback-char-count">0 / 1500</span>
+        </div>
+
+        <button id="btn-submit-feedback" type="button" class="modal-btn modal-btn-ready" style="padding:12px; font-size:14px; font-weight:900; letter-spacing:1px; margin-top:4px;">
+          🚀 TRANSMIT TO D1 DATABASE
+        </button>
+
+        <div id="feedback-status-msg" style="min-height:18px; font-size:11px; font-weight:bold; text-align:center; margin-top:4px;"></div>
+      </form>
+    </div>
+
+    <!-- Tab 2: Live Reports List -->
+    <div id="feedback-tab-view" class="hidden">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-size:11px; color:#88a0c0; font-weight:bold;">COMMUNITY SUBMISSIONS (D1 STORED)</span>
+        <button id="btn-refresh-feedback" type="button" style="background:rgba(0,240,255,0.1); border:1px solid #00f0ff; color:#00f0ff; border-radius:4px; font-size:10px; padding:3px 8px; cursor:pointer; font-weight:900;">🔄 REFRESH</button>
+      </div>
+      <div id="feedback-list-container" style="max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+        <div style="text-align:center; padding:24px; color:#ffff00; font-size:12px;">Querying D1 Edge Database...</div>
+      </div>
+    </div>
   </div>
 
   <!-- Standings Modal (Opened via STANDINGS button) -->
@@ -1012,6 +1095,7 @@
       <p id="death-stat" style="color:#fff; font-size:13px; margin: 10px 0; text-align:center;"></p>
       <button class="modal-btn" id="btn-respawn" type="button">RESPAWN & DROP AGAIN</button>
       <button class="modal-btn modal-btn-ready" id="btn-claim-from-death" style="margin-top:8px;" type="button">🏆 PUBLISH SCORE TO LEADERBOARD</button>
+      <button class="modal-btn" id="btn-report-from-death" style="margin-top:8px; background:rgba(0,240,255,0.15); border:1px solid #00f0ff; color:#00f0ff; font-size:11px;" type="button">🐛 REPORT GLITCH / BETA ISSUE</button>
     </div>
 
     <!-- In-Game Pause Modal -->
@@ -1038,6 +1122,7 @@
       </div>
 
       <button class="modal-btn" id="btn-resume-game" style="margin-top:10px;" type="button">RESUME HUNT 🎿</button>
+      <button class="modal-btn" id="btn-report-from-menu" style="margin-top:8px; background:rgba(0,240,255,0.15); border:1px solid #00f0ff; color:#00f0ff; font-size:11px;" type="button">🐛 REPORT BETA ISSUE</button>
     </div>
   </div>
 

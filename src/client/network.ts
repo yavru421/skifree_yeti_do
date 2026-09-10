@@ -13,6 +13,7 @@ export class NetworkSystem {
   private roomId: string;
   private seq: number = 0;
   private isConnected: boolean = false;
+  private pendingDropIn: boolean = false;
   private onStateUpdate: (packet: GameStatePacket) => void;
 
   constructor(
@@ -41,6 +42,11 @@ export class NetworkSystem {
       this.ws.onopen = () => {
         this.isConnected = true;
         console.log(`[Network] Connected to MountainDO room ${this.roomId} as ${this.callsign}`);
+        if (this.pendingDropIn) {
+          this.pendingDropIn = false;
+          this.ws?.send(JSON.stringify({ type: "drop_in" }));
+          console.log("[Network] Flushed queued drop_in packet on socket open");
+        }
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
@@ -91,7 +97,12 @@ export class NetworkSystem {
   }
 
   public sendDropIn(): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn("[Network] sendDropIn queued - waiting for socket open");
+      this.pendingDropIn = true;
+      return;
+    }
+    this.pendingDropIn = false;
     this.ws.send(JSON.stringify({ type: "drop_in" }));
   }
 

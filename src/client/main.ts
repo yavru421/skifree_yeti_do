@@ -44,6 +44,7 @@ export class SkiFreeApp {
   private isBraking: boolean = false;
   private isTakedownTriggered: boolean = false;
   private isWaitingForDropIn: boolean = false;
+  private modalMountTime: number = 0;
   private takedownTapProgress: number = 0;
   private isPlayerDead: boolean = false;
   private lastSteerDir: number = 0;
@@ -105,6 +106,9 @@ export class SkiFreeApp {
 
     // 6. Yeti Boss Entity
     this.yetiEntity = new YetiEntity(scene);
+    this.yetiEntity.onSprintStateChange = (sprinting: boolean) => {
+      this.handleBeastSprintChange(sprinting);
+    };
 
     // 6b. FPV Skis, Steam Harpoon & NPC System
     this.fpvSkis = new FPVSkis(scene, this.cameraRig.camera);
@@ -215,8 +219,12 @@ export class SkiFreeApp {
     }
 
     window.addEventListener("keydown", (e) => {
-      if ((e.code === "Space" || e.code === "Enter") && (this.isWaitingForDropIn || this.isTakedownTriggered)) {
-        this.executeDropIn();
+      if (e.code === "Space" || e.code === "Enter") {
+        if (this.isTakedownTriggered && !this.isWaitingForDropIn) return;
+        if (this.isWaitingForDropIn) {
+          if (Date.now() - this.modalMountTime < 350) return;
+          this.executeDropIn();
+        }
       }
     });
 
@@ -232,17 +240,19 @@ export class SkiFreeApp {
       });
     }
 
-    // Handle New Level Screen Drop-In button & modal click
+    // Handle New Level Screen Drop-In button & modal click with debounce
     const btnDropIn = document.getElementById("btn-drop-in");
     if (btnDropIn) {
       btnDropIn.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (Date.now() - this.modalMountTime < 350) return;
         this.executeDropIn();
       });
     }
     const levelClearModal = document.getElementById("level-clear-modal");
     if (levelClearModal) {
       levelClearModal.addEventListener("click", () => {
+        if (Date.now() - this.modalMountTime < 350) return;
         this.executeDropIn();
       });
     }
@@ -916,6 +926,7 @@ export class SkiFreeApp {
       if (backdrop) backdrop.classList.remove("hidden");
       if (levelModal) levelModal.classList.remove("hidden");
       this.isWaitingForDropIn = true;
+      this.modalMountTime = Date.now();
 
       // Slight pause countdown (3 seconds) before auto-restarting at the next level
       let pauseSeconds = 3;
@@ -1062,6 +1073,46 @@ export class SkiFreeApp {
 
     this.showLevelSplash(level);
     this.updateGranbyHud(track);
+  }
+
+  private handleBeastSprintChange(sprinting: boolean): void {
+    let badge = document.getElementById("beast-sprint-badge");
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.id = "beast-sprint-badge";
+      badge.style.position = "fixed";
+      badge.style.top = "clamp(55px, 10vh, 75px)";
+      badge.style.left = "50%";
+      badge.style.transform = "translateX(-50%)";
+      badge.style.background = "rgba(220, 20, 40, 0.9)";
+      badge.style.color = "#ffffff";
+      badge.style.fontWeight = "900";
+      badge.style.fontSize = "clamp(12px, 2.2vw, 15px)";
+      badge.style.letterSpacing = "1.5px";
+      badge.style.padding = "6px 18px";
+      badge.style.borderRadius = "20px";
+      badge.style.border = "2px solid #ffff00";
+      badge.style.boxShadow = "0 0 20px rgba(255, 0, 50, 0.9), 0 0 10px #ffff00";
+      badge.style.zIndex = "60";
+      badge.style.pointerEvents = "none";
+      badge.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+      document.body.appendChild(badge);
+    }
+
+    if (sprinting) {
+      const sprintSpeed = Math.min(22, 10 + (this.currentLevel - 1) * 3.5);
+      badge.innerHTML = `⚡ BEAST SPRINT ENGAGED! (+${sprintSpeed} MPH)`;
+      badge.style.opacity = "1";
+      badge.style.display = "block";
+      badge.style.transform = "translateX(-50%) scale(1.05)";
+      this.cameraRig.addImpactShake(0.6);
+      this.audioSystem.playYetiRoar();
+    } else {
+      badge.style.opacity = "0";
+      setTimeout(() => {
+        if (badge && !this.yetiEntity.isSprinting) badge.style.display = "none";
+      }, 200);
+    }
   }
 
   private updateGranbyHud(track: GranbyTrackConfig): void {
