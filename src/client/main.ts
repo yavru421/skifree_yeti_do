@@ -1352,4 +1352,215 @@ if (typeof window !== "undefined") {
       standingsModal.classList.add("hidden");
     });
   }
+
+  setupBetaFeedback();
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function setupBetaFeedback() {
+  const feedbackBtn = document.getElementById("btn-toggle-feedback");
+  const feedbackModal = document.getElementById("feedback-modal");
+  const closeFeedbackBtn = document.getElementById("btn-close-feedback");
+  const tabSubmitBtn = document.getElementById("tab-btn-submit-feedback");
+  const tabViewBtn = document.getElementById("tab-btn-view-feedback");
+  const tabSubmitDiv = document.getElementById("feedback-tab-submit");
+  const tabViewDiv = document.getElementById("feedback-tab-view");
+  const submitBtn = document.getElementById("btn-submit-feedback");
+  const refreshBtn = document.getElementById("btn-refresh-feedback");
+  const feedbackList = document.getElementById("feedback-list-container");
+  const statusMsg = document.getElementById("feedback-status-msg");
+  const callsignInput = document.getElementById("feedback-callsign") as HTMLInputElement | null;
+  const categorySelect = document.getElementById("feedback-category") as HTMLSelectElement | null;
+  const titleInput = document.getElementById("feedback-title") as HTMLInputElement | null;
+  const detailsInput = document.getElementById("feedback-details") as HTMLTextAreaElement | null;
+  const charCount = document.getElementById("feedback-char-count");
+  const deviceTag = document.getElementById("feedback-device-tag");
+  const reportDeathBtn = document.getElementById("btn-report-from-death");
+  const reportMenuBtn = document.getElementById("btn-report-from-menu");
+
+  const getActiveCallsign = (): string => {
+    const lobbyCallsign = (document.getElementById("callsign-input") as HTMLInputElement | null)?.value;
+    const startCallsign = (document.getElementById("player-callsign") as HTMLInputElement | null)?.value;
+    return (lobbyCallsign || startCallsign || localStorage.getItem("skifree_callsign") || "SKIER_BETA").trim();
+  };
+
+  const getDeviceInfo = (): string => {
+    const ua = navigator.userAgent;
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    const screenRes = `${window.innerWidth}x${window.innerHeight}`;
+    const renderer = !!(window as any).WebGLRenderingContext ? "WebGL" : "Canvas";
+    return `${isMobile ? "Mobile" : "Desktop"} (${screenRes}, ${renderer})`;
+  };
+
+  if (deviceTag) {
+    deviceTag.textContent = `💻 Telemetry: ${getDeviceInfo()}`;
+  }
+
+  if (detailsInput && charCount) {
+    detailsInput.addEventListener("input", () => {
+      charCount.textContent = `${detailsInput.value.length} / 1500`;
+    });
+  }
+
+  const openFeedback = () => {
+    if (!feedbackModal) return;
+    feedbackModal.classList.remove("hidden");
+    if (callsignInput) {
+      callsignInput.value = getActiveCallsign();
+    }
+    if (statusMsg) {
+      statusMsg.textContent = "";
+    }
+  };
+
+  const closeFeedback = () => {
+    feedbackModal?.classList.add("hidden");
+  };
+
+  const switchTab = (activeTab: "submit" | "view") => {
+    if (activeTab === "submit") {
+      tabSubmitBtn?.classList.add("active");
+      tabViewBtn?.classList.remove("active");
+      tabSubmitDiv?.classList.remove("hidden");
+      tabViewDiv?.classList.add("hidden");
+    } else {
+      tabViewBtn?.classList.add("active");
+      tabSubmitBtn?.classList.remove("active");
+      tabViewDiv?.classList.remove("hidden");
+      tabSubmitDiv?.classList.add("hidden");
+      fetchFeedbackList();
+    }
+  };
+
+  tabSubmitBtn?.addEventListener("click", () => switchTab("submit"));
+  tabViewBtn?.addEventListener("click", () => switchTab("view"));
+  feedbackBtn?.addEventListener("click", openFeedback);
+  closeFeedbackBtn?.addEventListener("click", closeFeedback);
+  reportDeathBtn?.addEventListener("click", openFeedback);
+  reportMenuBtn?.addEventListener("click", openFeedback);
+
+  const fetchFeedbackList = async () => {
+    if (!feedbackList) return;
+    feedbackList.innerHTML = `<div style="text-align:center; padding:16px; color:#ffff00; font-size:12px;">Intercepting D1 Edge Feedback...</div>`;
+    try {
+      const res = await fetch("/api/feedback");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const items: any[] = await res.json();
+      if (!items || items.length === 0) {
+        feedbackList.innerHTML = `<div style="text-align:center; padding:20px; color:#88a0c0; font-size:12px;">No issues filed yet! Be the first to submit.</div>`;
+        return;
+      }
+      feedbackList.innerHTML = "";
+      items.forEach((item: any) => {
+        const row = document.createElement("div");
+        row.style.cssText = "background:rgba(12,22,38,0.85); border:1px solid #1a3a60; border-radius:6px; padding:10px; font-size:11px;";
+
+        const categoryColors: Record<string, string> = {
+          bug: "#ff0055",
+          balance: "#00f0ff",
+          idea: "#39ff14",
+          audio_visual: "#ffaa00",
+          other: "#88a0c0"
+        };
+        const catColor = categoryColors[item.category] || "#00f0ff";
+        const dateStr = item.timestamp ? new Date(item.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Recent";
+        const statusColor = item.status === "resolved" ? "#39ff14" : (item.status === "investigating" ? "#ffff00" : "#ff0055");
+
+        row.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="background:${catColor}22; color:${catColor}; border:1px solid ${catColor}; border-radius:3px; padding:1px 5px; font-size:9px; font-weight:900; text-transform:uppercase;">${item.category || "BUG"}</span>
+              <span style="color:#00f0ff; font-weight:bold;">🎿 ${escapeHtml(item.callsign || "SKIER")}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="color:${statusColor}; font-size:9px; font-weight:bold; text-transform:uppercase; border:1px solid ${statusColor}; border-radius:3px; padding:1px 4px;">${item.status || "OPEN"}</span>
+              <span style="color:#88a0c0; font-size:9px;">${dateStr}</span>
+            </div>
+          </div>
+          <div style="color:#fff; font-weight:bold; font-size:12px; margin-bottom:4px;">${escapeHtml(item.title || "Untitled")}</div>
+          <div style="color:#a8bed8; font-size:11px; line-height:1.4; white-space:pre-wrap; max-height:80px; overflow-y:auto;">${escapeHtml(item.details || "")}</div>
+          ${item.device_info ? `<div style="color:#506a88; font-size:9px; margin-top:4px;">💻 ${escapeHtml(item.device_info)}</div>` : ""}
+        `;
+        feedbackList.appendChild(row);
+      });
+    } catch (err: any) {
+      feedbackList.innerHTML = `<div style="text-align:center; padding:16px; color:#ff0055; font-size:11px;">Error loading reports: ${err.message}</div>`;
+    }
+  };
+
+  refreshBtn?.addEventListener("click", fetchFeedbackList);
+
+  submitBtn?.addEventListener("click", async () => {
+    const callsign = (callsignInput?.value || getActiveCallsign()).trim() || "SKIER_BETA";
+    const category = categorySelect?.value || "bug";
+    const title = (titleInput?.value || "").trim();
+    const details = (detailsInput?.value || "").trim();
+
+    if (!details) {
+      if (statusMsg) {
+        statusMsg.style.color = "#ff0055";
+        statusMsg.textContent = "⚠️ Please provide details or description of the issue.";
+      }
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.setAttribute("disabled", "true");
+      submitBtn.textContent = "⚡ TRANSMITTING TO D1...";
+    }
+    if (statusMsg) {
+      statusMsg.style.color = "#00f0ff";
+      statusMsg.textContent = "Dispatching report to edge database...";
+    }
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          callsign,
+          category,
+          title: title || "Player Feedback",
+          details,
+          device_info: getDeviceInfo()
+        })
+      });
+
+      if (!res.ok) {
+        const errJson: any = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
+      }
+
+      if (statusMsg) {
+        statusMsg.style.color = "#39ff14";
+        statusMsg.textContent = "✅ DISPATCHED! Your report was saved to D1 database.";
+      }
+
+      if (titleInput) titleInput.value = "";
+      if (detailsInput) detailsInput.value = "";
+      if (charCount) charCount.textContent = "0 / 1500";
+
+      setTimeout(() => {
+        switchTab("view");
+      }, 1200);
+    } catch (err: any) {
+      if (statusMsg) {
+        statusMsg.style.color = "#ff0055";
+        statusMsg.textContent = `❌ Submission failed: ${err.message}`;
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.removeAttribute("disabled");
+        submitBtn.textContent = "🚀 TRANSMIT TO D1 DATABASE";
+      }
+    }
+  });
 }
