@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'VT323', monospace;
+  color: #00ff66;
+}
+
+#renderCanvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+/* CRT Scanline & Curved Glass Effect */
+.crt::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 10;
+  background-size: 100% 4px, 6px 100%;
+  pointer-events: none;
+}
+
+#hud {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  z-index: 5;
+}
+
+.hud-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.boss-container {
+  width: 350px;
+}
+
+.boss-title {
+  font-size: 24px;
+  margin-bottom: 4px;
+  text-shadow: 0 0 8px #ff0055;
+  color: #ff0055;
+}
+
+.boss-hp-bar {
+  width: 100%;
+  height: 16px;
+  border: 2px solid #ff0055;
+  background: rgba(0,0,0,0.6);
+}
+
+#boss-hp-fill {
+  height: 100%;
+  background: #ff0055;
+  box-shadow: 0 0 12px #ff0055;
+  transition: width 0.1s linear;
+}
+
+.telemetry {
+  font-size: 28px;
+  text-align: right;
+  text-shadow: 0 0 8px #00ff66;
+}
+
+.crosshair {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px; height: 24px;
+  border: 2px solid rgba(0, 255, 102, 0.7);
+  border-radius: 50%;
+}
+.crosshair::after {
+  content: '';
+  position: absolute;
+  top: 10px; left: 10px;
+  width: 4px; height: 4px;
+  background: #00ff66;
+  border-radius: 50%;
+}
+
+.hud-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 26px;
+}
+
+.limb {
+  padding: 2px 8px;
+  margin-right: 6px;
+  border: 1px solid #00ff66;
+}
+.limb.active { background: rgba(0, 255, 102, 0.2); }
+.limb.lost { border-color: #ff0055; color: #ff0055; text-decoration: line-through; }
+
+.ammo-counter {
+  text-align: right;
+  font-size: 32px;
+}
+
+#reload-prompt {
+  color: #ff0055;
+  font-size: 20px;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Modal Styling */
+.modal-backdrop {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85);
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-box {
+  border: 3px solid #00ff66;
+  padding: 30px;
+  background: #050d08;
+  box-shadow: 0 0 30px rgba(0, 255, 102, 0.3);
+  text-align: center;
+  max-width: 500px;
+  width: 90%;
+}
+
+.modal-box h1 { font-size: 36px; text-shadow: 0 0 10px #00ff66; }
+.modal-box h2 { font-size: 18px; color: #00aa44; margin-bottom: 20px; }
+
+.input-group { margin: 20px 0; font-size: 22px; }
+.input-group input {
+  background: #000;
+  border: 1px solid #00ff66;
+  color: #00ff66;
+  font-family: 'VT323', monospace;
+  font-size: 24px;
+  padding: 4px 8px;
+  text-align: center;
+  margin-left: 10px;
+}
+
+.arcade-btn {
+  background: #00ff66;
+  color: #000;
+  font-family: 'VT323', monospace;
+  font-size: 28px;
+  padding: 8px 24px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  box-shadow: 0 0 15px #00ff66;
+}
+.arcade-btn:hover { background: #fff; box-shadow: 0 0 25px #fff; }
+
+.leaderboard-section { margin-top: 25px; text-align: left; }
+.leaderboard-section h3 { font-size: 20px; border-bottom: 1px dashed #00ff66; }
+.leaderboard-section ul { list-style: none; margin-top: 10px; max-height: 120px; overflow-y: auto; }

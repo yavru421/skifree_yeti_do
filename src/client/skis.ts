@@ -42,7 +42,8 @@ export class FPVSkis {
     // Root node parented to camera for 1:1 FPV locking
     this.rootNode = new Mesh("fpvSkisRoot", this.scene);
     this.rootNode.parent = this.camera;
-    this.rootNode.position.set(0, -0.62, 1.15); // Eye-level forward alignment
+    this.rootNode.position.set(0, -0.82, 1.1); // Positioned naturally along bottom viewport edge
+    this.rootNode.rotation.x = 0.08;
 
     // --- MATERIALS ---
     // Carbon Fiber Ski Body with Gloss
@@ -122,15 +123,15 @@ export class FPVSkis {
       edgeR.position.x = 0.076;
       edgeR.parent = skiBase;
 
-      // Up-curved ski tip with shovel flare
+      // Up-curved ski tip with sleek racing rocker
       const tip = MeshBuilder.CreateBox(
         `${name}Tip`,
-        { width: 0.18, height: 0.03, depth: 0.38 },
+        { width: 0.14, height: 0.022, depth: 0.28 },
         this.scene
       );
       tip.material = tipMat;
-      tip.position.set(0, 0.11, 1.15);
-      tip.rotation.x = -0.48; // Upward rocker bend
+      tip.position.set(0, 0.07, 1.08);
+      tip.rotation.x = -0.42; // Upward rocker bend
       tip.parent = skiBase;
 
       // Bindings: Toe piece
@@ -219,6 +220,9 @@ export class FPVSkis {
 
     this.leftPoleRoot = buildPole("leftPole", -0.58);
     this.rightPoleRoot = buildPole("rightPole", 0.58);
+    // Hide floating detached ski poles in FPV view
+    this.leftPoleRoot.setEnabled(false);
+    this.rightPoleRoot.setEnabled(false);
 
     // 3. Snow Powder Spray Particles
     this.initPowderParticles();
@@ -228,30 +232,32 @@ export class FPVSkis {
     // Left spray
     this.powderParticlesLeft = new ParticleSystem("powderL", 180, this.scene);
     this.powderParticlesLeft.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
+    this.powderParticlesLeft.blendMode = ParticleSystem.BLENDMODE_ADD;
     this.powderParticlesLeft.emitter = this.leftSki;
-    this.powderParticlesLeft.minSize = 0.06;
-    this.powderParticlesLeft.maxSize = 0.24;
-    this.powderParticlesLeft.color1 = new Color3(1, 1, 1).toColor4(0.85);
-    this.powderParticlesLeft.color2 = new Color3(0.82, 0.92, 1).toColor4(0.35);
+    this.powderParticlesLeft.minSize = 0.04;
+    this.powderParticlesLeft.maxSize = 0.16;
+    this.powderParticlesLeft.color1 = new Color3(1, 1, 1).toColor4(0.7);
+    this.powderParticlesLeft.color2 = new Color3(0.82, 0.92, 1).toColor4(0.2);
     this.powderParticlesLeft.direction1 = new Vector3(-0.9, 0.6, -1.6);
     this.powderParticlesLeft.direction2 = new Vector3(-0.2, 0.9, -0.6);
     this.powderParticlesLeft.minLifeTime = 0.2;
-    this.powderParticlesLeft.maxLifeTime = 0.5;
+    this.powderParticlesLeft.maxLifeTime = 0.45;
     this.powderParticlesLeft.emitRate = 0;
     this.powderParticlesLeft.start();
 
     // Right spray
     this.powderParticlesRight = new ParticleSystem("powderR", 180, this.scene);
     this.powderParticlesRight.particleTexture = new Texture("/assets/snow_texture.jpg", this.scene);
+    this.powderParticlesRight.blendMode = ParticleSystem.BLENDMODE_ADD;
     this.powderParticlesRight.emitter = this.rightSki;
-    this.powderParticlesRight.minSize = 0.06;
-    this.powderParticlesRight.maxSize = 0.24;
-    this.powderParticlesRight.color1 = new Color3(1, 1, 1).toColor4(0.85);
-    this.powderParticlesRight.color2 = new Color3(0.82, 0.92, 1).toColor4(0.35);
+    this.powderParticlesRight.minSize = 0.04;
+    this.powderParticlesRight.maxSize = 0.16;
+    this.powderParticlesRight.color1 = new Color3(1, 1, 1).toColor4(0.7);
+    this.powderParticlesRight.color2 = new Color3(0.82, 0.92, 1).toColor4(0.2);
     this.powderParticlesRight.direction1 = new Vector3(0.2, 0.9, -0.6);
     this.powderParticlesRight.direction2 = new Vector3(0.9, 0.6, -1.6);
     this.powderParticlesRight.minLifeTime = 0.2;
-    this.powderParticlesRight.maxLifeTime = 0.5;
+    this.powderParticlesRight.maxLifeTime = 0.45;
     this.powderParticlesRight.emitRate = 0;
     this.powderParticlesRight.start();
   }

@@ -2,16 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "skifree-yeti-do",
   "main": "src/index.ts",
-  "compatibility_date": "2024-08-01",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
-  "routes": [
-    {
-      "pattern": "yeti.dondlingergc.com",
-      "custom_domain": true
-    }
-  ],
+  "compatibility_date": "2024-03-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -20,33 +16,17 @@
       }
     ]
   },
-  "migrations": [
+  "d1_databases": [
     {
-      "tag": "v1",
-      "new_sqlite_classes": [
-        "MountainDO"
-      ]
-    },
-    {
-      "tag": "v2",
-      "new_sqlite_classes": [
-        "GameRoom"
-      ]
-    },
-    {
-      "tag": "v3",
-      "deleted_classes": [
-        "GameRoom"
-      ]
+      "binding": "DB",
+      "database_name": "skifree-global-db",
+      "database_id": "a8e3b623-9e96-49e8-aaa8-dbe65ab7054f"
     }
   ],
-  "assets": {
-    "directory": "public",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "html_handling": "auto-trailing-slash"
-  },
-  "observability": {
-    "enabled": true
-  }
+  "routes": [
+    {
+      "pattern": "yeti.dondlingergc.com",
+      "custom_domain": true
+    }
+  ]
 }

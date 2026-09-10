@@ -13,7 +13,6 @@ import { CameraRig } from "./camera";
 import { YetiEntity } from "./yeti";
 import { CombatSystem } from "./combat";
 import { AudioSystem } from "./audio";
-import { HUDManager } from "./hud";
 import { NetworkSystem } from "./network";
 import { FPVSkis } from "./skis";
 import { SteamHarpoon } from "./harpoon";
@@ -29,7 +28,6 @@ export class SkiFreeApp {
   private yetiEntity!: YetiEntity;
   private combatSystem!: CombatSystem;
   private audioSystem!: AudioSystem;
-  private hudManager!: HUDManager;
   private networkSystem!: NetworkSystem;
   private fpvSkis!: FPVSkis;
   private steamHarpoon!: SteamHarpoon;
@@ -51,6 +49,7 @@ export class SkiFreeApp {
   private limbStatus: LimbStatus = LimbStatus.FULL;
   private callsign: string = "Skier_" + Math.floor(1000 + Math.random() * 9000);
   private roomId: string = "alpine-lodge-1";
+  private levelStartTime: number = Date.now();
 
   public static async start(): Promise<SkiFreeApp> {
     const app = new SkiFreeApp();
@@ -112,24 +111,33 @@ export class SkiFreeApp {
         const prompt = document.getElementById("tow-action-prompt");
         if (gauge) gauge.classList.remove("hidden");
         if (prompt) prompt.classList.remove("hidden");
+
+        // Apply Harpoon Damage Directly to Yeti!
+        const dmg = packet.damage || 400;
+        const isFelled = this.yetiEntity.takeDamage(dmg);
+        this.totalScore += packet.isCritical ? 1500 : 500;
+        this.cameraRig.addImpactShake(packet.isCritical ? 0.7 : 0.3);
+
+        const hpPct = Math.max(0, (this.yetiEntity.hp / this.yetiEntity.maxHp) * 100);
+        const bossHpFill = document.getElementById("boss-hp-fill");
+        if (bossHpFill) bossHpFill.style.width = `${hpPct}%`;
+
+        if ((isFelled || this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) && !this.isTakedownTriggered) {
+          this.triggerYetiTakedown();
+        }
+
         this.networkSystem.sendHitscan(packet);
       },
       this.npcSystem
     );
 
-    // 9. HUD Manager
-    this.hudManager = new HUDManager();
-
-    // 10. Network System (20Hz WebSocket to MountainDO)
-    this.networkSystem = new NetworkSystem(
-      this.callsign,
-      this.roomId,
-      (packet: GameStatePacket) => this.handleNetworkState(packet)
-    );
     this.networkSystem.connect();
 
     // 11. Skier Keyboard Controls
     this.setupSkierControls();
+
+    // De-Clutter UI: Strip away multi-button HUD clutter
+    this.updateGranbyHud(this.terrainSystem.currentTrack);
 
     // 12. Setup Intro Overlay & Interaction Dismissals
     this.setupIntroOverlay();
@@ -217,7 +225,10 @@ export class SkiFreeApp {
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       keys[e.key.toLowerCase()] = true;
       if (this.isTakedownTriggered && (e.code === "Space" || e.code === "Enter")) {
-        this.startNextLevel();
+        this.executeDropIn();
+      }
+      if (["1", "2", "3", "4"].includes(e.key) && (e.target as HTMLElement)?.tagName !== "INPUT") {
+        this.switchTrack(Number(e.key));
       }
     });
 
@@ -272,9 +283,32 @@ export class SkiFreeApp {
     const halfWidth = this.terrainSystem.currentTrack.trailWidth / 2;
     this.playerPos.x = Scalar.Clamp(this.playerPos.x, -halfWidth, halfWidth); // Bound within slope
 
+    // 3D Mogul Mound Vertical Bump & Ski Suspension
+    const terrainH = this.terrainSystem.getTerrainHeightAt(this.playerPos.x, this.playerPos.z);
+    const mogulH = this.terrainSystem.getMogulHeightAt(this.playerPos.x, this.playerPos.z);
+    this.playerPos.y = Scalar.Lerp(this.playerPos.y, terrainH + mogulH, deltaTime * 14.0);
+    if (mogulH > 0.35) {
+      this.cameraRig.addImpactShake(0.06 * (this.speedMph / 35));
+      this.speedMph = Math.max(16, this.speedMph - deltaTime * 5.0); // Mogul carving resistance
+    }
+
     // Sound effect on carving
     if (Math.abs(this.steerInput) > 0.1) {
       this.audioSystem.playSkiCarve(this.speedMph / this.maxSpeedMph);
+    }
+
+    // Live Granby Ranch Elevation Tracking
+    const currentElev = Math.round(this.terrainSystem.currentTrack.baseElevationFt - (Math.abs(this.playerPos.z) * 0.16));
+    const statsEl = document.getElementById("hud-granby-stats");
+    if (statsEl) {
+      statsEl.textContent = `${this.terrainSystem.currentTrack.mountainArea.toUpperCase()} • ELEV ${currentElev.toLocaleString()}' • ${this.terrainSystem.currentTrack.slopeGradeDeg}° PITCH`;
+    }
+
+    // Check if Yeti is dead and skier has physically zoomed past the felled corpse
+    if (this.yetiEntity.state === YetiAIState.DEAD && !this.isTakedownTriggered) {
+      if (this.playerPos.z < this.yetiEntity.rootMesh.position.z - 4) {
+        this.triggerYetiTakedown();
+      }
     }
 
     // Slalom Gates Crossing Check
@@ -339,8 +373,8 @@ export class SkiFreeApp {
 
     // 3. Update Subsystems
     this.terrainSystem.update(this.playerPos.z, deltaTime);
-    this.cameraRig.update(this.playerPos, this.steerInput, this.speedMph, deltaTime);
-    this.yetiEntity.update(this.playerPos, deltaTime);
+    this.cameraRig.update(this.playerPos, this.steerInput, this.speedMph, deltaTime, this.terrainSystem.getSlopePitchRad());
+    this.yetiEntity.update(this.playerPos, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
     if (this.fpvSkis) {
       this.fpvSkis.update(this.steerInput, this.isTucking, this.isBraking, this.speedMph, this.cameraRig.isAimingRear, deltaTime);
     }
@@ -348,7 +382,7 @@ export class SkiFreeApp {
       this.steamHarpoon.update(this.yetiEntity.rootMesh.position, this.cameraRig.isAimingRear, deltaTime);
     }
     if (this.npcSystem) {
-      this.npcSystem.update(this.playerPos.z, this.yetiEntity.rootMesh.position, deltaTime);
+      this.npcSystem.update(this.playerPos.z, this.yetiEntity.rootMesh.position, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
     }
 
     // 3b. Harpoon Drag & Braking Tug-of-War (Hold 'S' to drag down Yeti)
@@ -372,7 +406,7 @@ export class SkiFreeApp {
         if (currentSteerDir !== 0 && currentSteerDir !== this.lastSteerDir && Math.abs(this.steerInput) > 0.3) {
           this.lastSteerDir = currentSteerDir;
           const sawDmg = 450 + this.currentLevel * 90;
-          this.yetiEntity.hp = Math.max(0, this.yetiEntity.hp - sawDmg);
+          const isFelled = this.yetiEntity.takeDamage(sawDmg);
           this.totalScore += 350;
           this.audioSystem.playSkiCarve(1.0);
           this.cameraRig.addImpactShake(0.09);
@@ -380,6 +414,10 @@ export class SkiFreeApp {
           if (towPrompt) {
             towPrompt.classList.remove("hidden");
             towPrompt.innerHTML = `⚡ <b>EDGE SLICE!</b> OPPOSITE CARVE! <span style="color:#ff0055;">-${sawDmg} HP!</span>`;
+          }
+
+          if ((isFelled || this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) && !this.isTakedownTriggered) {
+            this.triggerYetiTakedown();
           }
         }
 
@@ -405,7 +443,7 @@ export class SkiFreeApp {
         }
 
         // Check if Yeti is downed!
-        if (this.yetiEntity.state === YetiAIState.DEAD && !this.isTakedownTriggered) {
+        if ((this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) && !this.isTakedownTriggered) {
           this.triggerYetiTakedown();
         }
       } else {
@@ -418,17 +456,6 @@ export class SkiFreeApp {
         }
       }
     }
-
-    // 4. Update HUD
-    this.hudManager.update(
-      this.speedMph,
-      this.yetiEntity.wave,
-      this.yetiEntity.hp,
-      this.yetiEntity.maxHp,
-      this.combatSystem.currentAmmo,
-      this.combatSystem.isReloading,
-      this.limbStatus
-    );
 
     // 5. Send 20Hz Input Packet to Cloudflare MountainDO
     this.networkSystem.sendInput(
@@ -443,6 +470,10 @@ export class SkiFreeApp {
   private triggerYetiTakedown(): void {
     this.isTakedownTriggered = true;
     console.log(`[SkiFree] LEVEL ${this.currentLevel} YETI FELLED! HUNT COMPLETE!`);
+    
+    if (this.hudSystem && this.hudSystem.addKillfeedMessage) {
+      this.hudSystem.addKillfeedMessage(`🎯 SKIER_PRO <span style="color:#ff0055;">+</span> ALPINE YETI (CRITICAL IMPALE)`);
+    }
 
     // Detach harpoon towline immediately from the felled beast
     if (this.steamHarpoon) {
@@ -453,9 +484,14 @@ export class SkiFreeApp {
     this.cameraRig.addImpactShake(2.5);
     this.audioSystem.playRifleShot();
 
-    // Calculate score
+    // Calculate score & time
     const levelBonus = 10000 * this.currentLevel;
     this.totalScore += levelBonus;
+    const takedownTimeMs = Date.now() - this.levelStartTime;
+    const seconds = Math.floor((takedownTimeMs / 1000) % 60).toString().padStart(2, "0");
+    const minutes = Math.floor((takedownTimeMs / 1000) / 60).toString().padStart(2, "0");
+    const ms = Math.floor((takedownTimeMs % 1000) / 100).toString();
+    const formattedTime = `${minutes}:${seconds}.${ms}`;
 
     // Clear auto-timeout so player is in full control of next level drop-in
     if (this.nextLevelTimeout) {
@@ -474,7 +510,7 @@ export class SkiFreeApp {
       banner.style.opacity = "1";
       banner.innerHTML = `
         <div style="font-size: clamp(22px, 4.5vw, 38px); font-weight: 900; color: #39ff14; text-shadow: 0 0 20px #39ff14; letter-spacing: 2px;">
-          RUN ${this.currentLevel} COMPLETE!
+          RUN ${this.currentLevel} COMPLETE IN ${formattedTime}!
         </div>
         <div style="font-size: clamp(13px, 2.2vw, 18px); font-weight: 800; color: #ffff00; margin-top: 6px; text-shadow: 0 0 10px #ff0055;">
           BEAST FELLED • +${levelBonus.toLocaleString()} PTS
@@ -526,6 +562,10 @@ export class SkiFreeApp {
     if (!this.isWaitingForDropIn) return;
     this.isWaitingForDropIn = false;
 
+    if (this.networkSystem) {
+      this.networkSystem.sendDropIn();
+    }
+
     const backdrop = document.getElementById("modal-backdrop");
     const levelModal = document.getElementById("level-clear-modal");
     if (backdrop) backdrop.classList.add("hidden");
@@ -550,6 +590,7 @@ export class SkiFreeApp {
 
     this.currentLevel++;
     this.isTakedownTriggered = false;
+    this.levelStartTime = Date.now();
 
     // Reset cinematic bars & banner
     const bars = document.getElementById("cinematic-bars");
@@ -581,7 +622,7 @@ export class SkiFreeApp {
 
     // Progressive level naming & Granby Ranch real run modeling
     const track = getGranbyTrack(this.currentLevel);
-    this.terrainSystem.applyTrack(track);
+    this.terrainSystem.applyTrack(track, this.playerPos.z);
 
     // Dynamic Atmosphere & Weather Transitions Per Run
     const scene = this.engineManager.scene;
@@ -601,10 +642,54 @@ export class SkiFreeApp {
     this.audioSystem.playRifleShot();
     this.cameraRig.addImpactShake(1.4);
 
-    // Show Level Announcement HUD Banner
+    // Show Level Announcement HUD Banner & Update Granby Info
     this.showLevelSplash(this.currentLevel);
+    this.updateGranbyHud(track);
 
     console.log(`[SkiFree] ADVANCING TO LEVEL ${this.currentLevel} (GRANBY: ${track.runName})! Grade: ${track.slopeGradeDeg}°, Yeti HP: ${this.yetiEntity.maxHp}, Speed: ${this.yetiEntity.dragSpeed} MPH`);
+  }
+
+  public switchTrack(level: number): void {
+    if (level < 1 || level > 4) return;
+    this.currentLevel = level;
+    this.isTakedownTriggered = false;
+
+    const track = getGranbyTrack(level);
+    this.terrainSystem.applyTrack(track, this.playerPos.z);
+    this.yetiEntity.startLevel(level, this.playerPos.z);
+
+    const scene = this.engineManager.scene;
+    scene.fogMode = 2;
+    scene.fogDensity = track.fogDensity;
+    scene.fogColor = track.fogColor;
+    scene.clearColor = new Color4(track.clearColor.r, track.clearColor.g, track.clearColor.b, 1.0);
+
+    this.maxSpeedMph = Math.round(75 * track.baseSpeedMultiplier);
+    this.speedMph = Math.max(34 * track.baseSpeedMultiplier, this.speedMph);
+
+    this.audioSystem.playDropIn();
+    this.cameraRig.addImpactShake(1.2);
+
+    this.showLevelSplash(level);
+    this.updateGranbyHud(track);
+  }
+
+  private updateGranbyHud(track: GranbyTrackConfig): void {
+    const titleEl = document.getElementById("hud-granby-title");
+    const badgeEl = document.getElementById("hud-granby-badge");
+    const statsEl = document.getElementById("hud-granby-stats");
+
+    if (titleEl) titleEl.textContent = `⛷️ GRANBY: ${track.runName}`;
+    if (badgeEl) {
+      badgeEl.textContent = track.difficultyBadge;
+      if (track.level === 1) badgeEl.style.color = "#39ff14";
+      else if (track.level === 2) badgeEl.style.color = "#00f0ff";
+      else if (track.level === 3) badgeEl.style.color = "#ffff00";
+      else badgeEl.style.color = "#ff0055";
+    }
+    if (statsEl) {
+      statsEl.textContent = `${track.mountainArea.toUpperCase()} • ELEV ${track.baseElevationFt.toLocaleString()}' • ${track.slopeGradeDeg}° PITCH`;
+    }
   }
 
   private showLevelSplash(level: number): void {
@@ -614,16 +699,16 @@ export class SkiFreeApp {
     if (prompt) {
       prompt.classList.remove("hidden");
       prompt.innerHTML = `
-        <div style="font-size: clamp(14px, 2.5vw, 20px); font-weight: 900; color: #00f0ff; letter-spacing: 1px;">
-          ⛷️ GRANBY RANCH: ${track.runName} (${track.difficulty})
+        <div style="font-size: clamp(15px, 3vw, 22px); font-weight: 900; color: #00f0ff; letter-spacing: 1px;">
+          ⛷️ GRANBY RANCH: ${track.runName} (${track.difficultyBadge})
         </div>
-        <div style="color: #ffff00; font-size: clamp(11px, 1.8vw, 14px); font-weight: 700; margin: 2px 0;">
-          ${track.mountainArea.toUpperCase()} • ELEV ${track.baseElevationFt.toLocaleString()}' • ${track.slopeGradeDeg}° GRADE PITCH
+        <div style="color: #ffff00; font-size: clamp(11px, 2vw, 14px); font-weight: 700; margin: 3px 0;">
+          ${track.mountainArea.toUpperCase()} • ELEV ${track.baseElevationFt.toLocaleString()}' • ${track.slopeGradeDeg}° PITCH
         </div>
-        <div style="color: #ffffff; font-size: clamp(10px, 1.5vw, 13px); opacity: 0.92;">
+        <div style="color: #ffffff; font-size: clamp(10px, 1.6vw, 12px); opacity: 0.95; line-height: 1.4;">
           ${track.description}
         </div>
-        <div style="color: #ff0055; font-size: clamp(10px, 1.5vw, 13px); font-weight: bold; margin-top: 2px;">
+        <div style="color: #ff0055; font-size: clamp(10px, 1.6vw, 12px); font-weight: bold; margin-top: 3px;">
           YETI THREAT: ${track.yetiBehaviorDesc}
         </div>
       `;
@@ -636,13 +721,64 @@ export class SkiFreeApp {
   }
 }
 
-// Auto-boot on page load with readyState check to prevent deferred module race condition
+// Deferred Engine Boot: Gated behind Lobby UI to prevent 350MB WebGPU/Havok startup penalty
 if (typeof window !== "undefined") {
-  if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", () => {
+  async function fetchLeaderboard() {
+    try {
+      // In dev this might fail due to CORS, but in prod it's same-origin on yeti.dondlingergc.com
+      const res = await fetch("/status");
+      if (!res.ok) throw new Error("Status API error");
+      const data = await res.json();
+      const tbody = document.getElementById("leaderboard-body");
+      if (tbody && data.telemetry && data.telemetry.length > 0) {
+        tbody.innerHTML = "";
+        data.telemetry.forEach((t: any) => {
+          const tr = document.createElement("tr");
+          tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+          tr.innerHTML = `
+            <td style="padding:6px; color:#00f0ff;">${t.callsign || 'UNKNOWN'}</td>
+            <td style="padding:6px; text-align:right; color:#fff;">${t.time_ms ? (t.time_ms / 1000).toFixed(1) + 's' : '-'}</td>
+            <td style="padding:6px; text-align:right; color:#ff0055;">${t.score || 0}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } else if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#88a0c0; font-style:italic;">No Active Standings Found.</td></tr>`;
+      }
+    } catch (err) {
+      console.warn("Could not fetch leaderboard:", err);
+      const tbody = document.getElementById("leaderboard-body");
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:16px; color:#ff3333; font-style:italic;">📡 Sat-Link Offline. Retry Later.</td></tr>`;
+      }
+    }
+  }
+
+  fetchLeaderboard();
+  setInterval(fetchLeaderboard, 15000); // Live poll every 15s
+
+  const enterBtn = document.getElementById("btn-skip-intro");
+  if (enterBtn) {
+    enterBtn.addEventListener("click", () => {
+      // Hide Lobby UI, Destroy Video, Mount Canvas
+      document.getElementById("lobby-ui")?.classList.add("hidden");
+      document.getElementById("intro-video")?.remove();
+      const canvas = document.getElementById("renderCanvas");
+      if (canvas) {
+        canvas.classList.remove("hidden");
+      }
+      
+      // Initialize Engine
       SkiFreeApp.start().catch((err) => console.error("[SkiFree] Boot error:", err));
     });
-  } else {
-    SkiFreeApp.start().catch((err) => console.error("[SkiFree] Boot error:", err));
+  }
+
+  const unmuteBtn = document.getElementById("btn-unmute-intro");
+  const introVideo = document.getElementById("intro-video") as HTMLVideoElement;
+  if (unmuteBtn && introVideo) {
+    unmuteBtn.addEventListener("click", () => {
+      introVideo.muted = !introVideo.muted;
+      unmuteBtn.textContent = introVideo.muted ? "🔊 UNMUTE LOBBY AUDIO" : "🔇 MUTE LOBBY AUDIO";
+    });
   }
 }

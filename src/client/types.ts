@@ -5,9 +5,35 @@
 
 export enum YetiAIState {
   CHARGING = "CHARGING",
+  FROST_NOVA = "FROST_NOVA",
+  AVALANCHE_TRIGGER = "AVALANCHE_TRIGGER",
+  BERSERK = "BERSERK",
   STAGGERED = "STAGGERED",
   RETREATING = "RETREATING",
   DEAD = "DEAD"
+}
+
+export enum PowerUpType {
+  NITRO_WAX = "NITRO_WAX",
+  CRYO_HARPOON = "CRYO_HARPOON",
+  SHIELD = "SHIELD"
+}
+
+export interface SlalomGateData {
+  id: string;
+  x: number;
+  z: number;
+  width: number;
+  passed: boolean;
+  color: "red" | "blue";
+}
+
+export interface PowerUpData {
+  id: string;
+  x: number;
+  z: number;
+  type: PowerUpType;
+  collected: boolean;
 }
 
 export enum LimbStatus {
@@ -85,6 +111,8 @@ export interface HitscanPacket {
   type: "hitscan";
   target: "yeti" | "obstacle" | "player";
   hitPart: "head" | "body" | "limb";
+  damage?: number;
+  isCritical?: boolean;
   distance: number;
   rayOrigin: Vector3D;
   rayDir: Vector3D;

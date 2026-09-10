@@ -90,6 +90,11 @@ export class NetworkSystem {
     this.ws.send(JSON.stringify(packet));
   }
 
+  public sendDropIn(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify({ type: "drop_in" }));
+  }
+
   public isReady(): boolean {
     return this.isConnected;
   }

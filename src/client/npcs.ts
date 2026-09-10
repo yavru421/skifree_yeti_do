@@ -410,7 +410,7 @@ export class NPCSystem {
     return false;
   }
 
-  public update(playerZ: number, yetiPos: Vector3, deltaTime: number): void {
+  public update(playerZ: number, yetiPos: Vector3, deltaTime: number, terrainHeightFn?: (x: number, z: number) => number): void {
     const dt = Math.min(deltaTime, 0.1);
 
     for (const npc of this.npcs) {
@@ -422,7 +422,12 @@ export class NPCSystem {
         npc.z -= forwardUnits * dt;
         npc.x += Math.sin(npc.z * 0.05) * 8 * dt;
 
-        npc.mesh.position.set(npc.x, 0, npc.z);
+        let groundY = 0;
+        if (terrainHeightFn) {
+            groundY = terrainHeightFn(npc.x, npc.z);
+        }
+        npc.y = groundY;
+        npc.mesh.position.set(npc.x, npc.y, npc.z);
 
         // Dynamic carving tilt
         npc.mesh.rotation.z = Math.sin(npc.z * 0.05) * 0.16;
@@ -454,9 +459,10 @@ export class NPCSystem {
         npc.y += npc.velocity.y * dt;
         npc.z += npc.velocity.z * dt;
 
-        // 3. Ground collision with snow slope (y = 0.35m resting height)
-        if (npc.y <= 0.35) {
-          npc.y = 0.35;
+        // 3. Ground collision with true 3D snow slope (0.35m resting body height)
+        const bodyRestY = terrainHeightFn ? terrainHeightFn(npc.x, npc.z) + 0.35 : 0.35;
+        if (npc.y <= bodyRestY) {
+          npc.y = bodyRestY;
           if (npc.velocity.y < -3.0) {
             // Elastic bounce off snow + puff
             npc.velocity.y = -npc.velocity.y * 0.22;
@@ -487,9 +493,10 @@ export class NPCSystem {
           gear.velocity.y -= 18.0 * dt;
           gear.mesh.position.addInPlace(gear.velocity.scale(dt));
 
-          // Ground bounce and slide for skis/poles
-          if (gear.mesh.position.y <= 0.08) {
-            gear.mesh.position.y = 0.08;
+          // Ground bounce and slide for skis/poles (0.08m resting gear height)
+          const gearRestY = terrainHeightFn ? terrainHeightFn(gear.mesh.position.x, gear.mesh.position.z) + 0.08 : 0.08;
+          if (gear.mesh.position.y <= gearRestY) {
+            gear.mesh.position.y = gearRestY;
             if (gear.velocity.y < -2.0) {
               gear.velocity.y = -gear.velocity.y * 0.25;
             } else {
@@ -521,7 +528,7 @@ export class NPCSystem {
 
     // Reset position ahead of player downhill
     npc.x = (Math.random() - 0.5) * 110;
-    npc.y = 0;
+    npc.y = 0.35;
     npc.z = playerZ - 180 - Math.random() * 90;
     npc.speed = 24 + Math.random() * 16;
     npc.isKnockedOver = false;

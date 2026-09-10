@@ -143,16 +143,20 @@ export class CombatSystem {
     const headPos = this.yeti.getHeadWorldPosition();
     const bodyPos = this.yeti.getBodyWorldPosition();
 
-    // Generous head sphere intersection check (2.2m radius)
+    // Generous head sphere intersection check (2.4m radius)
     const distToHeadRay = this.distancePointToRay(headPos, ray.origin, ray.direction);
     const distHead = Vector3.Distance(ray.origin, headPos);
 
-    if (distToHeadRay < 2.2 && distHead < 350) {
+    if (distToHeadRay < 2.4 && distHead < 350) {
+      const flankCheck = this.yeti.evaluateFlankVulnerability(ray.origin.x);
+      this.triggerDeflectFeedback(flankCheck.message);
       this.yeti.triggerHitFeedback(true);
       this.onHitCallback({
         type: "hitscan",
         target: "yeti",
         hitPart: "head",
+        damage: flankCheck.damage + 200,
+        isCritical: flankCheck.isCritical,
         distance: distHead,
         rayOrigin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
         rayDir: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
@@ -161,16 +165,20 @@ export class CombatSystem {
       return;
     }
 
-    // Generous body box intersection check (3.8m radius)
+    // Generous body box intersection check (4.2m radius)
     const distToBodyRay = this.distancePointToRay(bodyPos, ray.origin, ray.direction);
     const distBody = Vector3.Distance(ray.origin, bodyPos);
 
-    if (distToBodyRay < 3.8 && distBody < 350) {
-      this.yeti.triggerHitFeedback(false);
+    if (distToBodyRay < 4.2 && distBody < 350) {
+      const flankCheck = this.yeti.evaluateFlankVulnerability(ray.origin.x);
+      this.triggerDeflectFeedback(flankCheck.message);
+      this.yeti.triggerHitFeedback(flankCheck.isCritical);
       this.onHitCallback({
         type: "hitscan",
         target: "yeti",
         hitPart: "body",
+        damage: flankCheck.damage,
+        isCritical: flankCheck.isCritical,
         distance: distBody,
         rayOrigin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
         rayDir: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
@@ -200,5 +208,16 @@ export class CombatSystem {
       this.currentAmmo = this.maxAmmo;
       this.isReloading = false;
     }, this.reloadTimeMs);
+  }
+
+  private triggerDeflectFeedback(message: string): void {
+    const prompt = document.getElementById("tow-action-prompt");
+    if (prompt) {
+      prompt.classList.remove("hidden");
+      prompt.innerHTML = `<span style="color:#ff0055; font-size:1.1em; font-weight:900;">${message}</span>`;
+      setTimeout(() => {
+        prompt.classList.add("hidden");
+      }, 1600);
+    }
   }
 }

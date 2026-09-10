@@ -47,7 +47,8 @@ export class SteamHarpoon {
     // Gun Root parented to camera (held in player's right hand / shoulder line)
     this.gunRoot = new Mesh("harpoonGunRoot", this.scene);
     this.gunRoot.parent = this.camera;
-    this.gunRoot.position.set(0.36, -0.32, 0.82);
+    this.gunRoot.position.set(0.40, -0.40, 0.95);
+    this.gunRoot.scaling.set(0.8, 0.8, 0.8);
     this.gunRoot.rotation.set(-0.04, -0.03, 0.02);
 
     // --- MATERIALS ---
@@ -59,8 +60,8 @@ export class SteamHarpoon {
 
     // Polished Alpine Brass
     const brassMat = new StandardMaterial("gunBrassMat", this.scene);
-    brassMat.diffuseColor = new Color3(0.88, 0.68, 0.24);
-    brassMat.specularColor = new Color3(1.0, 0.95, 0.6);
+    brassMat.diffuseColor = new Color3(0.55, 0.42, 0.18);
+    brassMat.specularColor = new Color3(0.65, 0.55, 0.35);
     brassMat.roughness = 0.15;
 
     // Polished Walnut Stock

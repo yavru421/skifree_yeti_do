@@ -1,864 +1,378 @@
 import { DurableObject } from "cloudflare:workers";
+import { encode, decode } from "@msgpack/msgpack";
 
-interface SkierState {
-  id: string;
-  hunterId: string;
+export interface Env {
+  MOUNTAIN_DO: DurableObjectNamespace;
+  DB: D1Database;
+  ASSETS: Fetcher;
+}
+
+interface PlayerState {
   callsign: string;
   x: number;
-  z: number;
-  speed: number;
-  steer: number;
-  state: number;
-  pitch: number;
-  score: number;
-  isDead: boolean;
-  isReady: boolean;
-  gameMode: "hunt" | "slalom";
-  lastActive: number;
-}
-
-interface NPCState {
-  id: string;
-  x: number;
-  z: number;
-  speed: number;
-  steer: number;
-  color: string;
-  type: "skier" | "snowboarder" | "speedster";
-  isEaten: boolean;
-  isRescued: boolean;
-  eatTimer?: number;
-}
-
-interface Boulder {
-  id: string;
-  x: number;
+  y: number;
   z: number;
   vx: number;
+  vy: number;
   vz: number;
-  radius: number;
+  rotationY: number;
+  state: string;
+  hp: number;
+  lastShootTime: number;
+  isTethered: boolean;
+  isDragging: boolean;
+  ws: WebSocket;
 }
 
-interface BaitItem {
-  id: string;
-  dropperId: string;
-  x: number;
-  z: number;
-  createdAt: number;
+interface HistoryFrame {
+  tick: number;
+  timestamp: number;
+  players: Map<string, { x: number; y: number; z: number }>;
+  yetiPos: { x: number; y: number; z: number };
 }
 
-function sanitizeCallsign(raw: string | null | undefined): string {
-  if (!raw) return "Hunter";
-  const cleaned = raw.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().slice(0, 12);
-  return cleaned.length > 0 ? cleaned : "Hunter";
-}
-
-async function hashPin(pin: string): Promise<string> {
-  const enc = new TextEncoder().encode("skifree_salt_" + (pin || "0000"));
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-const NPC_COLORS = [
-  "#ff0055", // Neon Magenta
-  "#00f0ff", // Alpine Cyan
-  "#39ff14", // Acid Green
-  "#ffff00", // Retro Yellow
-  "#ff7700", // Blaze Orange
-  "#aa00ff", // Electric Purple
-  "#0088ff"  // Royal Blue
-];
-
-export class MountainDO extends DurableObject {
-  private players = new Map<string, SkierState>();
-  
-  // Match Lifecycle States
-  private matchState: "LOBBY_WAITING" | "COUNTDOWN_DROP" | "ACTIVE_HUNT" | "GONDOLA_REST" | "WIPEOUT" = "LOBBY_WAITING";
-  private countdownTimer = 0;
-  private restTimer = 0;
-  private boulders: Boulder[] = [];
-  private activeBaitItems: BaitItem[] = [];
-  private npcs: NPCState[] = [];
-
-  // Yeti Boss State
-  private yetiZ = 950;
-  private yetiX = 0;
-  private yetiActive = true;
-  private yetiMaxHp = 8000;
-  private yetiHp = 8000;
-  private yetiState: "STALKING_NPCS" | "EATING_NPC" | "CHARGING" | "STAGGERED" | "RETREATING" | "DISTRACTED" | "DEAD" = "STALKING_NPCS";
+export class MountainDO extends DurableObject<Env> {
+  private players: Map<string, PlayerState> = new Map();
+  private tick = 0;
   private currentWave = 1;
-  private yetiKillCount = 0;
-  private yetiDistractedTimer = 0;
-  private yetiEatingTimer = 0;
-  private yetiStaggerTimer = 0;
-  private currentTargetNpcId: string | null = null;
-  private currentTargetPlayerId: string | null = null;
-  
-  private matchStartTime = 0;
-  // 20Hz alarm-chained tick — DO NEVER uses setInterval (leaks across hibernation)
-  private readonly TICK_MS = 50;
+
+  private yeti = {
+    x: 0,
+    y: 0,
+    z: -24,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    rotationY: 0,
+    state: "CHARGING",
+    hp: 5000,
+    maxHp: 5000,
+    staggerTimer: 0,
+    dragFactor: 1.0
+  };
+
+  private historyBuffer: HistoryFrame[] = [];
+  private readonly BUFFER_CAPACITY = 10; // 200ms at 20Hz
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.initDatabase();
-    this.restoreHibernatedSockets();
+
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS match_telemetry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        callsign TEXT,
+        distance REAL,
+        speed REAL,
+        survival_sec REAL,
+        timestamp INTEGER
+      );
+    `);
+
+    this.ctx.storage.setAlarm(Date.now() + 50);
   }
 
-  private restoreHibernatedSockets() {
-    for (const ws of this.ctx.getWebSockets()) {
-      try {
-        const att = ws.deserializeAttachment() as {
-          playerId: string;
-          hunterId: string;
-          callsign: string;
-          mode: "hunt" | "slalom";
-        } | null;
-        if (att && !this.players.has(att.playerId)) {
-          this.players.set(att.playerId, {
-            id: att.playerId,
-            hunterId: att.hunterId,
-            callsign: att.callsign,
-            x: 0,
-            z: 0,
-            speed: 24,
-            steer: 0,
-            state: 0,
-            pitch: 0,
-            score: 0,
-            isDead: false,
-            isReady: false,
-            gameMode: att.mode,
-            lastActive: Date.now()
-          });
-        }
-      } catch (e) {}
-    }
-  }
-
-  private initDatabase() {
-    try {
-      this.ctx.storage.sql.exec(`
-        CREATE TABLE IF NOT EXISTS hunter_profiles (
-          callsign TEXT PRIMARY KEY,
-          pin_hash TEXT NOT NULL,
-          hunter_id TEXT,
-          created_at INTEGER NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS global_leaderboard (
-          id TEXT PRIMARY KEY,
-          hunter_id TEXT,
-          callsign TEXT NOT NULL,
-          max_distance INTEGER NOT NULL,
-          max_speed REAL NOT NULL,
-          survival_time REAL NOT NULL,
-          score INTEGER NOT NULL,
-          track_id TEXT DEFAULT 'alpine',
-          rider_class TEXT DEFAULT 'skier',
-          created_at INTEGER NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS race_leaderboard (
-          id TEXT PRIMARY KEY,
-          hunter_id TEXT,
-          callsign TEXT NOT NULL,
-          clear_time_sec REAL NOT NULL,
-          max_speed REAL NOT NULL,
-          gates_hit INTEGER NOT NULL,
-          score INTEGER NOT NULL,
-          track_id TEXT DEFAULT 'alpine',
-          rider_class TEXT DEFAULT 'skier',
-          created_at INTEGER NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS yeti_kills (
-          kill_id INTEGER PRIMARY KEY AUTOINCREMENT,
-          killer_callsign TEXT NOT NULL,
-          wave_number INTEGER NOT NULL,
-          killer_score INTEGER NOT NULL,
-          squad_size INTEGER NOT NULL,
-          created_at INTEGER NOT NULL
-        );
-      `);
-
-      try {
-        this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN track_id TEXT DEFAULT 'alpine';");
-      } catch (e) {}
-      try {
-        this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN rider_class TEXT DEFAULT 'skier';");
-      } catch (e) {}
-      try {
-        this.ctx.storage.sql.exec("ALTER TABLE global_leaderboard ADD COLUMN takedown_time_sec REAL DEFAULT 0;");
-      } catch (e) {}
-      try {
-        this.ctx.storage.sql.exec("ALTER TABLE yeti_kills ADD COLUMN takedown_time_sec REAL DEFAULT 0;");
-      } catch (e) {}
-      try {
-        this.ctx.storage.sql.exec("ALTER TABLE race_leaderboard ADD COLUMN track_id TEXT DEFAULT 'alpine';");
-      } catch (e) {}
-      try {
-        this.ctx.storage.sql.exec("ALTER TABLE race_leaderboard ADD COLUMN rider_class TEXT DEFAULT 'skier';");
-      } catch (e) {}
-
-      try {
-        this.ctx.storage.sql.exec(`
-          CREATE INDEX IF NOT EXISTS idx_global_score ON global_leaderboard(score DESC);
-          CREATE INDEX IF NOT EXISTS idx_race_time ON race_leaderboard(clear_time_sec ASC, score DESC);
-          CREATE INDEX IF NOT EXISTS idx_hunter_callsign ON hunter_profiles(callsign);
-        `);
-      } catch (e) {}
-    } catch (e) {
-      console.warn("SQLite init warning:", e);
-    }
-  }
-
-  async fetch(request: Request): Promise<Response> {
+  public async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-
-    // 1. Leaderboard Scores API endpoint
-    if (url.pathname === "/api/scores" || url.pathname === "/scores" || url.pathname === "/api/leaderboard") {
-      const trackFilter = url.searchParams.get("track") || "";
-      const huntSql = trackFilter 
-        ? "SELECT callsign, score, max_speed, max_distance, takedown_time_sec, track_id, rider_class, created_at FROM global_leaderboard WHERE track_id = ? ORDER BY CASE WHEN takedown_time_sec > 0 THEN 0 ELSE 1 END, CASE WHEN takedown_time_sec > 0 THEN takedown_time_sec END ASC, score DESC LIMIT 10"
-        : "SELECT callsign, score, max_speed, max_distance, takedown_time_sec, track_id, rider_class, created_at FROM global_leaderboard ORDER BY CASE WHEN takedown_time_sec > 0 THEN 0 ELSE 1 END, CASE WHEN takedown_time_sec > 0 THEN takedown_time_sec END ASC, score DESC LIMIT 10";
-      const huntBoard = [...(trackFilter ? this.ctx.storage.sql.exec(huntSql, trackFilter) : this.ctx.storage.sql.exec(huntSql))];
-
-      const raceSql = trackFilter
-        ? "SELECT callsign, clear_time_sec, gates_hit, max_speed, score, track_id, rider_class, created_at FROM race_leaderboard WHERE track_id = ? ORDER BY clear_time_sec ASC, score DESC LIMIT 10"
-        : "SELECT callsign, clear_time_sec, gates_hit, max_speed, score, track_id, rider_class, created_at FROM race_leaderboard ORDER BY clear_time_sec ASC, score DESC LIMIT 10";
-      const raceBoard = [...(trackFilter ? this.ctx.storage.sql.exec(raceSql, trackFilter) : this.ctx.storage.sql.exec(raceSql))];
-
-      return new Response(JSON.stringify({
-        leaderboard: huntBoard,
-        raceLeaderboard: raceBoard
-      }), {
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // 2. PIN-Protected Score Publishing Endpoint
-    if (url.pathname === "/api/publish-score" && request.method === "POST") {
-      try {
-        const body = await request.json() as any;
-        const callsign = sanitizeCallsign(body.callsign);
-        const pin = String(body.pin || "0000").trim();
-        const pinH = await hashPin(pin);
-        const hunterId = String(body.hunterId || crypto.randomUUID());
-        const mode = body.mode || "hunt";
-        const score = Number(body.score) || 0;
-        const maxSpeed = Number(body.maxSpeed) || 0;
-        const trackId = String(body.trackId || "alpine");
-        const riderClass = String(body.riderClass || "skier");
-
-        const existing = [...this.ctx.storage.sql.exec(
-          "SELECT callsign, pin_hash FROM hunter_profiles WHERE callsign = ? ",
-          callsign
-        )];
-
-        if (existing.length > 0) {
-          const profile = existing[0] as { callsign: string; pin_hash: string };
-          if (profile.pin_hash !== pinH) {
-            return new Response(JSON.stringify({
-              success: false,
-              error: `❌ Callsign "${callsign}" is claimed! Enter the correct PIN or pick a new name.`
-            }), { status: 403, headers: { "Content-Type": "application/json" } });
-          }
-        } else {
-          this.ctx.storage.sql.exec(
-            "INSERT INTO hunter_profiles (callsign, pin_hash, hunter_id, created_at) VALUES (?, ?, ?, ?)",
-            callsign, pinH, hunterId, Date.now()
-          );
-        }
-
-        const recordId = crypto.randomUUID();
-        if (mode === "slalom") {
-          const clearTimeSec = Number(body.clearTimeSec) || 0;
-          const gatesHit = Number(body.gatesHit) || 0;
-          this.ctx.storage.sql.exec(
-            "INSERT INTO race_leaderboard (id, hunter_id, callsign, clear_time_sec, max_speed, gates_hit, score, track_id, rider_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            recordId, hunterId, callsign, clearTimeSec, maxSpeed, gatesHit, score, trackId, riderClass, Date.now()
-          );
-        } else {
-          const maxDist = Number(body.maxDistance) || 0;
-          const survivalTime = Number(body.survivalTime) || 0;
-          const takedownTimeSec = Number(body.takedownTimeSec) || 0;
-          this.ctx.storage.sql.exec(
-            "INSERT INTO global_leaderboard (id, hunter_id, callsign, max_distance, max_speed, survival_time, score, takedown_time_sec, track_id, rider_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            recordId, hunterId, callsign, maxDist, maxSpeed, survivalTime, score, takedownTimeSec, trackId, riderClass, Date.now()
-          );
-        }
-
-        return new Response(JSON.stringify({
-          success: true,
-          callsign,
-          message: `🏆 Verified! Score published under "${callsign}".`
-        }), { status: 200, headers: { "Content-Type": "application/json" } });
-
-      } catch (e: any) {
-        return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500 });
+    if (url.pathname === "/ws") {
+      const callsign = url.searchParams.get("callsign");
+      if (!callsign || !/^[a-zA-Z0-9_\- ]{1,12}$/.test(callsign)) {
+        return new Response("Invalid Callsign", { status: 400 });
       }
-    }
 
-    // 3. WebSocket Upgrade Routing
-    if (request.headers.get("Upgrade") === "websocket") {
       const pair = new WebSocketPair();
-      const clientWs = pair[0];
-      const serverWs = pair[1];
+      const [client, server] = Object.values(pair);
 
-      const rawCallsign = url.searchParams.get("callsign");
-      const hunterId = url.searchParams.get("hunterId") || crypto.randomUUID();
-      const validatedCallsign = sanitizeCallsign(rawCallsign);
-      const mode = (url.searchParams.get("mode") || "hunt") as "hunt" | "slalom";
+      this.ctx.acceptWebSocket(server, [callsign]);
 
-      const playerId = crypto.randomUUID();
-      this.ctx.acceptWebSocket(serverWs, [playerId]);
-      try {
-        (serverWs as any).serializeAttachment({
-          playerId,
-          hunterId,
-          callsign: validatedCallsign,
-          mode,
-          joinedAt: Date.now()
-        });
-      } catch (e) {}
+      // If room is fresh or previous Yeti was felled, reset to full health!
+      if (this.players.size === 0 || this.yeti.state === "DEAD") {
+        this.yeti.state = "CHARGING";
+        this.yeti.hp = 5000;
+        this.yeti.maxHp = 5000;
+        this.yeti.x = 0;
+        this.yeti.z = -24;
+      }
 
-      const newSkier: SkierState = {
-        id: playerId,
-        hunterId,
-        callsign: validatedCallsign,
-        x: (Math.random() - 0.5) * 10,
+      this.players.set(callsign, {
+        callsign,
+        x: 0,
+        y: 50,
         z: 0,
-        speed: 24,
-        steer: 0,
-        state: 0,
-        pitch: 0,
-        score: 0,
-        isDead: false,
-        isReady: false,
-        gameMode: mode,
-        lastActive: Date.now()
-      };
+        vx: 0,
+        vy: 0,
+        vz: -15,
+        rotationY: 0,
+        state: "ALIVE",
+        hp: 100,
+        lastShootTime: 0,
+        isTethered: false,
+        isDragging: false,
+        ws: server
+      });
 
-      this.players.set(playerId, newSkier);
-
-      serverWs.send(JSON.stringify({
-        type: "WELCOME",
-        playerId,
-        callsign: validatedCallsign,
-        matchState: this.matchState,
-        wave: this.currentWave,
-        yetiHp: this.yetiHp,
-        yetiMaxHp: this.yetiMaxHp
-      }));
-
-      this.broadcastLobbyState();
-      this.ensureGameLoop();
-
-      return new Response(null, { status: 101, webSocket: clientWs });
+      return new Response(null, { status: 101, webSocket: client });
     }
 
-    return new Response("MountainDO Active", { status: 200 });
-  }
-
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    if (typeof message !== "string") return;
-    try {
-      const data = JSON.parse(message);
-      const tags = this.ctx.getTags(ws);
-      const playerId = tags[0];
-      let player = this.players.get(playerId);
-      if (!player) {
-        try {
-          const att = (ws as any).deserializeAttachment() as any;
-          if (att && att.playerId === playerId) {
-            player = {
-              id: att.playerId,
-              hunterId: att.hunterId,
-              callsign: att.callsign,
-              x: 0,
-              z: 0,
-              speed: 24,
-              steer: 0,
-              state: 0,
-              pitch: 0,
-              score: 0,
-              isDead: false,
-              isReady: false,
-              gameMode: att.mode || "hunt",
-              lastActive: Date.now()
-            };
-            this.players.set(playerId, player);
+    if (url.pathname === "/status" || url.pathname === "/api/telemetry") {
+      try {
+        const rows = this.ctx.storage.sql.exec(`SELECT * FROM match_telemetry ORDER BY timestamp DESC LIMIT 25;`).toArray();
+        return new Response(JSON.stringify({
+          status: "ok",
+          activePlayers: this.players.size,
+          yeti: {
+            state: this.yeti.state,
+            hp: this.yeti.hp,
+            maxHp: this.yeti.maxHp,
+            wave: this.currentWave
+          },
+          telemetry: rows
+        }), {
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
           }
-        } catch (e) {}
-      }
-      if (!player) return;
-
-      player.lastActive = Date.now();
-
-      if (data.type === "PING") {
-        try {
-          ws.send(JSON.stringify({ type: "PONG", timestamp: Date.now() }));
-        } catch (e) {}
-        return;
-      }
-
-      if (data.type === "INPUT") {
-        player.steer = Math.max(-1, Math.min(1, data.steer || 0));
-        player.pitch = Math.max(-1, Math.min(1, data.pitch || 0));
-        // Bounds-clamp position to prevent position-spoofing cheats
-        if (typeof data.z === "number") player.z = Math.max(player.z - 5, Math.min(player.z + 10, data.z));
-        if (typeof data.x === "number") player.x = Math.max(-65, Math.min(65, data.x));
-        if (typeof data.speed === "number") player.speed = Math.max(0, Math.min(120, data.speed));
-      } else if (data.type === "DAMAGE_YETI") {
-        // ─── C2: Server-Authoritative Yeti Damage Handler ─────────────────────
-        // Rate-limit: enforce 120ms minimum between shots per player
-        const now = Date.now();
-        const lastShot = (player as any).lastShot || 0;
-        if (now - lastShot < 120) return;
-        (player as any).lastShot = now;
-
-        // Validate: yeti must be alive and in melee range (18m max with ping tolerance)
-        if (this.yetiHp <= 0 || this.matchState !== "ACTIVE_HUNT") return;
-        const distToYeti = Math.hypot(player.x - this.yetiX, player.z - this.yetiZ);
-        if (distToYeti > 18) return; // authoritative melee harpoon/spear range
-
-        const isCrit = !!data.isCrit;
-        const weaponType: string = data.weaponType || "spear";
-        const chargeLevel: number = typeof data.chargeLevel === "number" ? Math.max(0.2, Math.min(1.5, data.chargeLevel)) : 1.0;
-
-        let damage = 0;
-        let staggerDuration = 0;
-        switch (weaponType) {
-          case "flare":
-            // Flare ignites panic, minimal direct damage
-            damage = 60;
-            staggerDuration = 0;
-            this.yetiDistractedTimer = Math.max(this.yetiDistractedTimer, 3.5);
-            this.broadcast({ type: "YETI_BURNING" });
-            break;
-          default: // spear / harpoon thrust
-            damage = Math.round((chargeLevel * 650) + (isCrit ? 450 : 0));
-            staggerDuration = isCrit ? 1.4 : 0.8;
-        }
-
-        this.yetiHp = Math.max(0, this.yetiHp - damage);
-        this.yetiStaggerTimer = Math.max(this.yetiStaggerTimer, staggerDuration);
-
-        // Update player score
-        player.score += damage;
-
-        this.broadcast({
-          type: "YETI_HIT",
-          damage,
-          isCrit,
-          hp: this.yetiHp,
-          maxHp: this.yetiMaxHp,
-          hitBy: player.callsign
         });
-
-        if (this.yetiHp <= 0) {
-          this.handleYetiDefeated(player);
-        }
-      } else if (data.type === "READY") {
-        player.isReady = !!data.ready;
-        player.gameMode = data.mode === "slalom" ? "slalom" : "hunt";
-        this.broadcastLobbyState();
-        this.checkAllReady();
-      } else if (data.type === "FORCE_LAUNCH") {
-        player.gameMode = data.mode === "slalom" ? "slalom" : "hunt";
-        this.startMatchCountdown();
-      } else if (data.type === "DROP_BAIT") {
-        const bait: BaitItem = {
-          id: crypto.randomUUID(),
-          dropperId: playerId,
-          x: player.x,
-          z: player.z,
-          createdAt: Date.now()
-        };
-        this.activeBaitItems.push(bait);
-        this.broadcast({
-          type: "BAIT_DROPPED",
-          dropper: player.callsign,
-          x: bait.x,
-          z: bait.z
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
         });
-      } else if (data.type === "PLAYER_DIED") {
-        player.isDead = true;
       }
-    } catch (e) {}
-  }
-
-  async webSocketClose(ws: WebSocket) {
-    const tags = this.ctx.getTags(ws);
-    const playerId = tags[0];
-    if (playerId) {
-      this.players.delete(playerId);
-      this.broadcastLobbyState();
     }
+
+    return new Response("Not Found", { status: 404 });
   }
 
-  private broadcastLobbyState() {
-    const skierList = Array.from(this.players.values()).map(p => ({
-      id: p.id,
-      callsign: p.callsign,
-      isReady: p.isReady,
-      gameMode: p.gameMode
-    }));
-
-    this.broadcast({
-      type: "LOBBY_STATE",
-      players: skierList
-    });
-  }
-
-  private checkAllReady() {
-    if (this.players.size === 0) return;
-    const allReady = Array.from(this.players.values()).every(p => p.isReady);
-    if (allReady && this.matchState === "LOBBY_WAITING") {
-      this.startMatchCountdown();
-    }
-  }
-
-  private startMatchCountdown() {
-    this.matchState = "COUNTDOWN_DROP";
-    this.countdownTimer = 3;
-    this.broadcast({ type: "COUNTDOWN_START", countdownSeconds: 3 });
-
-    const countdownInterval = setInterval(() => {
-      this.countdownTimer--;
-      if (this.countdownTimer <= 0) {
-        clearInterval(countdownInterval);
-        this.launchMatch();
-      }
-    }, 1000);
-  }
-
-  private spawnProceduralNPCs(leadZ: number) {
-    this.npcs = [];
-    const npcTypes: ("skier" | "snowboarder" | "speedster")[] = ["skier", "snowboarder", "speedster"];
-    for (let i = 0; i < 22; i++) {
-      const type = npcTypes[i % 3];
-      const baseSpeed = type === "speedster" ? 36 : (type === "snowboarder" ? 28 : 22);
-      this.npcs.push({
-        id: `npc_${i}_${Date.now()}`,
-        x: (Math.random() - 0.5) * 70,
-        z: leadZ + 15 + (i * 8) + (Math.random() * 6),
-        speed: baseSpeed + (Math.random() * 6),
-        steer: (Math.random() - 0.5) * 0.4,
-        color: NPC_COLORS[i % NPC_COLORS.length],
-        type,
-        isEaten: false,
-        isRescued: false
-      });
-    }
-  }
-
-  private launchMatch() {
-    this.matchState = "ACTIVE_HUNT";
-    this.matchStartTime = Date.now();
-    this.yetiHp = 8000 * this.currentWave;
-    this.yetiMaxHp = this.yetiHp;
-    this.yetiZ = 25;
-    this.boulders = [];
-    for (let b = 0; b < 10; b++) {
-      this.boulders.push({
-        id: `boulder_${b}_${Date.now()}`,
-        x: (Math.random() - 0.5) * 60,
-        z: 200 + b * 75 + Math.random() * 25,
-        vx: (Math.random() - 0.5) * 6,
-        vz: 14 + Math.random() * 10,
-        radius: 2.2 + Math.random() * 1.2
-      });
-    }
-    this.yetiDistractedTimer = 0;
-    this.yetiEatingTimer = 0;
-    this.yetiStaggerTimer = 0;
-    this.currentTargetNpcId = null;
-    this.currentTargetPlayerId = null;
-
-    this.players.forEach(p => {
-      p.z = 0;
-      p.x = (Math.random() - 0.5) * 8;
-      p.isDead = false;
-      p.score = 0;
-    });
-
-    this.spawnProceduralNPCs(0);
-
-    this.broadcast({
-      type: "MATCH_LAUNCH",
-      wave: this.currentWave,
-      yetiHp: this.yetiHp,
-      yetiMaxHp: this.yetiMaxHp
-    });
-  }
-
-  private handleYetiDefeated(killer: SkierState) {
-    this.yetiKillCount++;
-    this.matchState = "GONDOLA_REST";
-    this.restTimer = 5;
-    this.yetiState = "DEAD";
-
-    const takedownTimeSec = Math.max(0, (Date.now() - this.matchStartTime) / 1000);
-
-    this.ctx.storage.sql.exec(
-      "INSERT INTO yeti_kills (killer_callsign, wave_number, killer_score, squad_size, takedown_time_sec, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      killer.callsign, this.currentWave, killer.score, this.players.size, takedownTimeSec, Date.now()
-    );
-
-    this.broadcast({
-      type: "YETI_DEFEATED",
-      wave: this.currentWave,
-      killer: killer.callsign,
-      takedownTimeSec,
-      squadSize: this.players.size
-    });
-
-    setTimeout(() => {
-      this.currentWave++;
-      this.matchState = "ACTIVE_HUNT";
-      this.yetiHp = 8000 * this.currentWave;
-      this.yetiMaxHp = this.yetiHp;
-      this.players.forEach(p => p.isDead = false);
-      const leadZ = Math.max(0, ...Array.from(this.players.values()).map(p => p.z));
-      this.yetiZ = leadZ + 25;
-      this.spawnProceduralNPCs(leadZ);
-
-      this.broadcast({
-        type: "NEXT_WAVE",
-        wave: this.currentWave,
-        yetiHp: this.yetiHp,
-        yetiMaxHp: this.yetiMaxHp
-      });
-    }, 5000);
-  }
-
-  // ─── Alarm-Chained 20Hz Tick (CORRECT DO pattern — NO setInterval) ───────────
-  // Cloudflare DOs guarantee alarm() survives hibernation; setInterval does NOT.
-  private ensureGameLoop() {
-    if (this.matchState === "ACTIVE_HUNT" && this.players.size > 0) {
-      // Prime the first tick immediately
-      this.ctx.storage.setAlarm(Date.now() + this.TICK_MS);
-    }
-  }
-
-  async alarm() {
+  public async alarm() {
+    this.tick++;
     const now = Date.now();
 
-    // 1. Inactivity watchdog — shut down if no players or all idle > 5 min
-    let hasRecentActivity = false;
-    for (const player of this.players.values()) {
-      if (now - player.lastActive < 300_000) { hasRecentActivity = true; break; }
-    }
-    if (!hasRecentActivity || this.players.size === 0) {
-      this.matchState = "LOBBY_WAITING";
-      return; // DO goes dormant — no reschedule
+    this.updateYetiAI(now);
+    this.pushHistoryFrame(now);
+    this.broadcastSnapshot(now);
+
+    this.ctx.storage.setAlarm(now + 50);
+  }
+
+  private updateYetiAI(now: number) {
+    if (this.yeti.state === "DEAD") return;
+
+    const hpRatio = this.yeti.hp / this.yeti.maxHp;
+    if (hpRatio <= 0.8 && hpRatio > 0.5 && this.yeti.state !== "FROST_NOVA" && this.yeti.state !== "AVALANCHE_TRIGGER" && this.yeti.state !== "BERSERK") {
+      this.yeti.state = "FROST_NOVA";
+    } else if (hpRatio <= 0.5 && hpRatio > 0.2 && this.yeti.state !== "AVALANCHE_TRIGGER" && this.yeti.state !== "BERSERK") {
+      this.yeti.state = "AVALANCHE_TRIGGER";
+    } else if (hpRatio <= 0.2 && this.yeti.state !== "BERSERK") {
+      this.yeti.state = "BERSERK";
     }
 
-    // 2. Active hunt tick
-    if (this.matchState === "ACTIVE_HUNT") {
-      this.gameTick();
-      // Self-chain: reschedule next 20Hz alarm
-      this.ctx.storage.setAlarm(now + this.TICK_MS);
-    } else {
-      // Lobby / rest — keep a slow 5-min watchdog alive
-      this.ctx.storage.setAlarm(now + 300_000);
+    let nearestSkier: PlayerState | null = null;
+    let minDistance = Infinity;
+    let draggingSkiersCount = 0;
+
+    this.players.forEach((skier) => {
+      if (skier.isDragging) draggingSkiersCount++;
+
+      const dx = skier.x - this.yeti.x;
+      const dz = skier.z - this.yeti.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearestSkier = skier;
+      }
+    });
+
+    // Calculate drag reduction from tether braking
+    this.yeti.dragFactor = draggingSkiersCount > 0 ? Math.max(0.3, 1.0 - draggingSkiersCount * 0.45) : 1.0;
+
+    if (nearestSkier) {
+      const target = nearestSkier as PlayerState;
+      const dx = target.x - this.yeti.x;
+      const dz = target.z - this.yeti.z;
+      const len = Math.sqrt(dx * dx + dz * dz) || 1;
+
+      let baseSpeed = 25;
+      if (this.yeti.state === "BERSERK") baseSpeed = 40;
+      if (this.yeti.state === "RETREATING") baseSpeed = -15;
+
+      const effectiveSpeed = baseSpeed * this.yeti.dragFactor;
+
+      this.yeti.vx = (dx / len) * effectiveSpeed;
+      this.yeti.vz = (dz / len) * effectiveSpeed;
+      this.yeti.x += this.yeti.vx * 0.05;
+      this.yeti.z += this.yeti.vz * 0.05;
+      this.yeti.rotationY = Math.atan2(dx, dz);
+
+      if (minDistance < 3.2 && this.yeti.state !== "RETREATING") {
+        target.hp -= 35;
+        this.yeti.state = "RETREATING";
+        setTimeout(() => {
+          if (this.yeti.state !== "DEAD") this.yeti.state = "CHARGING";
+        }, 2000);
+      }
     }
   }
 
-  private gameTick() {
-    if (this.players.size === 0 || this.matchState !== "ACTIVE_HUNT") {
-      // Alarm will not reschedule if matchState != ACTIVE_HUNT — loop naturally stops
-      return;
+  private pushHistoryFrame(now: number) {
+    const frame: HistoryFrame = {
+      tick: this.tick,
+      timestamp: now,
+      players: new Map(),
+      yetiPos: { x: this.yeti.x, y: this.yeti.y, z: this.yeti.z }
+    };
+
+    this.players.forEach((p, id) => {
+      frame.players.set(id, { x: p.x, y: p.y, z: p.z });
+    });
+
+    this.historyBuffer.push(frame);
+    if (this.historyBuffer.length > this.BUFFER_CAPACITY) {
+      this.historyBuffer.shift();
     }
+  }
 
-    if (this.matchState === "ACTIVE_HUNT") {
-      const dt = this.TICK_MS / 1000;
-      const alivePlayers = Array.from(this.players.values()).filter(p => !p.isDead);
-      const leadSkierZ = alivePlayers.length > 0 ? Math.max(...alivePlayers.map(p => p.z)) : 0;
-      
-      if (alivePlayers.length > 0) {
-        const avgSkierX = alivePlayers.reduce((acc, p) => acc + p.x, 0) / alivePlayers.length;
+  public webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
+    if (typeof message === "string") return;
 
-        // 1. Update NPC Downhill Movement & Recycle Swarm
-        this.npcs.forEach(npc => {
-          if (!npc.isEaten) {
-            // Carving motion
-            npc.steer += (Math.random() - 0.5) * 0.1;
-            npc.steer = Math.max(-0.6, Math.min(0.6, npc.steer));
-            npc.x += Math.sin(npc.steer) * (npc.speed * 0.038);
-            npc.z += Math.cos(npc.steer) * (npc.speed * 0.038);
-            npc.x = Math.max(-60, Math.min(60, npc.x));
-          } else if (npc.eatTimer) {
-            npc.eatTimer -= dt;
-          }
+    const data = decode(new Uint8Array(message)) as any;
+    const callsign = [...this.players.entries()].find(([_, p]) => p.ws === ws)?.[0];
+    if (!callsign) return;
+    const player = this.players.get(callsign);
+    if (!player) return;
 
-          // Recycle NPCs that fall behind or go too far
-          if (leadSkierZ - npc.z > 35) {
-            npc.z = leadSkierZ + 60 + Math.random() * 80;
-            npc.x = (Math.random() - 0.5) * 70;
-            npc.isEaten = false;
-            npc.isRescued = false;
-            npc.eatTimer = undefined;
-          }
-        });
+    if (data.type === "input") {
+      player.x = data.payload.pos[0];
+      player.y = data.payload.pos[1];
+      player.z = data.payload.pos[2];
+      player.vx = data.payload.vel[0];
+      player.vy = data.payload.vel[1];
+      player.vz = data.payload.vel[2];
+    } else if (data.type === "drag") {
+      player.isDragging = !!data.payload.dragging;
+      if (player.isDragging && this.yeti.state !== "DEAD") {
+        this.yeti.hp -= Math.min(this.yeti.hp, data.payload.drain || 25);
+        if (this.yeti.hp <= 0) {
+          this.yeti.state = "DEAD";
+          this.onYetiKilled(callsign);
+        }
+      }
+    } else if (data.type === "tether") {
+      player.isTethered = !!data.payload.tethered;
+      if (!player.isTethered) player.isDragging = false;
+    } else if (data.type === "drop_in") {
+      if (this.yeti.state === "DEAD") {
+        this.currentWave++;
+        this.yeti.state = "CHARGING";
+        this.yeti.hp = 3000 + (this.currentWave - 1) * 1200;
+        this.yeti.maxHp = this.yeti.hp;
+        this.yeti.x = 0;
+        this.yeti.z = -24;
+      }
+    } else if (data.type === "shoot") {
+      const now = Date.now();
+      if (now - player.lastShootTime < 120) return;
+      player.lastShootTime = now;
 
-        // 1b. Update Rolling Boulders
-        this.boulders.forEach(b => {
-          b.x += b.vx * dt;
-          b.z += b.vz * dt;
-          if (b.x < -60 || b.x > 60) b.vx = -b.vx;
-          if (leadSkierZ - b.z > 40) {
-            b.z = leadSkierZ + 120 + Math.random() * 80;
-            b.x = (Math.random() - 0.5) * 60;
-          }
-        });
+      // 200ms Hit Rewind Check
+      const clientTs = data.payload.clientTimestamp || now;
+      const rewindFrame = this.findRewindFrame(clientTs);
+      const yetiPos = rewindFrame ? rewindFrame.yetiPos : { x: this.yeti.x, y: this.yeti.y, z: this.yeti.z };
 
-        // 2. Yeti State Machine & Predator AI
-        if (this.yetiStaggerTimer > 0) {
-          this.yetiStaggerTimer -= dt;
-          this.yetiState = "STAGGERED";
-        } else if (this.yetiDistractedTimer > 0) {
-          this.yetiDistractedTimer -= dt;
-          this.yetiState = "DISTRACTED";
-        } else if (this.activeBaitItems.length > 0) {
-          const nearestBait = this.activeBaitItems[0];
-          const distToBait = Math.hypot(this.yetiX - nearestBait.x, this.yetiZ - nearestBait.z);
-          if (distToBait < 35) {
-            this.yetiDistractedTimer = 3.5;
-            this.yetiState = "DISTRACTED";
-            this.activeBaitItems.shift();
-            this.broadcast({ type: "YETI_EATING_BAIT" });
-          }
-        } else if (this.yetiEatingTimer > 0) {
-          this.yetiEatingTimer -= dt;
-          this.yetiState = "EATING_NPC";
-          if (this.yetiEatingTimer <= 0) {
-            this.currentTargetNpcId = null;
-            this.yetiState = "STALKING_NPCS";
-          }
-        } else {
-          // Predator Loop: Target closest NPC downhill in view
-          const aliveNPCs = this.npcs.filter(n => !n.isEaten);
-          let closestNpc: NPCState | null = null;
-          let minNpcDist = 9999;
+      const origin = data.payload.origin;
+      const dir = data.payload.direction;
 
-          aliveNPCs.forEach(n => {
-            const dist = Math.hypot(this.yetiX - n.x, this.yetiZ - n.z);
-            if (dist < minNpcDist) {
-              minNpcDist = dist;
-              closestNpc = n;
-            }
-          });
+      // Ray-sphere distance check to Yeti
+      const vx = yetiPos.x - origin[0];
+      const vy = yetiPos.y - origin[1];
+      const vz = yetiPos.z - origin[2];
 
-          // Check if player is close (< 8m)
-          let closestPlayer: SkierState | null = null;
-          let minPlayerDist = 9999;
-          alivePlayers.forEach(p => {
-            const pDist = Math.hypot(p.x - this.yetiX, p.z - this.yetiZ);
-            if (pDist < minPlayerDist) {
-              minPlayerDist = pDist;
-              closestPlayer = p;
-            }
-          });
+      const dot = vx * dir[0] + vy * dir[1] + vz * dir[2];
+      if (dot > 0) {
+        const perpDistSq = (vx * vx + vy * vy + vz * vz) - (dot * dot);
+        if (perpDistSq < 16.0) { // 4m radius around Yeti
+          this.yeti.hp -= 400;
+          player.isTethered = true;
 
-          if (minPlayerDist < 8.0 && closestPlayer) {
-            // Charge player
-            this.yetiState = "CHARGING";
-            this.currentTargetPlayerId = (closestPlayer as SkierState).id;
-            const dx = (closestPlayer as SkierState).x - this.yetiX;
-            const dz = (closestPlayer as SkierState).z - this.yetiZ;
-            this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx), 0.35);
-            this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz), 0.45);
+          // Notify shooter that tether hooked!
+          const hitPayload = encode({ type: "tether_hooked", callsign });
+          ws.send(hitPayload);
 
-            if (minPlayerDist < 3.2) {
-              this.broadcast({ type: "YETI_BITE_ATTACK", victimId: (closestPlayer as SkierState).id });
-            }
-          } else if (closestNpc && minNpcDist < 60) {
-            // Hunt NPC in front view
-            this.yetiState = "STALKING_NPCS";
-            this.currentTargetNpcId = (closestNpc as NPCState).id;
-            const target = closestNpc as NPCState;
-            const dx = target.x - this.yetiX;
-            const dz = target.z - this.yetiZ;
-            this.yetiX += Math.sign(dx) * Math.min(Math.abs(dx) * 0.08, 0.4);
-            this.yetiZ += Math.sign(dz) * Math.min(Math.abs(dz) * 0.08, 0.5);
-
-            if (minNpcDist < 3.5) {
-              target.isEaten = true;
-              target.eatTimer = 1.4;
-              this.yetiEatingTimer = 1.2;
-              this.yetiState = "EATING_NPC";
-              this.broadcast({
-                type: "YETI_MAUL_NPC",
-                npcId: target.id,
-                x: target.x,
-                z: target.z
-              });
-            }
-          } else {
-            // Default Prowl in front of lead skier (18m-35m ahead)
-            this.yetiState = "STALKING_NPCS";
-            const targetZ = leadSkierZ + 25;
-            this.yetiZ += (targetZ - this.yetiZ) * 0.06;
-            this.yetiX += (avgSkierX - this.yetiX) * 0.05 + Math.sin(Date.now() * 0.003) * 0.4;
-          }
-
-          // Keep Yeti in active forward zone
-          if (this.yetiZ < leadSkierZ - 10) {
-            this.yetiZ = leadSkierZ + 25;
-            this.yetiX = avgSkierX + (Math.random() - 0.5) * 14;
-            this.broadcast({
-              type: "YETI_AMBUSH",
-              x: this.yetiX,
-              z: this.yetiZ
-            });
-          } else if (this.yetiZ > leadSkierZ + 65) {
-            this.yetiZ = leadSkierZ + 40;
+          if (this.yeti.hp <= 0) {
+            this.yeti.state = "DEAD";
+            this.onYetiKilled(callsign);
           }
         }
       }
-
-      const skiers = Array.from(this.players.values()).map(p => ({
-        id: p.id,
-        callsign: p.callsign,
-        x: p.x,
-        z: p.z,
-        steer: p.steer,
-        isDead: p.isDead,
-        score: p.score
-      }));
-
-      // Spatial Interest Culling: Only broadcast NPCs in active vicinity (-35m to +120m)
-      const visibleNpcs = this.npcs.filter(npc => {
-        return (npc.z >= leadSkierZ - 35 && npc.z <= leadSkierZ + 120);
-      });
-
-      this.broadcast({
-        type: "FRAME",
-        wave: this.currentWave,
-        yeti: {
-          x: this.yetiX,
-          z: this.yetiZ,
-          hp: this.yetiHp,
-          maxHp: this.yetiMaxHp,
-          state: this.yetiState,
-          active: this.yetiActive,
-          targetNpcId: this.currentTargetNpcId
-        },
-        npcs: visibleNpcs,
-        skiers,
-        boulders: this.boulders,
-        baitItems: this.activeBaitItems
-      });
     }
   }
 
-  private broadcast(msg: any) {
-    const payload = JSON.stringify(msg);
-    this.ctx.getWebSockets().forEach(ws => {
-      try { ws.send(payload); } catch (e) {}
+  private findRewindFrame(clientTimestamp: number): HistoryFrame | undefined {
+    return this.historyBuffer.reduce((prev, curr) =>
+      Math.abs(curr.timestamp - clientTimestamp) < Math.abs(prev.timestamp - clientTimestamp) ? curr : prev
+    );
+  }
+
+  private async onYetiKilled(killerCallsign: string) {
+    this.ctx.storage.sql.exec(
+      `INSERT INTO match_telemetry (callsign, distance, speed, survival_sec, timestamp) VALUES (?, ?, ?, ?, ?);`,
+      killerCallsign, 1500, 65, 120, Date.now()
+    );
+
+    try {
+      this.env.DB.prepare(
+        `INSERT INTO global_leaderboard (callsign, wave, score, timestamp) VALUES (?, ?, ?, ?)`
+      ).bind(killerCallsign, this.currentWave, 10000, Date.now()).run();
+    } catch (err) {
+      console.error("[DO Engine] D1 sync error:", err);
+    }
+  }
+
+  private broadcastSnapshot(now: number) {
+    const snapshot = {
+      tick: this.tick,
+      timestamp: now,
+      skiers: Array.from(this.players.values()).map(p => ({
+        id: p.callsign,
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        vx: p.vx,
+        vy: p.vy,
+        vz: p.vz,
+        rotationY: p.rotationY,
+        state: p.state,
+        hp: p.hp,
+        isTethered: p.isTethered,
+        isDragging: p.isDragging
+      })),
+      yeti: {
+        id: "YETI",
+        x: this.yeti.x,
+        y: this.yeti.y,
+        z: this.yeti.z,
+        vx: this.yeti.vx,
+        vy: this.yeti.vy,
+        vz: this.yeti.vz,
+        rotationY: this.yeti.rotationY,
+        state: this.yeti.state,
+        hp: this.yeti.hp,
+        dragFactor: this.yeti.dragFactor
+      },
+      wave: this.currentWave
+    };
+
+    const binaryPayload = encode(snapshot);
+
+    this.players.forEach((p) => {
+      if (p.ws.readyState === WebSocket.OPEN) {
+        p.ws.send(binaryPayload);
+      }
+    });
+  }
+
+  public webSocketClose(ws: WebSocket) {
+    this.players.forEach((p, id) => {
+      if (p.ws === ws) this.players.delete(id);
     });
   }
 }

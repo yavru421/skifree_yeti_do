@@ -1,13 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM"],
+    "moduleResolution": "bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["@cloudflare/workers-types"],
     "strict": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "sourceMap": true
   },
   "include": ["src/**/*", "worker-configuration.d.ts"]
 }

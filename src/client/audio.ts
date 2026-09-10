@@ -150,6 +150,98 @@ export class AudioSystem {
     }
   }
 
+  public playArmorDeflect(): void {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(1800, now);
+      osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+      gain.gain.setValueAtTime(0.45, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } catch {}
+  }
+
+  public playAlpineHorn(): void {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      // Traditional Alpine Horn / Mountain Starting Horn Brass Fanfare
+      // Natural harmonic series: C4 (261.63Hz), E4 (329.63Hz), G4 (392.00Hz), C5 (523.25Hz)
+      const notes = [
+        { freq: 261.63, start: 0.0, dur: 0.22, gain: 0.32 },
+        { freq: 329.63, start: 0.18, dur: 0.22, gain: 0.35 },
+        { freq: 392.00, start: 0.36, dur: 0.25, gain: 0.38 },
+        { freq: 523.25, start: 0.58, dur: 0.65, gain: 0.45 },
+      ];
+
+      for (const n of notes) {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(n.freq, now + n.start);
+
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(n.freq * 4.5, now + n.start);
+        filter.frequency.exponentialRampToValueAtTime(n.freq * 1.5, now + n.start + n.dur);
+        filter.Q.value = 2.5;
+
+        g.gain.setValueAtTime(0.001, now + n.start);
+        g.gain.linearRampToValueAtTime(n.gain, now + n.start + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.001, now + n.start + n.dur);
+
+        osc.connect(filter);
+        filter.connect(g);
+        g.connect(this.ctx.destination);
+
+        osc.start(now + n.start);
+        osc.stop(now + n.start + n.dur);
+      }
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  public playDropIn(): void {
+    if (!this.ctx || this.isMuted) return;
+    this.playAlpineHorn();
+    try {
+      const now = this.ctx.currentTime;
+      [0, 0.14, 0.28].forEach((t, i) => {
+        const osc = this.ctx!.createOscillator();
+        const g = this.ctx!.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(i === 2 ? 1400 : 880, now + t);
+        g.gain.setValueAtTime(0.22, now + t);
+        g.gain.exponentialRampToValueAtTime(0.001, now + t + 0.1);
+        osc.connect(g);
+        g.connect(this.ctx!.destination);
+        osc.start(now + t);
+        osc.stop(now + t + 0.1);
+      });
+
+      const whooshOsc = this.ctx.createOscillator();
+      const whooshGain = this.ctx.createGain();
+      whooshOsc.type = "sawtooth";
+      whooshOsc.frequency.setValueAtTime(320, now + 0.38);
+      whooshOsc.frequency.exponentialRampToValueAtTime(70, now + 0.9);
+      whooshGain.gain.setValueAtTime(0.35, now + 0.38);
+      whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+      whooshOsc.connect(whooshGain);
+      whooshGain.connect(this.ctx.destination);
+      whooshOsc.start(now + 0.38);
+      whooshOsc.stop(now + 0.9);
+    } catch {}
+  }
+
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     if (this.bgmAudio) {

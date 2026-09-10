@@ -71,7 +71,8 @@ export class CameraRig {
     playerPosition: Vector3,
     steerInput: number,
     speedMph: number,
-    deltaTime: number
+    deltaTime: number,
+    slopePitchRad: number = 0
   ): void {
     this.currentSpeed = speedMph;
 
@@ -112,8 +113,9 @@ export class CameraRig {
     this.currentYaw = Scalar.Lerp(this.currentYaw, this.targetYaw, 0.18);
     this.camera.rotation.y = this.currentYaw;
 
-    // Slight head-bob or pitch down toward slope
-    this.camera.rotation.x = this.isAimingRear ? -0.04 : 0.06;
+    // Physical downhill slope pitch + subtle eye bob
+    const baseSlopeAngle = slopePitchRad * 0.35;
+    this.camera.rotation.x = this.isAimingRear ? -0.04 : (0.06 + baseSlopeAngle);
   }
 
   public getForwardRay(): Vector3 {

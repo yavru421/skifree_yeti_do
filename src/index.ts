@@ -1,83 +1,69 @@
-import { MountainDO } from "./MountainDO";
+import { MountainDO, Env } from "./MountainDO";
 
 export { MountainDO };
-
-export interface Env {
-  MOUNTAIN_DO: DurableObjectNamespace<MountainDO>;
-  ASSETS: Fetcher;
-}
-
-const SECURITY_HEADERS: Record<string, string> = {
-  "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-  "Content-Security-Policy":
-    "default-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://yeti.dondlingergc.com https://static.cloudflareinsights.com; connect-src 'self' ws: wss: https:; media-src 'self' blob:; img-src 'self' data: blob:;"
-};
-
-function withSecurityHeaders(response: Response): Response {
-  const newHeaders = new Headers(response.headers);
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-    if (!newHeaders.has(key)) {
-      newHeaders.set(key, value);
-    }
-  }
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: newHeaders
-  });
-}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. WebSocket Upgrade & Matchmaking Routing to MountainDO
-    if (url.pathname.startsWith("/ws") || url.pathname.startsWith("/websocket")) {
-      const upgradeHeader = request.headers.get("Upgrade");
-      if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
-        return new Response("Expected WebSocket upgrade", { status: 426 });
+    // WebMCP Interceptor / Bridge.js endpoint handler
+    if (url.pathname === "/mcp" || url.pathname === "/mcp/") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+          }
+        });
       }
-
-      const requestedRoom = url.searchParams.get("room") || url.searchParams.get("roomId") || "alpine-lodge-1";
-      const doId = env.MOUNTAIN_DO.idFromName(requestedRoom);
-      const doStub = env.MOUNTAIN_DO.get(doId);
-
-      url.searchParams.set("roomId", requestedRoom);
-      const routedRequest = new Request(url.toString(), request);
-      return doStub.fetch(routedRequest);
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0",
+        result: {
+          tools: []
+        }
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
     }
 
-    // 2. Leaderboard Scores Routing
-    if (url.pathname === "/api/leaderboard" || url.pathname === "/api/scores") {
-      const targetRoom = url.searchParams.get("room") || "GLOBAL_LEADERBOARD";
-      const stub = env.MOUNTAIN_DO.get(env.MOUNTAIN_DO.idFromName(targetRoom));
-      const res = await stub.fetch(request);
-      return withSecurityHeaders(res);
+    if (url.pathname === "/ws") {
+      const id = env.MOUNTAIN_DO.idFromName("global-mountain-lobby");
+      const stub = env.MOUNTAIN_DO.get(id);
+      return stub.fetch(request);
     }
 
-    // 3. Landing page & Game shortcuts
-    if (url.pathname === "/" || url.pathname === "/play" || url.pathname === "/game") {
-      const gameReq = new Request(new URL("/index.html", request.url), request);
-      const res = await env.ASSETS.fetch(gameReq);
-      return withSecurityHeaders(res);
-    }
-    if (url.pathname === "/landing" || url.pathname === "/teaser") {
-      const landingReq = new Request(new URL("/landing.html", request.url), request);
-      const res = await env.ASSETS.fetch(landingReq);
-      return withSecurityHeaders(res);
+    if (url.pathname === "/api/scores") {
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT callsign, wave, score, timestamp FROM global_leaderboard ORDER BY score DESC LIMIT 50`
+        ).all();
+
+        return new Response(JSON.stringify(results), {
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=10"
+          }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
     }
 
-    // 4. Static Assets from public/
-    if (env.ASSETS) {
-      const assetRes = await env.ASSETS.fetch(request);
-      return withSecurityHeaders(assetRes);
+    // Stale path alias fallback: rewrite /dist/bundle.js to /bundle.js
+    if (url.pathname === "/dist/bundle.js") {
+      url.pathname = "/bundle.js";
+      return env.ASSETS.fetch(new Request(url.toString(), request));
     }
 
-    return withSecurityHeaders(
-      new Response("SkiFree 2: Mountain Hunt — Edge Server Active", { status: 200 })
-    );
+    return env.ASSETS.fetch(request);
   }
 };
