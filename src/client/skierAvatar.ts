@@ -1,18 +1,17 @@
 /**
  * SkierAvatar.ts
- * High-Fidelity Procedural 3D Skier Character Avatar matching "thats_the_best_video_you_have.mp4":
- * - Authentic Alpine Gold / Mustard Yellow tactical racing suit with micro-contrast.
- * - Tactical black contrast panels (shoulders, underarm torso, knee pads, elbow pads).
- * - Composite tactical shoulder armor epaulets & utility waist belt.
- * - Molded alpine ski boots with forward lean & metallic alloy micro-buckles.
- * - Heavy-duty step-in downhill bindings (toe clamp, heel housing, lateral brake arms).
- * - Dual carbon racing skis with metal edges, red tips, and rear twin-tip tail flares.
- * - Rugged black tactical expedition backpack with dual front chest harness & compression straps.
- * - Matte aerodynamic ski racing helmet with rear spoiler and dark polarized snow goggles.
- * - Tactical Scoped Harpoon Rifle (fluted barrel, elevated scope with lens glint, cable drum spool).
- * - Dual graphite ski poles with snow baskets and wrist loops.
- * - Dynamic procedural animations (carving bank, ski edge bite, aerodynamic tuck, snowplow brake, high-speed tip chatter).
- * - Dual ski-tail powder snow rooster tail particle emitters.
+ * High-Fidelity Athletic 3D Skier Character Avatar:
+ * - Athletic V-taper alpine racing suit with Alpine Gold livery and carbon contrast flank panels.
+ * - Aerodynamic teardrop racing helmet with rear wind spoiler and curved polarized mirror snow goggles.
+ * - Articulated athletic downhill crouch kinematics (flexed knees, canted shins, alloy micro-buckles).
+ * - Detailed twin-tip downhill racing skis with polished steel edges and racing red tip scoops.
+ * - Ergonomic graphite ski poles with snow baskets and angled shafts held properly in gloved hands.
+ * - ALWAYS-VISIBLE TACTICAL HARPOON RIFLE:
+ *     * Cruising / Downhill Stance: Magnetically slung diagonally across tactical backpack scabbard
+ *       (fluted barrel, optic scope, tension coils, and cable drum clearly visible over right shoulder).
+ *     * Combat / Aiming / Tethered Stance: Drawn into hands in two-handed tactical ready-fire posture.
+ * - Dynamic procedural animations (carving roll, ski edge bite, aerodynamic tuck, snowplow brake,
+ *   high-speed tip chatter, powder snow rooster tails, and end-of-level victory celebration pose).
  */
 
 import {
@@ -43,6 +42,8 @@ export class SkierAvatar {
   private rightArm: Mesh;
   private leftForearm: Mesh;
   private rightForearm: Mesh;
+  private leftGlove: Mesh;
+  private rightGlove: Mesh;
   private leftLeg: Mesh;
   private rightLeg: Mesh;
   private leftBoot: Mesh;
@@ -53,9 +54,15 @@ export class SkierAvatar {
   private rightSki: Mesh;
   private leftTip: Mesh;
   private rightTip: Mesh;
-  private rifleRoot: Mesh;
 
-  // Particle Spray
+  // Harpoon Weapon System (Always visible)
+  public rifleRoot: Mesh;
+  private currentRiflePos: Vector3 = new Vector3(0.18, 1.15, 0.28);
+  private targetRiflePos: Vector3 = new Vector3(0.18, 1.15, 0.28);
+  private currentRifleRot: Vector3 = new Vector3(0.25, 0.35, 0.85);
+  private targetRifleRot: Vector3 = new Vector3(0.25, 0.35, 0.85);
+
+  // Powder Snow Particle Spray
   private leftSpray: ParticleSystem | null = null;
   private rightSpray: ParticleSystem | null = null;
 
@@ -67,440 +74,450 @@ export class SkierAvatar {
   public isVisible: boolean = true;
   public isAimingGun: boolean = false;
   public isWipeout: boolean = false;
+  public isCutsceneVictory: boolean = false;
   private wipeoutTimer: number = 0;
+  private victoryTimer: number = 0;
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.rootNode = new Mesh("skierAvatarRoot", this.scene);
 
     // ==========================================
-    // AUTHENTIC MATERIALS FROM VIDEO
+    // AUTHENTIC ALPINE RACING MATERIALS
     // ==========================================
 
-    // 1. Alpine Gold / Mustard Yellow Suit Material
+    // 1. Alpine Gold / Mustard Racing Suit Material
     const suitMat = new StandardMaterial("skierSuitGoldMat", this.scene);
-    suitMat.diffuseColor = new Color3(0.88, 0.65, 0.12);
-    suitMat.specularColor = new Color3(0.35, 0.30, 0.18);
-    suitMat.emissiveColor = new Color3(0.12, 0.08, 0.02);
-    suitMat.roughness = 0.45;
+    suitMat.diffuseColor = new Color3(0.92, 0.68, 0.14);
+    suitMat.specularColor = new Color3(0.40, 0.35, 0.22);
+    suitMat.emissiveColor = new Color3(0.14, 0.10, 0.03);
+    suitMat.roughness = 0.35;
 
-    // 2. Tactical Contrast Black Panels (Shoulders, Knee Pads, Underarms, Elbows)
+    // 2. Tactical Contrast Black Panels (Flanks, Underarm, Knees, Elbows)
     const blackPanelMat = new StandardMaterial("skierBlackPanelMat", this.scene);
-    blackPanelMat.diffuseColor = new Color3(0.10, 0.10, 0.12);
-    blackPanelMat.specularColor = new Color3(0.25, 0.25, 0.28);
-    blackPanelMat.roughness = 0.5;
+    blackPanelMat.diffuseColor = new Color3(0.10, 0.11, 0.13);
+    blackPanelMat.specularColor = new Color3(0.28, 0.28, 0.30);
+    blackPanelMat.roughness = 0.45;
 
-    // 3. Tactical Backpack Material (Rugged Cordura Black)
+    // 3. Tactical Backpack Material (Matte Cordura)
     const backpackMat = new StandardMaterial("skierBackpackMat", this.scene);
     backpackMat.diffuseColor = new Color3(0.08, 0.08, 0.10);
-    backpackMat.specularColor = new Color3(0.15, 0.15, 0.15);
-    backpackMat.roughness = 0.75;
+    backpackMat.specularColor = new Color3(0.18, 0.18, 0.20);
+    backpackMat.roughness = 0.65;
 
-    // 4. Matte Black Aerodynamic Racing Helmet
+    // 4. Aerodynamic Carbon Racing Helmet
     const helmetMat = new StandardMaterial("skierHelmetMat", this.scene);
-    helmetMat.diffuseColor = new Color3(0.06, 0.07, 0.09);
-    helmetMat.specularColor = new Color3(0.60, 0.60, 0.65);
-    helmetMat.roughness = 0.25;
+    helmetMat.diffuseColor = new Color3(0.07, 0.08, 0.10);
+    helmetMat.specularColor = new Color3(0.70, 0.70, 0.75);
+    helmetMat.roughness = 0.20;
 
-    // 5. Dark Polarized Visor with Mirror Sun Glint
+    // 5. Mirrored Polarized Snow Goggles (Gold & Cyan Sun-Glint)
     const visorMat = new StandardMaterial("skierVisorMat", this.scene);
-    visorMat.diffuseColor = new Color3(0.03, 0.03, 0.04);
-    visorMat.specularColor = new Color3(0.95, 0.98, 1.0);
-    visorMat.specularPower = 128; // Piercing specular highlight
+    visorMat.diffuseColor = new Color3(0.02, 0.04, 0.06);
+    visorMat.specularColor = new Color3(1.0, 0.85, 0.40);
+    visorMat.emissiveColor = new Color3(0.02, 0.08, 0.12);
+    visorMat.specularPower = 160;
 
-    // 6. Carbon Downhill Ski Material
+    // 6. Carbon Downhill Skis
     const skiMat = new StandardMaterial("skierSkiMat", this.scene);
     skiMat.diffuseColor = new Color3(0.08, 0.09, 0.11);
-    skiMat.specularColor = new Color3(0.70, 0.70, 0.80);
+    skiMat.specularColor = new Color3(0.75, 0.75, 0.82);
     skiMat.roughness = 0.2;
 
-    // 7. Polished Metal Ski Edge & Binding Material
+    // 7. Polished Metal Ski Edge & Binding Alloy
     const metalEdgeMat = new StandardMaterial("skierMetalEdgeMat", this.scene);
-    metalEdgeMat.diffuseColor = new Color3(0.75, 0.78, 0.82);
-    metalEdgeMat.specularColor = new Color3(0.95, 0.95, 1.0);
+    metalEdgeMat.diffuseColor = new Color3(0.80, 0.82, 0.86);
+    metalEdgeMat.specularColor = new Color3(0.98, 0.98, 1.0);
 
-    // 8. Racing Red Accent Material
+    // 8. Racing Red Livery Accent
     const redAccentMat = new StandardMaterial("skierRedAccentMat", this.scene);
-    redAccentMat.diffuseColor = new Color3(0.88, 0.12, 0.14);
-    redAccentMat.specularColor = new Color3(0.5, 0.5, 0.5);
+    redAccentMat.diffuseColor = new Color3(0.92, 0.14, 0.16);
+    redAccentMat.specularColor = new Color3(0.6, 0.6, 0.6);
 
-    // 9. Gunmetal Material (Poles & Scoped Rifle)
+    // 9. Gunmetal / Titanium Alloy (Harpoon Barrel & Poles)
     const gunmetalMat = new StandardMaterial("skierGunmetalMat", this.scene);
-    gunmetalMat.diffuseColor = new Color3(0.20, 0.22, 0.24);
-    gunmetalMat.specularColor = new Color3(0.85, 0.90, 0.95);
+    gunmetalMat.diffuseColor = new Color3(0.22, 0.24, 0.27);
+    gunmetalMat.specularColor = new Color3(0.90, 0.92, 0.98);
 
     // 10. Molded Alpine Ski Boot Material
     const bootMat = new StandardMaterial("skierBootMat", this.scene);
-    bootMat.diffuseColor = new Color3(0.14, 0.14, 0.16);
-    bootMat.specularColor = new Color3(0.40, 0.40, 0.45);
-    bootMat.roughness = 0.4;
+    bootMat.diffuseColor = new Color3(0.13, 0.14, 0.16);
+    bootMat.specularColor = new Color3(0.45, 0.45, 0.50);
+    bootMat.roughness = 0.35;
 
-    // 11. Optical Scope Glass Lens Material
+    // 11. Optical Scope Glass Lens
     const lensMat = new StandardMaterial("skierScopeLensMat", this.scene);
-    lensMat.diffuseColor = new Color3(0.05, 0.20, 0.35);
+    lensMat.diffuseColor = new Color3(0.05, 0.25, 0.40);
     lensMat.specularColor = new Color3(0.95, 1.0, 1.0);
-    lensMat.specularPower = 128;
+    lensMat.specularPower = 180;
 
     // ==========================================
-    // MESH HIERARCHY & DETAILED SKELETAL ANATOMY
+    // ATHLETIC SKELETAL GEOMETRY & ANATOMY
     // ==========================================
 
-    // 1. Torso / Body (Alpine Gold Jacket)
-    this.bodyMesh = MeshBuilder.CreateBox("skierTorso", { width: 0.66, height: 0.82, depth: 0.42 }, this.scene);
+    // 1. Torso / Jacket (Athletic V-Taper, Contoured Proportions)
+    // Upper Chest
+    this.bodyMesh = MeshBuilder.CreateBox("skierChest", { width: 0.52, height: 0.46, depth: 0.32 }, this.scene);
     this.bodyMesh.material = suitMat;
-    this.bodyMesh.position.set(0, 1.05, 0);
+    this.bodyMesh.position.set(0, 1.18, -0.02);
     this.bodyMesh.parent = this.rootNode;
 
+    // Tapered Lower Waist
+    const waistMesh = MeshBuilder.CreateBox("skierWaist", { width: 0.42, height: 0.32, depth: 0.28 }, this.scene);
+    waistMesh.material = suitMat;
+    waistMesh.position.set(0, -0.32, 0.01);
+    waistMesh.parent = this.bodyMesh;
+
     // High Wind Cowl / Neck Collar
-    this.collarMesh = MeshBuilder.CreateCylinder("skierCollar", { height: 0.14, diameter: 0.38 }, this.scene);
+    this.collarMesh = MeshBuilder.CreateCylinder("skierCollar", { height: 0.12, diameter: 0.30 }, this.scene);
     this.collarMesh.material = blackPanelMat;
-    this.collarMesh.position.set(0, 0.45, -0.02);
+    this.collarMesh.position.set(0, 0.28, -0.01);
     this.collarMesh.parent = this.bodyMesh;
 
-    // Torso Side Contrast Panels (Black tactical trim)
-    const leftPanel = MeshBuilder.CreateBox("skierTorsoLeftPanel", { width: 0.08, height: 0.78, depth: 0.38 }, this.scene);
-    leftPanel.material = blackPanelMat;
-    leftPanel.position.set(-0.30, 0, 0);
-    leftPanel.parent = this.bodyMesh;
+    // Side Aerodynamic Stretch Flanks (Black contrast racing accents)
+    const flankL = MeshBuilder.CreateBox("skierFlankL", { width: 0.06, height: 0.65, depth: 0.28 }, this.scene);
+    flankL.material = blackPanelMat;
+    flankL.position.set(-0.25, -0.10, 0);
+    flankL.parent = this.bodyMesh;
 
-    const rightPanel = MeshBuilder.CreateBox("skierTorsoRightPanel", { width: 0.08, height: 0.78, depth: 0.38 }, this.scene);
-    rightPanel.material = blackPanelMat;
-    rightPanel.position.set(0.30, 0, 0);
-    rightPanel.parent = this.bodyMesh;
+    const flankR = MeshBuilder.CreateBox("skierFlankR", { width: 0.06, height: 0.65, depth: 0.28 }, this.scene);
+    flankR.material = blackPanelMat;
+    flankR.position.set(0.25, -0.10, 0);
+    flankR.parent = this.bodyMesh;
 
-    // Tactical Utility Belt & Buckle
-    this.beltMesh = MeshBuilder.CreateBox("skierBelt", { width: 0.68, height: 0.10, depth: 0.44 }, this.scene);
+    // Racing Center Stripe (Front)
+    const raceStripe = MeshBuilder.CreateBox("skierRaceStripe", { width: 0.07, height: 0.55, depth: 0.02 }, this.scene);
+    raceStripe.material = redAccentMat;
+    raceStripe.position.set(0, -0.05, -0.165);
+    raceStripe.parent = this.bodyMesh;
+
+    // Tactical Waist Utility Belt & Buckle
+    this.beltMesh = MeshBuilder.CreateBox("skierBelt", { width: 0.46, height: 0.08, depth: 0.30 }, this.scene);
     this.beltMesh.material = blackPanelMat;
-    this.beltMesh.position.set(0, -0.38, 0);
+    this.beltMesh.position.set(0, -0.46, 0.01);
     this.beltMesh.parent = this.bodyMesh;
 
-    const beltBuckle = MeshBuilder.CreateBox("skierBeltBuckle", { width: 0.12, height: 0.08, depth: 0.46 }, this.scene);
+    const beltBuckle = MeshBuilder.CreateBox("skierBeltBuckle", { width: 0.10, height: 0.06, depth: 0.32 }, this.scene);
     beltBuckle.material = metalEdgeMat;
-    beltBuckle.position.set(0, -0.38, 0);
+    beltBuckle.position.set(0, -0.46, 0.01);
     beltBuckle.parent = this.bodyMesh;
 
-    // Shoulder Armor Epaulets
-    const leftEpaulet = MeshBuilder.CreateBox("skierLeftEpaulet", { width: 0.18, height: 0.08, depth: 0.32 }, this.scene);
+    // Aerodynamic Shoulder Armor Plates
+    const leftEpaulet = MeshBuilder.CreateBox("skierLeftEpaulet", { width: 0.14, height: 0.06, depth: 0.24 }, this.scene);
     leftEpaulet.material = blackPanelMat;
-    leftEpaulet.position.set(-0.36, 0.38, 0);
-    leftEpaulet.rotation.z = -0.18;
+    leftEpaulet.position.set(-0.29, 0.24, 0);
+    leftEpaulet.rotation.z = -0.22;
     leftEpaulet.parent = this.bodyMesh;
 
-    const rightEpaulet = MeshBuilder.CreateBox("skierRightEpaulet", { width: 0.18, height: 0.08, depth: 0.32 }, this.scene);
+    const rightEpaulet = MeshBuilder.CreateBox("skierRightEpaulet", { width: 0.14, height: 0.06, depth: 0.24 }, this.scene);
     rightEpaulet.material = blackPanelMat;
-    rightEpaulet.position.set(0.36, 0.38, 0);
-    rightEpaulet.rotation.z = 0.18;
+    rightEpaulet.position.set(0.29, 0.24, 0);
+    rightEpaulet.rotation.z = 0.22;
     rightEpaulet.parent = this.bodyMesh;
 
-    // 2. Tactical Black Expedition Backpack (Mounted on Back +Z)
-    this.backpackMesh = MeshBuilder.CreateBox("skierBackpack", { width: 0.48, height: 0.62, depth: 0.26 }, this.scene);
+    // 2. Streamlined Tactical Gear Pack (Mounted on Upper Back +Z)
+    this.backpackMesh = MeshBuilder.CreateBox("skierBackpack", { width: 0.34, height: 0.48, depth: 0.18 }, this.scene);
     this.backpackMesh.material = backpackMat;
-    this.backpackMesh.position.set(0, 0.04, 0.26);
+    this.backpackMesh.position.set(0, 0.04, 0.22);
     this.backpackMesh.parent = this.bodyMesh;
 
-    // Backpack Top Flap
-    const packFlap = MeshBuilder.CreateBox("skierPackFlap", { width: 0.44, height: 0.12, depth: 0.28 }, this.scene);
-    packFlap.material = blackPanelMat;
-    packFlap.position.set(0, 0.26, 0.02);
-    packFlap.parent = this.backpackMesh;
+    // Backpack Aerodynamic Top Cap
+    const packCap = MeshBuilder.CreateCylinder("skierPackCap", { height: 0.32, diameter: 0.16 }, this.scene);
+    packCap.material = blackPanelMat;
+    packCap.rotation.z = Math.PI / 2;
+    packCap.position.set(0, 0.24, 0);
+    packCap.parent = this.backpackMesh;
 
-    // Backpack Dual Compression Straps with Buckles
-    const strapL = MeshBuilder.CreateBox("skierPackStrapL", { width: 0.04, height: 0.58, depth: 0.28 }, this.scene);
-    strapL.material = blackPanelMat;
-    strapL.position.set(-0.16, 0, 0.01);
-    strapL.parent = this.backpackMesh;
+    // Diagonal Rifle Scabbard Sheath Across Pack
+    const scabbard = MeshBuilder.CreateBox("skierScabbard", { width: 0.10, height: 0.52, depth: 0.08 }, this.scene);
+    scabbard.material = blackPanelMat;
+    scabbard.position.set(0.04, 0.06, 0.11);
+    scabbard.rotation.z = -0.45;
+    scabbard.parent = this.backpackMesh;
 
-    const buckleL = MeshBuilder.CreateBox("skierPackBuckleL", { width: 0.06, height: 0.04, depth: 0.29 }, this.scene);
-    buckleL.material = metalEdgeMat;
-    buckleL.position.set(-0.16, 0.08, 0.01);
-    buckleL.parent = this.backpackMesh;
-
-    const strapR = MeshBuilder.CreateBox("skierPackStrapR", { width: 0.04, height: 0.58, depth: 0.28 }, this.scene);
-    strapR.material = blackPanelMat;
-    strapR.position.set(0.16, 0, 0.01);
-    strapR.parent = this.backpackMesh;
-
-    const buckleR = MeshBuilder.CreateBox("skierPackBuckleR", { width: 0.06, height: 0.04, depth: 0.29 }, this.scene);
-    buckleR.material = metalEdgeMat;
-    buckleR.position.set(0.16, 0.08, 0.01);
-    buckleR.parent = this.backpackMesh;
-
-    // Chest Sternum Harness Straps (Front of jacket)
-    const chestHarness = MeshBuilder.CreateBox("skierChestHarness", { width: 0.38, height: 0.05, depth: 0.43 }, this.scene);
-    chestHarness.material = blackPanelMat;
-    chestHarness.position.set(0, 0.12, 0);
-    chestHarness.parent = this.bodyMesh;
-
-    // 3. Helmet & Head
-    this.headMesh = MeshBuilder.CreateSphere("skierHead", { diameter: 0.46, segments: 14 }, this.scene);
+    // 3. Head, Helmet & Curved Snow Goggles
+    this.headMesh = MeshBuilder.CreateSphere("skierHead", { diameter: 0.38, segments: 16 }, this.scene);
     this.headMesh.material = helmetMat;
-    this.headMesh.position.set(0, 1.62, 0.02);
+    this.headMesh.position.set(0, 1.58, 0.01);
     this.headMesh.parent = this.rootNode;
 
-    // Rear Helmet Aerodynamic Spoiler Flare
-    const spoiler = MeshBuilder.CreateBox("skierHelmetSpoiler", { width: 0.28, height: 0.12, depth: 0.16 }, this.scene);
+    // Helmet Aerodynamic Rear Wind Spoiler Flare
+    const spoiler = MeshBuilder.CreateBox("skierHelmetSpoiler", { width: 0.22, height: 0.08, depth: 0.14 }, this.scene);
     spoiler.material = helmetMat;
-    spoiler.position.set(0, 0.08, 0.20);
-    spoiler.rotation.x = -0.25;
+    spoiler.position.set(0, 0.06, 0.16);
+    spoiler.rotation.x = -0.32;
     spoiler.parent = this.headMesh;
 
-    // Cylindrical Mirrored Visor / Dark Snow Goggles
-    this.helmetVisor = MeshBuilder.CreateCylinder("skierVisor", { height: 0.14, diameter: 0.48, arc: 0.45 }, this.scene);
+    // Curved Wrap-Around Polarized Mirror Snow Goggles
+    this.helmetVisor = MeshBuilder.CreateCylinder("skierVisor", { height: 0.11, diameter: 0.40, arc: 0.48 }, this.scene);
     this.helmetVisor.material = visorMat;
-    this.helmetVisor.rotation.y = Math.PI * 0.775;
-    this.helmetVisor.position.set(0, 0.02, 0);
+    this.helmetVisor.rotation.y = Math.PI * 0.76;
+    this.helmetVisor.position.set(0, 0.02, 0.01);
     this.helmetVisor.parent = this.headMesh;
 
-    // Goggle Strap
-    const strap = MeshBuilder.CreateCylinder("skierGoggleStrap", { height: 0.07, diameter: 0.48 }, this.scene);
-    strap.material = blackPanelMat;
-    strap.position.set(0, 0.02, 0);
-    strap.parent = this.headMesh;
+    const goggleFrame = MeshBuilder.CreateCylinder("skierGoggleFrame", { height: 0.05, diameter: 0.402, arc: 0.50 }, this.scene);
+    goggleFrame.material = metalEdgeMat;
+    goggleFrame.rotation.y = Math.PI * 0.75;
+    goggleFrame.position.set(0, 0.02, 0.01);
+    goggleFrame.parent = this.headMesh;
 
-    // 4. Legs, Knee Armor, and Molded Ski Boots
-    // Left Leg
-    this.leftLeg = MeshBuilder.CreateCylinder("skierLeftLeg", { height: 0.62, diameter: 0.19 }, this.scene);
+    const goggleStrap = MeshBuilder.CreateCylinder("skierGoggleStrap", { height: 0.06, diameter: 0.39 }, this.scene);
+    goggleStrap.material = blackPanelMat;
+    goggleStrap.position.set(0, 0.02, 0);
+    goggleStrap.parent = this.headMesh;
+
+    // 4. Articulated Legs, Knee Armor, and Molded Ski Boots (Athletic Downhill Stance)
+    // Left Leg (Athletic forward cant)
+    this.leftLeg = MeshBuilder.CreateCylinder("skierLeftLeg", { height: 0.56, diameter: 0.16 }, this.scene);
     this.leftLeg.material = suitMat;
-    this.leftLeg.position.set(-0.19, 0.52, -0.02);
-    this.leftLeg.rotation.x = -0.14;
+    this.leftLeg.position.set(-0.16, 0.56, 0.01);
+    this.leftLeg.rotation.x = -0.22;
     this.leftLeg.parent = this.rootNode;
 
-    const leftKnee = MeshBuilder.CreateBox("skierLeftKnee", { width: 0.17, height: 0.20, depth: 0.12 }, this.scene);
+    const leftKnee = MeshBuilder.CreateBox("skierLeftKnee", { width: 0.14, height: 0.16, depth: 0.10 }, this.scene);
     leftKnee.material = blackPanelMat;
-    leftKnee.position.set(0, 0.05, -0.09);
+    leftKnee.position.set(0, 0.04, -0.07);
     leftKnee.parent = this.leftLeg;
 
-    // Left Molded Ski Boot (with forward cuff angle & buckles)
-    this.leftBoot = MeshBuilder.CreateBox("skierLeftBoot", { width: 0.16, height: 0.24, depth: 0.32 }, this.scene);
+    this.leftBoot = MeshBuilder.CreateBox("skierLeftBoot", { width: 0.14, height: 0.22, depth: 0.30 }, this.scene);
     this.leftBoot.material = bootMat;
-    this.leftBoot.position.set(0, -0.28, -0.04);
-    this.leftBoot.rotation.x = -0.18;
+    this.leftBoot.position.set(0, -0.27, -0.03);
+    this.leftBoot.rotation.x = -0.16;
     this.leftBoot.parent = this.leftLeg;
 
-    const leftBootBuckle = MeshBuilder.CreateBox("skierLeftBootBuckle", { width: 0.17, height: 0.04, depth: 0.14 }, this.scene);
-    leftBootBuckle.material = metalEdgeMat;
-    leftBootBuckle.position.set(0, 0.04, -0.08);
-    leftBootBuckle.parent = this.leftBoot;
+    const leftBuckle = MeshBuilder.CreateBox("skierLeftBuckle", { width: 0.15, height: 0.03, depth: 0.12 }, this.scene);
+    leftBuckle.material = metalEdgeMat;
+    leftBuckle.position.set(0, 0.04, -0.07);
+    leftBuckle.parent = this.leftBoot;
 
-    // Right Leg
-    this.rightLeg = MeshBuilder.CreateCylinder("skierRightLeg", { height: 0.62, diameter: 0.19 }, this.scene);
+    // Right Leg (Athletic forward cant)
+    this.rightLeg = MeshBuilder.CreateCylinder("skierRightLeg", { height: 0.56, diameter: 0.16 }, this.scene);
     this.rightLeg.material = suitMat;
-    this.rightLeg.position.set(0.19, 0.52, -0.02);
-    this.rightLeg.rotation.x = -0.14;
+    this.rightLeg.position.set(0.16, 0.56, 0.01);
+    this.rightLeg.rotation.x = -0.22;
     this.rightLeg.parent = this.rootNode;
 
-    const rightKnee = MeshBuilder.CreateBox("skierRightKnee", { width: 0.17, height: 0.20, depth: 0.12 }, this.scene);
+    const rightKnee = MeshBuilder.CreateBox("skierRightKnee", { width: 0.14, height: 0.16, depth: 0.10 }, this.scene);
     rightKnee.material = blackPanelMat;
-    rightKnee.position.set(0, 0.05, -0.09);
+    rightKnee.position.set(0, 0.04, -0.07);
     rightKnee.parent = this.rightLeg;
 
-    this.rightBoot = MeshBuilder.CreateBox("skierRightBoot", { width: 0.16, height: 0.24, depth: 0.32 }, this.scene);
+    this.rightBoot = MeshBuilder.CreateBox("skierRightBoot", { width: 0.14, height: 0.22, depth: 0.30 }, this.scene);
     this.rightBoot.material = bootMat;
-    this.rightBoot.position.set(0, -0.28, -0.04);
-    this.rightBoot.rotation.x = -0.18;
+    this.rightBoot.position.set(0, -0.27, -0.03);
+    this.rightBoot.rotation.x = -0.16;
     this.rightBoot.parent = this.rightLeg;
 
-    const rightBootBuckle = MeshBuilder.CreateBox("skierRightBootBuckle", { width: 0.17, height: 0.04, depth: 0.14 }, this.scene);
-    rightBootBuckle.material = metalEdgeMat;
-    rightBootBuckle.position.set(0, 0.04, -0.08);
-    rightBootBuckle.parent = this.rightBoot;
+    const rightBuckle = MeshBuilder.CreateBox("skierRightBuckle", { width: 0.15, height: 0.03, depth: 0.12 }, this.scene);
+    rightBuckle.material = metalEdgeMat;
+    rightBuckle.position.set(0, 0.04, -0.07);
+    rightBuckle.parent = this.rightBoot;
 
-    // 5. Arms, Elbow Armor & Ski Poles (Cruising)
+    // 5. Arms, Elbow Armor & Ski Poles (Cruising Stance)
     // Left Arm
-    this.leftArm = MeshBuilder.CreateCylinder("skierLeftArm", { height: 0.42, diameter: 0.15 }, this.scene);
+    this.leftArm = MeshBuilder.CreateCylinder("skierLeftArm", { height: 0.38, diameter: 0.13 }, this.scene);
     this.leftArm.material = suitMat;
-    this.leftArm.position.set(-0.46, 1.22, -0.05);
-    this.leftArm.rotation.set(-0.25, 0, 0.22);
+    this.leftArm.position.set(-0.36, 1.22, -0.02);
+    this.leftArm.rotation.set(-0.25, 0, 0.20);
     this.leftArm.parent = this.rootNode;
 
-    this.leftForearm = MeshBuilder.CreateCylinder("skierLeftForearm", { height: 0.40, diameter: 0.13 }, this.scene);
+    this.leftForearm = MeshBuilder.CreateCylinder("skierLeftForearm", { height: 0.36, diameter: 0.11 }, this.scene);
     this.leftForearm.material = suitMat;
-    this.leftForearm.position.set(0, -0.32, 0.08);
-    this.leftForearm.rotation.x = 0.45;
+    this.leftForearm.position.set(0, -0.28, 0.06);
+    this.leftForearm.rotation.x = 0.48;
     this.leftForearm.parent = this.leftArm;
 
-    const leftElbow = MeshBuilder.CreateBox("skierLeftElbow", { width: 0.14, height: 0.14, depth: 0.09 }, this.scene);
+    const leftElbow = MeshBuilder.CreateBox("skierLeftElbow", { width: 0.12, height: 0.12, depth: 0.08 }, this.scene);
     leftElbow.material = blackPanelMat;
-    leftElbow.position.set(0, 0.16, 0.06);
+    leftElbow.position.set(0, 0.14, 0.05);
     leftElbow.parent = this.leftForearm;
 
-    const leftGlove = MeshBuilder.CreateSphere("skierLeftGlove", { diameter: 0.15 }, this.scene);
-    leftGlove.material = blackPanelMat;
-    leftGlove.position.set(0, -0.22, 0);
-    leftGlove.parent = this.leftForearm;
+    this.leftGlove = MeshBuilder.CreateSphere("skierLeftGlove", { diameter: 0.13 }, this.scene);
+    this.leftGlove.material = blackPanelMat;
+    this.leftGlove.position.set(0, -0.20, 0);
+    this.leftGlove.parent = this.leftForearm;
 
-    this.leftPole = MeshBuilder.CreateCylinder("skierLeftPole", { height: 1.28, diameter: 0.026 }, this.scene);
+    this.leftPole = MeshBuilder.CreateCylinder("skierLeftPole", { height: 1.25, diameter: 0.024 }, this.scene);
     this.leftPole.material = gunmetalMat;
-    this.leftPole.position.set(0, -0.25, 0.20);
-    this.leftPole.rotation.x = 0.55;
-    this.leftPole.parent = leftGlove;
+    this.leftPole.position.set(0, -0.25, 0.18);
+    this.leftPole.rotation.x = 0.52;
+    this.leftPole.parent = this.leftGlove;
 
-    const leftBasket = MeshBuilder.CreateCylinder("skierLeftBasket", { height: 0.02, diameter: 0.12 }, this.scene);
+    const leftBasket = MeshBuilder.CreateCylinder("skierLeftBasket", { height: 0.02, diameter: 0.11 }, this.scene);
     leftBasket.material = blackPanelMat;
-    leftBasket.position.set(0, -0.48, 0);
+    leftBasket.position.set(0, -0.46, 0);
     leftBasket.parent = this.leftPole;
 
     // Right Arm
-    this.rightArm = MeshBuilder.CreateCylinder("skierRightArm", { height: 0.42, diameter: 0.15 }, this.scene);
+    this.rightArm = MeshBuilder.CreateCylinder("skierRightArm", { height: 0.38, diameter: 0.13 }, this.scene);
     this.rightArm.material = suitMat;
-    this.rightArm.position.set(0.46, 1.22, -0.05);
-    this.rightArm.rotation.set(-0.25, 0, -0.22);
+    this.rightArm.position.set(0.36, 1.22, -0.02);
+    this.rightArm.rotation.set(-0.25, 0, -0.20);
     this.rightArm.parent = this.rootNode;
 
-    this.rightForearm = MeshBuilder.CreateCylinder("skierRightForearm", { height: 0.40, diameter: 0.13 }, this.scene);
+    this.rightForearm = MeshBuilder.CreateCylinder("skierRightForearm", { height: 0.36, diameter: 0.11 }, this.scene);
     this.rightForearm.material = suitMat;
-    this.rightForearm.position.set(0, -0.32, 0.08);
-    this.rightForearm.rotation.x = 0.45;
+    this.rightForearm.position.set(0, -0.28, 0.06);
+    this.rightForearm.rotation.x = 0.48;
     this.rightForearm.parent = this.rightArm;
 
-    const rightElbow = MeshBuilder.CreateBox("skierRightElbow", { width: 0.14, height: 0.14, depth: 0.09 }, this.scene);
+    const rightElbow = MeshBuilder.CreateBox("skierRightElbow", { width: 0.12, height: 0.12, depth: 0.08 }, this.scene);
     rightElbow.material = blackPanelMat;
-    rightElbow.position.set(0, 0.16, 0.06);
+    rightElbow.position.set(0, 0.14, 0.05);
     rightElbow.parent = this.rightForearm;
 
-    const rightGlove = MeshBuilder.CreateSphere("skierRightGlove", { diameter: 0.15 }, this.scene);
-    rightGlove.material = blackPanelMat;
-    rightGlove.position.set(0, -0.22, 0);
-    rightGlove.parent = this.rightForearm;
+    this.rightGlove = MeshBuilder.CreateSphere("skierRightGlove", { diameter: 0.13 }, this.scene);
+    this.rightGlove.material = blackPanelMat;
+    this.rightGlove.position.set(0, -0.20, 0);
+    this.rightGlove.parent = this.rightForearm;
 
-    this.rightPole = MeshBuilder.CreateCylinder("skierRightPole", { height: 1.28, diameter: 0.026 }, this.scene);
+    this.rightPole = MeshBuilder.CreateCylinder("skierRightPole", { height: 1.25, diameter: 0.024 }, this.scene);
     this.rightPole.material = gunmetalMat;
-    this.rightPole.position.set(0, -0.25, 0.20);
-    this.rightPole.rotation.x = 0.55;
-    this.rightPole.parent = rightGlove;
+    this.rightPole.position.set(0, -0.25, 0.18);
+    this.rightPole.rotation.x = 0.52;
+    this.rightPole.parent = this.rightGlove;
 
-    const rightBasket = MeshBuilder.CreateCylinder("skierRightBasket", { height: 0.02, diameter: 0.12 }, this.scene);
+    const rightBasket = MeshBuilder.CreateCylinder("skierRightBasket", { height: 0.02, diameter: 0.11 }, this.scene);
     rightBasket.material = blackPanelMat;
-    rightBasket.position.set(0, -0.48, 0);
+    rightBasket.position.set(0, -0.46, 0);
     rightBasket.parent = this.rightPole;
 
-    // 6. Tactical Scoped Hunting Rifle / Harpoon Gun (Combat Stance)
+    // ==========================================
+    // ALWAYS-VISIBLE TACTICAL HARPOON RIFLE
+    // ==========================================
     this.rifleRoot = new Mesh("skierRifleRoot", this.scene);
-    this.rifleRoot.position.set(0.18, 1.15, -0.42);
-    this.rifleRoot.rotation.set(0.10, 0, 0);
     this.rifleRoot.parent = this.rootNode;
+    // Start in diagonal backpack scabbard mount
+    this.rifleRoot.position.set(0.14, 1.28, 0.28);
+    this.rifleRoot.rotation.set(0.25, 0.35, 0.85);
 
     // Receiver & Stock
-    const rifleBody = MeshBuilder.CreateBox("skierRifleBody", { width: 0.08, height: 0.14, depth: 0.95 }, this.scene);
+    const rifleBody = MeshBuilder.CreateBox("skierRifleBody", { width: 0.07, height: 0.13, depth: 0.90 }, this.scene);
     rifleBody.material = gunmetalMat;
     rifleBody.parent = this.rifleRoot;
 
     // Top Picatinny Rail
-    const rail = MeshBuilder.CreateBox("skierRifleRail", { width: 0.06, height: 0.03, depth: 0.70 }, this.scene);
+    const rail = MeshBuilder.CreateBox("skierRifleRail", { width: 0.05, height: 0.025, depth: 0.65 }, this.scene);
     rail.material = blackPanelMat;
-    rail.position.set(0, 0.08, -0.10);
+    rail.position.set(0, 0.075, -0.10);
     rail.parent = this.rifleRoot;
 
     // Fluted Precision Barrel
-    const rifleBarrel = MeshBuilder.CreateCylinder("skierRifleBarrel", { height: 0.75, diameter: 0.038 }, this.scene);
+    const rifleBarrel = MeshBuilder.CreateCylinder("skierRifleBarrel", { height: 0.72, diameter: 0.035 }, this.scene);
     rifleBarrel.material = gunmetalMat;
     rifleBarrel.rotation.x = Math.PI / 2;
-    rifleBarrel.position.set(0, 0.02, -0.70);
+    rifleBarrel.position.set(0, 0.02, -0.68);
     rifleBarrel.parent = this.rifleRoot;
 
     // Muzzle Brake
-    const muzzleBrake = MeshBuilder.CreateCylinder("skierMuzzleBrake", { height: 0.10, diameter: 0.052 }, this.scene);
+    const muzzleBrake = MeshBuilder.CreateCylinder("skierMuzzleBrake", { height: 0.09, diameter: 0.050 }, this.scene);
     muzzleBrake.material = blackPanelMat;
     muzzleBrake.rotation.x = Math.PI / 2;
-    muzzleBrake.position.set(0, 0.02, -1.08);
+    muzzleBrake.position.set(0, 0.02, -1.05);
     muzzleBrake.parent = this.rifleRoot;
 
     // Tactical High-Power Optical Scope
-    const rifleScope = MeshBuilder.CreateCylinder("skierRifleScope", { height: 0.38, diameter: 0.052 }, this.scene);
+    const rifleScope = MeshBuilder.CreateCylinder("skierRifleScope", { height: 0.36, diameter: 0.050 }, this.scene);
     rifleScope.material = blackPanelMat;
     rifleScope.rotation.x = Math.PI / 2;
-    rifleScope.position.set(0, 0.13, -0.15);
+    rifleScope.position.set(0, 0.12, -0.15);
     rifleScope.parent = this.rifleRoot;
 
     // Scope Objective Lens (front & rear glass glints)
-    const lensFront = MeshBuilder.CreateDisc("skierLensFront", { radius: 0.024 }, this.scene);
+    const lensFront = MeshBuilder.CreateDisc("skierLensFront", { radius: 0.023 }, this.scene);
     lensFront.material = lensMat;
-    lensFront.position.set(0, 0.13, -0.34);
+    lensFront.position.set(0, 0.12, -0.33);
     lensFront.parent = this.rifleRoot;
 
-    const lensRear = MeshBuilder.CreateDisc("skierLensRear", { radius: 0.024 }, this.scene);
+    const lensRear = MeshBuilder.CreateDisc("skierLensRear", { radius: 0.023 }, this.scene);
     lensRear.material = lensMat;
     lensRear.rotation.y = Math.PI;
-    lensRear.position.set(0, 0.13, 0.04);
+    lensRear.position.set(0, 0.12, 0.03);
     lensRear.parent = this.rifleRoot;
 
-    // Cable Drum Spool
-    const spool = MeshBuilder.CreateCylinder("skierRifleSpool", { height: 0.12, diameter: 0.14 }, this.scene);
+    // Heavy Brass Pressure Coils & Red Cable Drum Spool
+    const spool = MeshBuilder.CreateCylinder("skierRifleSpool", { height: 0.11, diameter: 0.13 }, this.scene);
     spool.material = redAccentMat;
-    spool.position.set(0, -0.09, -0.05);
+    spool.position.set(0, -0.08, -0.05);
     spool.parent = this.rifleRoot;
 
-    // Hidden by default when cruising downhill; shown when tethered or aiming
-    this.rifleRoot.setEnabled(false);
+    // Harpoon Projectile Tip (visible loaded in front muzzle)
+    const harpoonTip = MeshBuilder.CreateCylinder("skierHarpoonTip", { height: 0.16, diameterTop: 0.005, diameterBottom: 0.03 }, this.scene);
+    harpoonTip.material = metalEdgeMat;
+    harpoonTip.rotation.x = Math.PI / 2;
+    harpoonTip.position.set(0, 0.02, -1.14);
+    harpoonTip.parent = this.rifleRoot;
 
-    // 7. Carbon Downhill Skis with Metallic Edges & Mechanical Bindings
-    const skiWidth = 0.16;
+    // Rifle is permanently enabled and visible!
+    this.rifleRoot.setEnabled(true);
+
+    // ==========================================
+    // RACING DOWNHILL SKIS & BINDINGS
+    // ==========================================
+    const skiWidth = 0.15;
     const skiLength = 2.10;
-    const skiSeparation = 0.28;
+    const skiSeparation = 0.26;
 
     // Left Ski
-    this.leftSki = MeshBuilder.CreateBox("skierLeftSki", { width: skiWidth, height: 0.038, depth: skiLength }, this.scene);
+    this.leftSki = MeshBuilder.CreateBox("skierLeftSki", { width: skiWidth, height: 0.035, depth: skiLength }, this.scene);
     this.leftSki.material = skiMat;
     this.leftSki.position.set(-skiSeparation, 0.02, 0);
     this.leftSki.parent = this.rootNode;
 
-    // Left Metal Ski Edges
-    const leftEdgeL = MeshBuilder.CreateBox("skierLeftEdgeL", { width: 0.012, height: 0.036, depth: skiLength }, this.scene);
+    const leftEdgeL = MeshBuilder.CreateBox("skierLeftEdgeL", { width: 0.010, height: 0.033, depth: skiLength }, this.scene);
     leftEdgeL.material = metalEdgeMat;
-    leftEdgeL.position.set(-skiWidth / 2 + 0.006, 0, 0);
+    leftEdgeL.position.set(-skiWidth / 2 + 0.005, 0, 0);
     leftEdgeL.parent = this.leftSki;
 
-    const leftEdgeR = MeshBuilder.CreateBox("skierLeftEdgeR", { width: 0.012, height: 0.036, depth: skiLength }, this.scene);
+    const leftEdgeR = MeshBuilder.CreateBox("skierLeftEdgeR", { width: 0.010, height: 0.033, depth: skiLength }, this.scene);
     leftEdgeR.material = metalEdgeMat;
-    leftEdgeR.position.set(skiWidth / 2 - 0.006, 0, 0);
+    leftEdgeR.position.set(skiWidth / 2 - 0.005, 0, 0);
     leftEdgeR.parent = this.leftSki;
 
-    // Left Red Racing Tip
-    this.leftTip = MeshBuilder.CreateBox("skierLeftTip", { width: skiWidth, height: 0.038, depth: 0.32 }, this.scene);
+    this.leftTip = MeshBuilder.CreateBox("skierLeftTip", { width: skiWidth, height: 0.035, depth: 0.30 }, this.scene);
     this.leftTip.material = redAccentMat;
-    this.leftTip.position.set(0, 0.06, -skiLength / 2 - 0.12);
+    this.leftTip.position.set(0, 0.05, -skiLength / 2 - 0.12);
     this.leftTip.rotation.x = -0.38;
     this.leftTip.parent = this.leftSki;
 
-    // Left Step-In Ski Binding (Toe clamp + heel unit)
-    const leftToeClamp = MeshBuilder.CreateBox("skierLeftToeClamp", { width: 0.13, height: 0.08, depth: 0.12 }, this.scene);
-    leftToeClamp.material = metalEdgeMat;
+    const leftToeClamp = MeshBuilder.CreateBox("skierLeftToeClamp", { width: 0.12, height: 0.08, depth: 0.14 }, this.scene);
+    leftToeClamp.material = blackPanelMat;
     leftToeClamp.position.set(0, 0.05, -0.16);
     leftToeClamp.parent = this.leftSki;
 
-    const leftHeelUnit = MeshBuilder.CreateBox("skierLeftHeelUnit", { width: 0.13, height: 0.09, depth: 0.16 }, this.scene);
+    const leftHeelUnit = MeshBuilder.CreateBox("skierLeftHeelUnit", { width: 0.12, height: 0.08, depth: 0.15 }, this.scene);
     leftHeelUnit.material = blackPanelMat;
     leftHeelUnit.position.set(0, 0.06, 0.14);
     leftHeelUnit.parent = this.leftSki;
 
     // Right Ski
-    this.rightSki = MeshBuilder.CreateBox("skierRightSki", { width: skiWidth, height: 0.038, depth: skiLength }, this.scene);
+    this.rightSki = MeshBuilder.CreateBox("skierRightSki", { width: skiWidth, height: 0.035, depth: skiLength }, this.scene);
     this.rightSki.material = skiMat;
     this.rightSki.position.set(skiSeparation, 0.02, 0);
     this.rightSki.parent = this.rootNode;
 
-    const rightEdgeL = MeshBuilder.CreateBox("skierRightEdgeL", { width: 0.012, height: 0.036, depth: skiLength }, this.scene);
+    const rightEdgeL = MeshBuilder.CreateBox("skierRightEdgeL", { width: 0.010, height: 0.033, depth: skiLength }, this.scene);
     rightEdgeL.material = metalEdgeMat;
-    rightEdgeL.position.set(-skiWidth / 2 + 0.006, 0, 0);
+    rightEdgeL.position.set(-skiWidth / 2 + 0.005, 0, 0);
     rightEdgeL.parent = this.rightSki;
 
-    const rightEdgeR = MeshBuilder.CreateBox("skierRightEdgeR", { width: 0.012, height: 0.036, depth: skiLength }, this.scene);
+    const rightEdgeR = MeshBuilder.CreateBox("skierRightEdgeR", { width: 0.010, height: 0.033, depth: skiLength }, this.scene);
     rightEdgeR.material = metalEdgeMat;
-    rightEdgeR.position.set(skiWidth / 2 - 0.006, 0, 0);
+    rightEdgeR.position.set(skiWidth / 2 - 0.005, 0, 0);
     rightEdgeR.parent = this.rightSki;
 
-    this.rightTip = MeshBuilder.CreateBox("skierRightTip", { width: skiWidth, height: 0.038, depth: 0.32 }, this.scene);
+    this.rightTip = MeshBuilder.CreateBox("skierRightTip", { width: skiWidth, height: 0.035, depth: 0.30 }, this.scene);
     this.rightTip.material = redAccentMat;
-    this.rightTip.position.set(0, 0.06, -skiLength / 2 - 0.12);
+    this.rightTip.position.set(0, 0.05, -skiLength / 2 - 0.12);
     this.rightTip.rotation.x = -0.38;
     this.rightTip.parent = this.rightSki;
 
-    const rightToeClamp = MeshBuilder.CreateBox("skierRightToeClamp", { width: 0.13, height: 0.08, depth: 0.12 }, this.scene);
-    rightToeClamp.material = metalEdgeMat;
+    const rightToeClamp = MeshBuilder.CreateBox("skierRightToeClamp", { width: 0.12, height: 0.08, depth: 0.14 }, this.scene);
+    rightToeClamp.material = blackPanelMat;
     rightToeClamp.position.set(0, 0.05, -0.16);
     rightToeClamp.parent = this.rightSki;
 
-    const rightHeelUnit = MeshBuilder.CreateBox("skierRightHeelUnit", { width: 0.13, height: 0.09, depth: 0.16 }, this.scene);
+    const rightHeelUnit = MeshBuilder.CreateBox("skierRightHeelUnit", { width: 0.12, height: 0.08, depth: 0.15 }, this.scene);
     rightHeelUnit.material = blackPanelMat;
     rightHeelUnit.position.set(0, 0.06, 0.14);
     rightHeelUnit.parent = this.rightSki;
@@ -549,6 +566,13 @@ export class SkierAvatar {
     this.rightSpray.start();
   }
 
+  public setCutsceneVictory(active: boolean): void {
+    this.isCutsceneVictory = active;
+    if (!active) {
+      this.victoryTimer = 0;
+    }
+  }
+
   public update(
     playerPosition: Vector3,
     steerInput: number,
@@ -556,7 +580,8 @@ export class SkierAvatar {
     isTucking: boolean,
     isBraking: boolean,
     deltaTime: number,
-    isTethered: boolean = false
+    isTethered: boolean = false,
+    isAiming: boolean = false
   ): void {
     // 1. Follow player position
     this.rootNode.position.copyFrom(playerPosition);
@@ -570,6 +595,30 @@ export class SkierAvatar {
       this.rootNode.rotation.z = Math.sin(this.wipeoutTimer * 8.0) * 0.4;
       if (this.leftSpray) this.leftSpray.emitRate = 0;
       if (this.rightSpray) this.rightSpray.emitRate = 0;
+      return;
+    }
+
+    // 2b. Cutscene Victory Celebration Pose
+    if (this.isCutsceneVictory) {
+      this.victoryTimer += deltaTime;
+      // Carve triumphant downhill sweep
+      this.rootNode.rotation.z = Math.sin(this.victoryTimer * 2.5) * 0.15;
+      this.rootNode.rotation.y = Math.sin(this.victoryTimer * 2.0) * 0.12;
+
+      // Right arm raised high in victory pole salute!
+      this.rightArm.rotation.set(-1.85, 0.25, -0.45);
+      this.rightForearm.rotation.x = 0.25;
+      this.rightPole.setEnabled(true);
+      this.leftPole.setEnabled(true);
+
+      // Left arm out for balance
+      this.leftArm.rotation.set(-0.35, 0, 0.45);
+      this.leftForearm.rotation.x = 0.50;
+
+      // Harpoon remains securely slung on back
+      this.targetRiflePos.set(0.14, 1.28, 0.28);
+      this.targetRifleRot.set(0.25, 0.35, 0.85);
+      this.lerpRifleTransform(deltaTime);
       return;
     }
 
@@ -595,20 +644,23 @@ export class SkierAvatar {
     const targetSquat = isTucking ? 0.32 : 0.0;
     this.currentSquat = Scalar.Lerp(this.currentSquat, targetSquat, Math.min(1.0, deltaTime * 10.0));
 
-    this.bodyMesh.position.y = 1.05 - this.currentSquat;
-    this.bodyMesh.rotation.x = isTucking ? 0.44 : 0.08;
-    this.headMesh.position.y = 1.62 - this.currentSquat * 1.25;
-    this.headMesh.position.z = isTucking ? -0.16 : 0.02;
+    this.bodyMesh.position.y = 1.18 - this.currentSquat;
+    this.bodyMesh.rotation.x = isTucking ? 0.42 : 0.06;
+    this.headMesh.position.y = 1.58 - this.currentSquat * 1.20;
+    this.headMesh.position.z = isTucking ? -0.14 : 0.01;
 
     // Knee flex in tuck
-    this.leftLeg.rotation.x = -0.14 - this.currentSquat * 0.45;
-    this.rightLeg.rotation.x = -0.14 - this.currentSquat * 0.45;
+    this.leftLeg.rotation.x = -0.22 - this.currentSquat * 0.40;
+    this.rightLeg.rotation.x = -0.22 - this.currentSquat * 0.40;
 
-    // 6. Combat Rifle Stance vs Cruising Poles
-    this.isAimingGun = isTethered;
-    if (isTethered) {
-      // Reveal rifle, position arms to grip rifle
-      this.rifleRoot.setEnabled(true);
+    // 6. HARPOON STANCE: Cruising Slung vs Combat Aiming / Tethered
+    this.isAimingGun = isTethered || isAiming;
+    if (this.isAimingGun) {
+      // Wielded Firing Stance: Harpoon brought forward into two hands
+      this.targetRiflePos.set(0.18, 1.15, -0.42);
+      this.targetRifleRot.set(0.10, 0, 0);
+
+      // Hide cruising poles when gripping harpoon
       this.leftPole.setEnabled(false);
       this.rightPole.setEnabled(false);
 
@@ -618,7 +670,10 @@ export class SkierAvatar {
       this.rightArm.rotation.set(-0.76, -0.28, -0.38);
       this.rightForearm.rotation.x = 0.70;
     } else {
-      this.rifleRoot.setEnabled(false);
+      // Cruising Downhill Stance: Harpoon slung diagonally across backpack over right shoulder
+      this.targetRiflePos.set(0.14, 1.28, 0.28);
+      this.targetRifleRot.set(0.25, 0.35, 0.85);
+
       this.leftPole.setEnabled(true);
       this.rightPole.setEnabled(true);
 
@@ -630,12 +685,15 @@ export class SkierAvatar {
         this.rightForearm.rotation.x = 0.20;
       } else {
         // Athletic downhill pole ready position
-        this.leftArm.rotation.set(-0.25, 0, 0.22);
-        this.leftForearm.rotation.x = 0.45;
-        this.rightArm.rotation.set(-0.25, 0, -0.22);
-        this.rightForearm.rotation.x = 0.45;
+        this.leftArm.rotation.set(-0.25, 0, 0.20);
+        this.leftForearm.rotation.x = 0.48;
+        this.rightArm.rotation.set(-0.25, 0, -0.20);
+        this.rightForearm.rotation.x = 0.48;
       }
     }
+
+    // Smooth lerp between holstered and wielded weapon positions
+    this.lerpRifleTransform(deltaTime);
 
     // 7. Snowplow Wedge Braking
     const targetPlow = isBraking ? 0.28 : 0.0;
@@ -651,6 +709,19 @@ export class SkierAvatar {
     if (this.rightSpray) {
       this.rightSpray.emitRate = Math.abs(steerInput) > 0.1 || isBraking ? sprayRate * 1.6 : sprayRate;
     }
+  }
+
+  private lerpRifleTransform(deltaTime: number): void {
+    const lerpSpeed = 12.0;
+    this.currentRiflePos.x = Scalar.Lerp(this.currentRiflePos.x, this.targetRiflePos.x, Math.min(1.0, deltaTime * lerpSpeed));
+    this.currentRiflePos.y = Scalar.Lerp(this.currentRiflePos.y, this.targetRiflePos.y, Math.min(1.0, deltaTime * lerpSpeed));
+    this.currentRiflePos.z = Scalar.Lerp(this.currentRiflePos.z, this.targetRiflePos.z, Math.min(1.0, deltaTime * lerpSpeed));
+    this.rifleRoot.position.copyFrom(this.currentRiflePos);
+
+    this.currentRifleRot.x = Scalar.Lerp(this.currentRifleRot.x, this.targetRifleRot.x, Math.min(1.0, deltaTime * lerpSpeed));
+    this.currentRifleRot.y = Scalar.Lerp(this.currentRifleRot.y, this.targetRifleRot.y, Math.min(1.0, deltaTime * lerpSpeed));
+    this.currentRifleRot.z = Scalar.Lerp(this.currentRifleRot.z, this.targetRifleRot.z, Math.min(1.0, deltaTime * lerpSpeed));
+    this.rifleRoot.rotation.copyFrom(this.currentRifleRot);
   }
 
   public setVisible(visible: boolean): void {
@@ -674,7 +745,7 @@ export class SkierAvatar {
   }
 
   public getTowlineAnchorWorldPosition(): Vector3 {
-    // Physical towline connects right from the rifle muzzle / cable drum in front of the skier
+    // Connects directly to the harpoon muzzle / cable drum in front of the skier
     return new Vector3(
       this.rootNode.position.x + 0.18,
       this.rootNode.position.y + 1.25,

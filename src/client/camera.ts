@@ -36,6 +36,13 @@ export class CameraRig {
   public isTargetLocked: boolean = false;
   public autoLockEnabled: boolean = true;
 
+  // End-of-Level Cinematic Cutscene State
+  public isCutsceneActive: boolean = false;
+  public cutscenePhase: 'takedown_orbit' | 'victory_pass' | 'summit_pullout' | null = null;
+  public cutsceneTimer: number = 0;
+  public cutsceneFocusPos: Vector3 = new Vector3(0, 0, 0);
+  public cutscenePlayerPos: Vector3 = new Vector3(0, 0, 0);
+
   constructor(scene: Scene, canvas: HTMLCanvasElement) {
     this.scene = scene;
     this.camera = new UniversalCamera("fpvCamera", new Vector3(0, 1.6, 0), this.scene);
@@ -125,6 +132,29 @@ export class CameraRig {
     this.recoilYaw += (Math.random() - 0.5) * yawKick;
   }
 
+  public startCutscene(
+    phase: 'takedown_orbit' | 'victory_pass' | 'summit_pullout',
+    focusPos: Vector3,
+    playerPos: Vector3
+  ): void {
+    this.isCutsceneActive = true;
+    this.cutscenePhase = phase;
+    this.cutsceneTimer = 0;
+    this.cutsceneFocusPos.copyFrom(focusPos);
+    this.cutscenePlayerPos.copyFrom(playerPos);
+  }
+
+  public setCutscenePhase(phase: 'takedown_orbit' | 'victory_pass' | 'summit_pullout'): void {
+    this.cutscenePhase = phase;
+    this.cutsceneTimer = 0;
+  }
+
+  public stopCutscene(): void {
+    this.isCutsceneActive = false;
+    this.cutscenePhase = null;
+    this.cutsceneTimer = 0;
+  }
+
   public update(
     playerPosition: Vector3,
     steerInput: number,
@@ -142,16 +172,52 @@ export class CameraRig {
       this.recoilYaw = Scalar.Lerp(this.recoilYaw, 0, Math.min(1.0, deltaTime * 16.0));
     }
 
+    // 0b. Cinematic Cutscene Execution Mode
+    if (this.isCutsceneActive) {
+      this.cutsceneTimer += deltaTime;
+      if (this.cutscenePhase === 'takedown_orbit') {
+        // Dramatic bullet-time orbit sweeping around the downed Yeti
+        const orbitRadius = 9.8;
+        const orbitSpeed = 0.95;
+        const angle = this.cutsceneTimer * orbitSpeed;
+        const camX = this.cutsceneFocusPos.x + Math.sin(angle) * orbitRadius;
+        const camY = this.cutsceneFocusPos.y + 3.4;
+        const camZ = this.cutsceneFocusPos.z + Math.cos(angle) * orbitRadius;
+        this.camera.position.set(camX, camY, camZ);
+        this.camera.setTarget(new Vector3(this.cutsceneFocusPos.x, this.cutsceneFocusPos.y + 1.2, this.cutsceneFocusPos.z));
+      } else if (this.cutscenePhase === 'victory_pass') {
+        // Dynamic low-angle 3/4 tracking shot framing skier triumphantly blasting past
+        const targetX = playerPosition.x + 3.2;
+        const targetY = playerPosition.y + 1.35;
+        const targetZ = playerPosition.z - 2.8;
+        this.camera.position.x = Scalar.Lerp(this.camera.position.x, targetX, Math.min(1.0, deltaTime * 10.0));
+        this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 10.0));
+        this.camera.position.z = Scalar.Lerp(this.camera.position.z, targetZ, Math.min(1.0, deltaTime * 10.0));
+        this.camera.setTarget(new Vector3(playerPosition.x, playerPosition.y + 1.1, playerPosition.z));
+      } else if (this.cutscenePhase === 'summit_pullout') {
+        // Panoramic mountain pull-back
+        const targetX = playerPosition.x;
+        const targetY = playerPosition.y + 8.5;
+        const targetZ = playerPosition.z + 16.0;
+        this.camera.position.x = Scalar.Lerp(this.camera.position.x, targetX, Math.min(1.0, deltaTime * 3.5));
+        this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 3.5));
+        this.camera.position.z = Scalar.Lerp(this.camera.position.z, targetZ, Math.min(1.0, deltaTime * 3.5));
+        this.camera.setTarget(new Vector3(playerPosition.x, playerPosition.y + 0.8, playerPosition.z - 28.0));
+      }
+      return;
+    }
+
     // 1. Position camera based on cameraMode
     const isThirdPerson = this.cameraMode === 'third_person';
     const speedRatio = Math.min(1.8, speedMph / 45);
     const mogulChatter = Math.sin(Date.now() * 0.024) * 0.012 * speedRatio;
 
     if (isThirdPerson) {
-      // Tight over-the-shoulder action perspective matching thats_the_best_video_you_have.mp4
-      const followDist = 3.8;
-      const followHeight = 1.85;
-      const targetX = playerPosition.x + 0.32 + (this.isAimingRear ? 0 : this.aimYawOffset * 2.0);
+      // Elevated downhill perspective framing skier in lower third with expansive slope visibility
+      const speedPullBack = (speedMph / 60) * 0.45;
+      const followDist = 4.85 + speedPullBack;
+      const followHeight = 2.85;
+      const targetX = playerPosition.x + (this.isAimingRear ? 0 : this.aimYawOffset * 1.8);
       const targetY = playerPosition.y + followHeight + mogulChatter * 0.2;
       const targetZ = playerPosition.z + (this.isAimingRear ? -followDist : followDist);
 
@@ -230,11 +296,11 @@ export class CameraRig {
     } else {
       this.isTargetLocked = false;
       if (isThirdPerson) {
-        // Tight over-the-shoulder downhill action framing matching thats_the_best_video_you_have.mp4
+        // Downhill slope pitch tilt (~10 degrees downward) looking ahead down the run
         const speedPitchCompression = (speedMph / 80) * 0.02;
         const basePitch = this.isAimingRear
           ? -0.02 + this.aimPitchOffset * 0.3
-          : (0.02 + slopePitchRad * 0.15 + speedPitchCompression + this.aimPitchOffset * 0.3);
+          : (0.17 + slopePitchRad * 0.22 + speedPitchCompression + this.aimPitchOffset * 0.3);
         targetPitchAngle = basePitch;
         targetYawAngle = defaultYaw + this.aimYawOffset;
       } else {

@@ -785,7 +785,9 @@ export class SkiFreeApp {
 
     // Update Realistic 3D Skier Avatar (matches thats_the_best_video_you_have.mp4)
     const isTethered = Boolean(this.steamHarpoon && this.steamHarpoon.isTethered);
+    const isAiming = Boolean(this.cameraRig.isAimingRear);
     if (this.skierAvatar) {
+      this.skierAvatar.setCutsceneVictory(this.isTakedownTriggered);
       this.skierAvatar.update(
         this.playerPos,
         this.steerInput,
@@ -793,7 +795,8 @@ export class SkiFreeApp {
         this.isTucking,
         this.isBraking,
         deltaTime,
-        isTethered
+        isTethered,
+        isAiming
       );
     }
 
@@ -1003,6 +1006,13 @@ export class SkiFreeApp {
       this.hudSystem.addKillfeedMessage(`🎯 SKIER_PRO <span style="color:#ff0055;">+</span> ALPINE YETI (CRITICAL IMPALE)`);
     }
 
+    // Launch 3-Stage 3D Cinematic Cutscene Sequence
+    const beastPos = this.yetiEntity ? this.yetiEntity.rootMesh.position : this.playerPos;
+    this.cameraRig.startCutscene('takedown_orbit', beastPos, this.playerPos);
+    if (this.skierAvatar) {
+      this.skierAvatar.setCutsceneVictory(true);
+    }
+
     // Calculate score & time
     const levelBonus = 10000 * this.currentLevel;
     this.totalScore += levelBonus;
@@ -1045,31 +1055,51 @@ export class SkiFreeApp {
           BEAST FELLED • +${levelBonus.toLocaleString()} PTS • SKIING PAST DOWNED YETI
         </div>
         <div id="takedown-ski-countdown" style="font-size: clamp(13px, 2.2vw, 17px); font-weight: 900; color: #00f0ff; margin-top: 10px; letter-spacing: 1px; text-shadow: 0 0 10px #00f0ff;">
-          LEVEL SUMMARY IN 5.0s...
+          CINEMATIC CLEAR IN 5.0s...
         </div>
       `;
     }
 
-    // 5-Second Celebration Countdown while skiing downhill past beast
+    // 5-Second Celebration Countdown & Multi-Stage Cutscene Transitions
     const celebrationStart = Date.now();
     this.takedownCountdownInterval = window.setInterval(() => {
       const elapsed = (Date.now() - celebrationStart) / 1000;
       const remaining = Math.max(0, 5.0 - elapsed);
       const countdownEl = document.getElementById("takedown-ski-countdown");
       if (countdownEl) {
-        countdownEl.textContent = `LEVEL SUMMARY IN ${remaining.toFixed(1)}s...`;
+        countdownEl.textContent = `CINEMATIC CLEAR IN ${remaining.toFixed(1)}s...`;
       }
+
+      // Transition cutscene camera phases:
+      // Phase 1 (0.0s - 2.0s): 'takedown_orbit'
+      // Phase 2 (2.0s - 3.8s): 'victory_pass'
+      // Phase 3 (3.8s - 5.0s): 'summit_pullout'
+      if (elapsed >= 3.8) {
+        if (this.cameraRig.cutscenePhase !== 'summit_pullout') {
+          this.cameraRig.setCutscenePhase('summit_pullout');
+        }
+      } else if (elapsed >= 2.0) {
+        if (this.cameraRig.cutscenePhase !== 'victory_pass') {
+          this.cameraRig.setCutscenePhase('victory_pass');
+        }
+      }
+
       if (remaining <= 0 && this.takedownCountdownInterval) {
         clearInterval(this.takedownCountdownInterval);
         this.takedownCountdownInterval = null;
       }
     }, 100);
 
-    // After 5 seconds: Reveal Level Complete Modal with a slight pause before next level
+    // After 5 seconds: Stop cutscene, reveal Level Complete Modal with a slight pause before next level
     this.nextLevelTimeout = window.setTimeout(() => {
       if (this.takedownCountdownInterval) {
         clearInterval(this.takedownCountdownInterval);
         this.takedownCountdownInterval = null;
+      }
+
+      this.cameraRig.stopCutscene();
+      if (this.skierAvatar) {
+        this.skierAvatar.setCutsceneVictory(false);
       }
 
       if (banner) {
@@ -1154,6 +1184,11 @@ export class SkiFreeApp {
 
     if (this.networkSystem) {
       this.networkSystem.sendDropIn();
+    }
+
+    this.cameraRig.stopCutscene();
+    if (this.skierAvatar) {
+      this.skierAvatar.setCutsceneVictory(false);
     }
 
     const backdrop = document.getElementById("modal-backdrop");
