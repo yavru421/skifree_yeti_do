@@ -31,6 +31,47 @@ export default {
       });
     }
 
+    // API: Create new Lobby Room Code
+    if (url.pathname === "/api/lobby/create" && request.method === "POST") {
+      const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      return new Response(JSON.stringify({ roomCode }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+
+    // API: Validate Lobby Room Code
+    if (url.pathname === "/api/lobby/validate" && request.method === "GET") {
+      const roomParam = url.searchParams.get("room");
+      if (!roomParam || roomParam.trim().length < 4) {
+        return new Response(JSON.stringify({ valid: false, error: "Invalid room code" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      }
+      const roomCode = roomParam.trim().toUpperCase();
+      try {
+        const id = env.MOUNTAIN_DO.idFromName(roomCode);
+        const stub = env.MOUNTAIN_DO.get(id);
+        const infoRes = await stub.fetch(new Request("https://internal/api/info"));
+        const infoData = await infoRes.json();
+        return new Response(JSON.stringify({ valid: true, roomCode, info: infoData }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      } catch (err: any) {
+        return new Response(JSON.stringify({ valid: true, roomCode }), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      }
+    }
+
+    if (url.pathname === "/landing" || url.pathname === "/landing.html") {
+      url.pathname = "/landing.html";
+      return env.ASSETS.fetch(new Request(url.toString(), request));
+    }
+
     if (url.pathname === "/ws" || url.pathname === "/status" || url.pathname === "/api/telemetry") {
       if (request.method === "OPTIONS") {
         return new Response(null, {
@@ -42,7 +83,9 @@ export default {
           }
         });
       }
-      const id = env.MOUNTAIN_DO.idFromName("global-mountain-lobby");
+      const roomParam = url.searchParams.get("room");
+      const roomCode = (roomParam && roomParam.trim().length > 0 ? roomParam.trim() : "global-mountain-lobby").toUpperCase();
+      const id = env.MOUNTAIN_DO.idFromName(roomCode);
       const stub = env.MOUNTAIN_DO.get(id);
       return stub.fetch(request);
     }

@@ -268,8 +268,13 @@ export class FPVSkis {
     isBraking: boolean,
     speedMph: number,
     isAimingRear: boolean,
-    deltaTime: number
+    deltaTime: number,
+    isThirdPerson: boolean = false
   ): void {
+    if (isThirdPerson) {
+      this.rootNode.setEnabled(false);
+      return;
+    }
     // Hide skis and poles if player is looking 180° backward uphill
     this.rootNode.setEnabled(!isAimingRear);
     if (isAimingRear) return;

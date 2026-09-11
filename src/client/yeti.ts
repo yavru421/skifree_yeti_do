@@ -74,11 +74,17 @@ export class YetiEntity {
   private flankMarkerR: Mesh | null = null;
   private flankMatVuln: StandardMaterial | null = null;
   private flankMatShield: StandardMaterial | null = null;
+  private lastSpawnX: number = 0;
 
   constructor(scene: Scene) {
     this.scene = scene;
+    const initialSpread = 22;
+    const initialX = (Math.random() - 0.5) * 2 * initialSpread;
+    const initialZ = -(26 + Math.random() * 16);
+    this.lastSpawnX = initialX;
+
     this.rootMesh = new Mesh("yetiRoot", this.scene);
-    this.rootMesh.position.set(0, 0, -32); // Visible ahead on the slope
+    this.rootMesh.position.set(initialX, 0, initialZ);
 
     // 1. Setup Atmospheric Particles
     this.initParticleSystems();
@@ -216,7 +222,12 @@ export class YetiEntity {
     this.hp = state.hp;
   }
 
-  public startLevel(wave: number, playerZ: number): void {
+  public startLevel(
+    wave: number,
+    playerZ: number,
+    trailWidth: number = 75,
+    terrainHeightFn?: (x: number, z: number) => number
+  ): void {
     this.wave = wave;
     // Progressive HP scaling: L1=3000, L2=5500, L3=8500, L4=12000, L5=16000
     this.maxHp = Math.round(3000 + (wave - 1) * 2500 + Math.max(0, wave - 2) * 800);
@@ -230,9 +241,31 @@ export class YetiEntity {
     this.sprintDuration = 0;
     if (this.onSprintStateChange) this.onSprintStateChange(false);
 
-    // Spawn beast 26m ahead down the slope (-Z) facing DOWNHILL (Math.PI)
-    this.rootMesh.position.set(0, 0, playerZ - 26);
-    this.rootMesh.rotation.set(0, Math.PI, 0);
+    // Dynamic Procedural Spawning: Never spawn in the same spot
+    const safeHalfWidth = Math.max(14, (trailWidth / 2) - 10);
+    let newX = (Math.random() - 0.5) * 2 * safeHalfWidth;
+    let attempts = 0;
+    while (Math.abs(newX - this.lastSpawnX) < 14 && attempts < 8) {
+      newX = (Math.random() - 0.5) * 2 * safeHalfWidth;
+      attempts++;
+    }
+    this.lastSpawnX = newX;
+
+    // Vary downhill distance: 24m to 42m down the slope ahead of skier
+    const spawnDist = 24 + Math.random() * 18;
+    const spawnZ = playerZ - spawnDist;
+
+    // Ground altitude snapping via terrain height function
+    let groundY = 0;
+    if (terrainHeightFn) {
+      groundY = terrainHeightFn(newX, spawnZ);
+    }
+
+    this.rootMesh.position.set(newX, groundY, spawnZ);
+
+    // Inward predatory stalking orientation angled toward the center ski fall-line
+    const inwardAngle = Math.atan2(-newX, 35);
+    this.rootMesh.rotation.set(0, Math.PI + inwardAngle, 0);
 
     // Dynamic scale progression per level
     const scale = Math.min(1.45, 1.0 + (wave - 1) * 0.12);

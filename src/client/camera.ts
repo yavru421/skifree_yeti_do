@@ -1,14 +1,20 @@
 /**
  * SkiFree Yeti DO - FPV Camera Rig
  * Provides downhill forward skiing camera with tilt/inertia, dynamic FOV,
- * screen shake on collision/knockdowns, and 180° rearview precision rifle aiming.
+ * screen shake on collision/knockdowns, CS:GO/Fortnite weapon screen recoil,
+ * and 180° rearview precision rifle aiming.
  */
 
 import { Scene, UniversalCamera, Vector3, Scalar } from "@babylonjs/core";
 
+export type CameraMode = 'third_person' | 'first_person';
+
 export class CameraRig {
   public camera: UniversalCamera;
   private scene: Scene;
+
+  // Camera Perspective Mode (Diablo-style Third-Person Overhead by default)
+  public cameraMode: CameraMode = 'third_person';
 
   // State
   public isAimingRear: boolean = false;
@@ -21,6 +27,14 @@ export class CameraRig {
   private shakeTrauma: number = 0;
   public aimYawOffset: number = 0;
   public aimPitchOffset: number = 0;
+
+  // CS:GO / Fortnite Screen Recoil Dynamics
+  private recoilPitch: number = 0;
+  private recoilYaw: number = 0;
+
+  // Yeti Target Auto-Lock & Auto-Aim Framing
+  public isTargetLocked: boolean = false;
+  public autoLockEnabled: boolean = true;
 
   constructor(scene: Scene, canvas: HTMLCanvasElement) {
     this.scene = scene;
@@ -79,8 +93,36 @@ export class CameraRig {
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
+  public setRearview(active: boolean): void {
+    this.isAimingRear = active;
+  }
+
+  public applyAimDelta(deltaYaw: number, deltaPitch: number): void {
+    this.aimYawOffset = Scalar.Clamp(this.aimYawOffset + deltaYaw, -0.60, 0.60);
+    this.aimPitchOffset = Scalar.Clamp(this.aimPitchOffset + deltaPitch, -0.35, 0.40);
+  }
+
+  public toggleCameraMode(): CameraMode {
+    this.cameraMode = this.cameraMode === 'third_person' ? 'first_person' : 'third_person';
+    return this.cameraMode;
+  }
+
+  public setCameraMode(mode: CameraMode): void {
+    this.cameraMode = mode;
+  }
+
   public addImpactShake(amount: number = 1.0): void {
     this.shakeTrauma = Math.min(1.0, this.shakeTrauma + amount);
+  }
+
+  /**
+   * Weapon Screen Recoil Impulse:
+   * Instant upward kick with slight random horizontal deviation,
+   * dampening back smoothly via spring-damper lerp.
+   */
+  public triggerRecoil(pitchKick: number = 0.08, yawKick: number = 0.025): void {
+    this.recoilPitch += pitchKick;
+    this.recoilYaw += (Math.random() - 0.5) * yawKick;
   }
 
   public update(
@@ -88,20 +130,42 @@ export class CameraRig {
     steerInput: number,
     speedMph: number,
     deltaTime: number,
-    slopePitchRad: number = 0
+    slopePitchRad: number = 0,
+    targetPos?: Vector3,
+    isTargetActive?: boolean
   ): void {
     this.currentSpeed = speedMph;
 
-    // 1. Position camera at player's eye level with dynamic mogul/bump compression
-    const eyeHeight = 1.55;
-    this.camera.position.x = Scalar.Lerp(this.camera.position.x, playerPosition.x, Math.min(1.0, deltaTime * 16.0));
-    
-    // High-speed mogul chatter & terrain compression
+    // 0. Recoil Decay (Spring recovery)
+    if (Math.abs(this.recoilPitch) > 0.0005 || Math.abs(this.recoilYaw) > 0.0005) {
+      this.recoilPitch = Scalar.Lerp(this.recoilPitch, 0, Math.min(1.0, deltaTime * 16.0));
+      this.recoilYaw = Scalar.Lerp(this.recoilYaw, 0, Math.min(1.0, deltaTime * 16.0));
+    }
+
+    // 1. Position camera based on cameraMode
+    const isThirdPerson = this.cameraMode === 'third_person';
     const speedRatio = Math.min(1.8, speedMph / 45);
     const mogulChatter = Math.sin(Date.now() * 0.024) * 0.012 * speedRatio;
-    const targetY = playerPosition.y + eyeHeight + mogulChatter;
-    this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 14.0));
-    this.camera.position.z = playerPosition.z;
+
+    if (isThirdPerson) {
+      // Tight over-the-shoulder action perspective matching thats_the_best_video_you_have.mp4
+      const followDist = 3.8;
+      const followHeight = 1.85;
+      const targetX = playerPosition.x + 0.32 + (this.isAimingRear ? 0 : this.aimYawOffset * 2.0);
+      const targetY = playerPosition.y + followHeight + mogulChatter * 0.2;
+      const targetZ = playerPosition.z + (this.isAimingRear ? -followDist : followDist);
+
+      this.camera.position.x = Scalar.Lerp(this.camera.position.x, targetX, Math.min(1.0, deltaTime * 14.0));
+      this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 12.0));
+      this.camera.position.z = Scalar.Lerp(this.camera.position.z, targetZ, Math.min(1.0, deltaTime * 14.0));
+    } else {
+      // Classic FPV eye level
+      const eyeHeight = 1.55;
+      const targetY = playerPosition.y + eyeHeight + mogulChatter;
+      this.camera.position.x = Scalar.Lerp(this.camera.position.x, playerPosition.x, Math.min(1.0, deltaTime * 16.0));
+      this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 14.0));
+      this.camera.position.z = playerPosition.z;
+    }
 
     // Harmonic Screen Shake on Impact / Knockdowns (Zero high-frequency strobe)
     let shakeX = 0;
@@ -118,8 +182,12 @@ export class CameraRig {
     this.camera.position.x += shakeX;
     this.camera.position.y += shakeY;
 
-    // 2. Camera Bank / Roll on carving (-8° max banking into turns with helmet inertia)
-    this.targetRoll = -steerInput * 0.14; // Visceral bank into turn (~8 deg)
+    // 2. Camera Bank / Roll on carving
+    if (isThirdPerson) {
+      this.targetRoll = -steerInput * 0.04; // Subtle bank to keep horizon stable
+    } else {
+      this.targetRoll = -steerInput * 0.14; // Visceral FPV bank into turn (~8 deg)
+    }
     this.currentRoll = Scalar.Lerp(this.currentRoll, this.targetRoll, Math.min(1.0, deltaTime * 10.0));
     this.camera.rotation.z = this.currentRoll + shakeRoll;
 
@@ -127,18 +195,73 @@ export class CameraRig {
     const targetFov = this.baseFov + (speedMph / 100) * 0.22;
     this.camera.fov = Scalar.Lerp(this.camera.fov, targetFov, Math.min(1.0, deltaTime * 8.0));
 
-    // 4. Rearview / 180° Aim Interpolation + Mouse Aim Offset
+    // 4. Yeti Auto-Lock & Target Framing (Upper Torso/Head vs Scenic Horizon)
     const carvingYawOffset = -steerInput * 0.09;
-    this.targetYaw = (this.isAimingRear ? 0 : Math.PI) + carvingYawOffset + this.aimYawOffset;
-    this.currentYaw = Scalar.Lerp(this.currentYaw, this.targetYaw, Math.min(1.0, deltaTime * 12.0));
-    this.camera.rotation.y = this.currentYaw;
+    const defaultYaw = (this.isAimingRear ? 0 : Math.PI) + (isThirdPerson ? carvingYawOffset * 0.4 : carvingYawOffset);
 
-    // Physical downhill slope pitch + subtle helmet forward lean on high velocity + pitch aim
-    const baseSlopeAngle = slopePitchRad * 0.40;
-    const speedPitchCompression = (speedMph / 80) * 0.05;
-    this.camera.rotation.x = this.isAimingRear 
-      ? -0.04 + this.aimPitchOffset 
-      : (0.07 + baseSlopeAngle + speedPitchCompression + this.aimPitchOffset);
+    let targetPitchAngle = 0;
+    let targetYawAngle = defaultYaw;
+
+    const hasValidTarget = !!(
+      this.autoLockEnabled &&
+      isTargetActive &&
+      targetPos &&
+      Math.abs(targetPos.z - playerPosition.z) > 1.0 &&
+      Math.hypot(targetPos.x - playerPosition.x, targetPos.z - playerPosition.z) < 180
+    );
+
+    if (hasValidTarget && targetPos) {
+      this.isTargetLocked = true;
+      // Target Yeti upper torso / head (2.2m above ground surface)
+      const targetCenterY = targetPos.y + 2.2;
+      const dx = targetPos.x - this.camera.position.x;
+      const dy = targetCenterY - this.camera.position.y;
+      const dz = targetPos.z - this.camera.position.z;
+      const distXZ = Math.hypot(dx, dz);
+
+      // Pitch calculation: Looking UP is negative rotation.x, looking DOWN is positive
+      const idealPitch = -Math.atan2(dy, distXZ) - 0.02;
+
+      // Yaw calculation: Angle to target in world coordinates
+      const idealYaw = Math.atan2(dx, dz);
+
+      targetPitchAngle = idealPitch + this.aimPitchOffset * 0.4;
+      targetYawAngle = idealYaw + this.aimYawOffset * 0.4;
+    } else {
+      this.isTargetLocked = false;
+      if (isThirdPerson) {
+        // Tight over-the-shoulder downhill action framing matching thats_the_best_video_you_have.mp4
+        const speedPitchCompression = (speedMph / 80) * 0.02;
+        const basePitch = this.isAimingRear
+          ? -0.02 + this.aimPitchOffset * 0.3
+          : (0.02 + slopePitchRad * 0.15 + speedPitchCompression + this.aimPitchOffset * 0.3);
+        targetPitchAngle = basePitch;
+        targetYawAngle = defaultYaw + this.aimYawOffset;
+      } else {
+        // Natural downhill horizon framing (level eye-line, never looking down at skis)
+        const speedPitchCompression = (speedMph / 80) * 0.03;
+        const basePitch = this.isAimingRear 
+          ? -0.02 + this.aimPitchOffset 
+          : (0.01 + slopePitchRad * 0.12 + speedPitchCompression + this.aimPitchOffset);
+
+        targetPitchAngle = basePitch;
+        targetYawAngle = defaultYaw + this.aimYawOffset;
+      }
+    }
+
+    // Shortest-path yaw lerp (prevents 360 wrap flickers)
+    let yawDiff = targetYawAngle - this.currentYaw;
+    while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+    while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    this.currentYaw += yawDiff * Math.min(1.0, deltaTime * (this.isTargetLocked ? 14.0 : 12.0));
+    this.camera.rotation.y = this.currentYaw + this.recoilYaw;
+
+    // Pitch lerp (kicks upward on recoil)
+    this.camera.rotation.x = Scalar.Lerp(
+      this.camera.rotation.x,
+      targetPitchAngle - this.recoilPitch,
+      Math.min(1.0, deltaTime * (this.isTargetLocked ? 14.0 : 10.0))
+    );
   }
 
   public getForwardRay(): Vector3 {

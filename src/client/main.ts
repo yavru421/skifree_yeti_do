@@ -5,7 +5,7 @@
  * spatial audio, HUD overlay, and 20Hz edge sync to Cloudflare MountainDO.
  */
 
-import { Vector3, Scalar, Color3, Color4 } from "@babylonjs/core";
+import { Vector3, Scalar, Color3, Color4, MeshBuilder, StandardMaterial, Mesh, DynamicTexture } from "@babylonjs/core";
 import { EngineManager } from "./engine";
 import { PhysicsSystem } from "./physics";
 import { TerrainSystem } from "./terrain";
@@ -20,6 +20,8 @@ import { NPCSystem } from "./npcs";
 import { HUDManager } from "./hud";
 import { GameStatePacket, HitscanPacket, LimbStatus, YetiAIState, PowerUpType } from "./types";
 import { getGranbyTrack, GranbyTrackConfig } from "./granbyTracks";
+import { MobileTouchController } from "./MobileTouchController";
+import { SkierAvatar } from "./skierAvatar";
 
 export class SkiFreeApp {
   private engineManager!: EngineManager;
@@ -32,8 +34,15 @@ export class SkiFreeApp {
   private networkSystem!: NetworkSystem;
   private fpvSkis!: FPVSkis;
   private steamHarpoon!: SteamHarpoon;
+  private skierAvatar!: SkierAvatar;
   private npcSystem!: NPCSystem;
   private hudSystem!: HUDManager;
+  private mobileTouchController?: MobileTouchController;
+
+  // Summit Starting Gate & Staging Bar
+  private startingGateMesh: Mesh | null = null;
+  private startingGateBarrier: Mesh | null = null;
+  private isGateOpen: boolean = false;
 
   // Skier State
   private playerPos: Vector3 = new Vector3(0, 0, 0);
@@ -42,6 +51,13 @@ export class SkiFreeApp {
   private steerInput: number = 0; // -1 to 1
   private isTucking: boolean = false;
   private isBraking: boolean = false;
+  private tuckStamina: number = 1.0;
+
+  // Downhill Wind Speed Lines
+  private speedLinesCanvas: HTMLCanvasElement | null = null;
+  private speedLinesCtx: CanvasRenderingContext2D | null = null;
+  private speedLines: Array<{ x: number; y: number; length: number; speed: number }> = [];
+
   private isTakedownTriggered: boolean = false;
   private isWaitingForDropIn: boolean = false;
   private modalMountTime: number = 0;
@@ -110,9 +126,10 @@ export class SkiFreeApp {
       this.handleBeastSprintChange(sprinting);
     };
 
-    // 6b. FPV Skis, Steam Harpoon & NPC System
+    // 6b. FPV Skis, Steam Harpoon, 3D Skier Avatar & NPC System
     this.fpvSkis = new FPVSkis(scene, this.cameraRig.camera);
     this.steamHarpoon = new SteamHarpoon(scene, this.cameraRig.camera);
+    this.skierAvatar = new SkierAvatar(scene);
     this.npcSystem = new NPCSystem(scene);
     this.npcSystem.init();
     this.hudSystem = new HUDManager();
@@ -121,10 +138,13 @@ export class SkiFreeApp {
     this.audioSystem = new AudioSystem();
     this.audioSystem.init();
 
+    // 7b. Summit Starting Gate (Alpine Drop-In Barrier)
+    this.setupStartingGate(scene);
+
     // 8. Network System (20Hz WebSocket to MountainDO)
     this.networkSystem = new NetworkSystem(this.callsign, this.roomId, (packet: any) => {
       if (this.npcSystem && packet.skiers) {
-        this.npcSystem.updatePlayers(packet.skiers.filter((s: any) => s.callsign !== this.callsign));
+        this.npcSystem.updatePlayers(packet.skiers.filter((s: any) => s.callsign !== this.callsign && s.id !== this.callsign));
       }
       if (this.yetiEntity && packet.yeti) {
         this.yetiEntity.syncNetState(packet.yeti);
@@ -182,6 +202,35 @@ export class SkiFreeApp {
       },
       this.npcSystem
     );
+
+    // Connect CS:GO & Fortnite Combat Juice & Sensory Feedback
+    this.combatSystem.onBloomKick = () => {
+      this.hudSystem.triggerBloomKick(18);
+    };
+    this.combatSystem.onRecoil = () => {
+      this.cameraRig.triggerRecoil(0.08, 0.025);
+    };
+    this.combatSystem.onHitmarker = (isHeadshot: boolean, damage: number) => {
+      this.hudSystem.triggerHitmarker(isHeadshot, damage);
+      this.audioSystem.playHitmarker(isHeadshot);
+      this.hudSystem.addTacticalFeed(
+        this.callsign,
+        isHeadshot ? "🎯" : "💥",
+        "Yeti",
+        `${damage} DMG`,
+        isHeadshot
+      );
+    };
+    this.combatSystem.onReloadStart = (durationMs: number) => {
+      this.hudSystem.startReload(durationMs);
+      this.audioSystem.playReload();
+    };
+    this.combatSystem.onReloadEnd = () => {
+      this.hudSystem.endReload();
+    };
+
+    // 10. Initialize Downhill Wind Speed Lines
+    this.initSpeedLines();
 
     // 11. Skier Keyboard Controls
     this.setupSkierControls();
@@ -304,6 +353,9 @@ export class SkiFreeApp {
     if (this.steamHarpoon) {
       this.steamHarpoon.detachTowline();
     }
+    if (this.skierAvatar) {
+      this.skierAvatar.triggerWipeout();
+    }
     const tapContainer = document.getElementById("takedown-tap-container");
     if (tapContainer) tapContainer.classList.add("hidden");
 
@@ -361,22 +413,28 @@ export class SkiFreeApp {
             this.combatSystem.tryFireHarpoon();
           }
         }
+      } else if (key === "c") {
+        if (this.cameraRig) {
+          this.cameraRig.toggleCameraMode();
+          console.log(`[Camera] Toggled camera mode to ${this.cameraRig.cameraMode}`);
+        }
       }
     });
+
+    (window as any).toggleCameraMode = () => {
+      if (this.cameraRig) {
+        return this.cameraRig.toggleCameraMode();
+      }
+    };
 
     window.addEventListener("keyup", (e: KeyboardEvent) => {
       keys[e.key.toLowerCase()] = false;
     });
 
-    // Wire Rapid-Tap Takedown Button
+    // Wire Rapid-Tap Takedown Button (pointerdown only to prevent double-tap firing on mobile)
     const btnTakedownTap = document.getElementById("btn-takedown-tap");
     if (btnTakedownTap) {
       btnTakedownTap.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.handleTakedownTap();
-      });
-      btnTakedownTap.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         this.handleTakedownTap();
@@ -399,8 +457,25 @@ export class SkiFreeApp {
         this.isPlayerDead = false;
         this.isTakedownTriggered = false;
         this.takedownTapProgress = 0;
+        if (this.skierAvatar) {
+          this.skierAvatar.resetWipeout();
+        }
         this.speedMph = 30;
-        this.yetiEntity.startLevel(this.currentLevel, this.playerPos.z);
+        this.playerPos.x = 0;
+        this.playerPos.z = 0;
+        this.steerInput = 0;
+        const track = getGranbyTrack(this.currentLevel);
+        this.terrainSystem.applyTrack(track, 0);
+        const groundY = this.terrainSystem.getTerrainHeightAt(0, 0);
+        this.playerPos.y = groundY;
+        this.cameraRig.camera.position.set(0, groundY + 1.55, 0);
+        this.cameraRig.camera.setTarget(new Vector3(0, groundY + 1.35, -20));
+        this.yetiEntity.startLevel(
+          this.currentLevel,
+          0,
+          track.trailWidth,
+          (x, z) => this.terrainSystem.getTerrainHeightAt(x, z)
+        );
         this.audioSystem.startBGM();
       });
     }
@@ -492,50 +567,77 @@ export class SkiFreeApp {
       if (keys["a"] || keys["arrowleft"]) steer -= 1;
       if (keys["d"] || keys["arrowright"]) steer += 1;
 
+      // Integrate MobileTouchController virtual joystick
+      if (this.mobileTouchController) {
+        const touch = this.mobileTouchController.state;
+        if (Math.abs(touch.steerX) > 0.05) {
+          steer = touch.steerX;
+        }
+        if (touch.throttleY > 0.2) {
+          this.isTucking = true;
+          this.isBraking = false;
+        } else if (touch.throttleY < -0.2) {
+          this.isBraking = true;
+          this.isTucking = false;
+        } else {
+          this.isTucking = !!(keys["w"] || keys["arrowup"]);
+          this.isBraking = !!(keys["s"] || keys["arrowdown"]);
+        }
+      } else {
+        this.isTucking = !!(keys["w"] || keys["arrowup"]);
+        if (!this.isMobileBraking) {
+          this.isBraking = !!(keys["s"] || keys["arrowdown"]);
+        }
+      }
+
       // Limb penalties
       if (this.limbStatus === LimbStatus.LEFT_ARM_LOST && steer < 0) steer *= 0.8;
       if (this.limbStatus === LimbStatus.BOTH_ARMS_LOST) steer *= 0.5;
 
-      // Update inputs (prioritize touch inputs if they exist)
-      if (this.steerInput === 0 || (!this.isMobileSteering)) {
-          this.steerInput = steer;
-      }
-      this.isTucking = !!(keys["w"] || keys["arrowup"]);
-      // Don't override touch brake
-      if (!this.isMobileBraking) {
-        this.isBraking = !!(keys["s"] || keys["arrowdown"]);
-      }
+      this.steerInput = steer;
     };
 
-    // Mobile Touch Controls Wiring
-    const btnLeft = document.getElementById("btn-touch-left");
-    const btnRight = document.getElementById("btn-touch-right");
-    const btnBrake = document.getElementById("btn-touch-brake");
-    const btnFire = document.getElementById("btn-touch-fire");
+    // Initialize MobileTouchController if touch device or mobile container present
+    if (typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0)) {
+      try {
+        this.mobileTouchController = new MobileTouchController("mobile-touch-container", {
+          onFire: () => {
+            if (this.combatSystem && !this.isTakedownTriggered) {
+              this.combatSystem.tryFireHarpoon();
+            }
+          },
+          onReload: () => {
+            if (this.combatSystem) {
+              this.combatSystem.reload();
+            }
+            if (this.audioSystem) {
+              this.audioSystem.playRifleShot?.();
+            }
+          },
+          onRearviewToggle: (active: boolean) => {
+            if (this.cameraRig) {
+              this.cameraRig.setRearview(active);
+            }
+          },
+          onAimDelta: (delta) => {
+            if (this.cameraRig) {
+              this.cameraRig.applyAimDelta(delta.deltaYaw, delta.deltaPitch);
+            }
+          }
+        });
 
-    if (btnLeft) {
-      btnLeft.addEventListener("touchstart", (e) => { e.preventDefault(); this.steerInput = -1.0; this.isMobileSteering = true; });
-      btnLeft.addEventListener("touchend", (e) => { e.preventDefault(); this.steerInput = 0; this.isMobileSteering = false; });
-    }
-    if (btnRight) {
-      btnRight.addEventListener("touchstart", (e) => { e.preventDefault(); this.steerInput = 1.0; this.isMobileSteering = true; });
-      btnRight.addEventListener("touchend", (e) => { e.preventDefault(); this.steerInput = 0; this.isMobileSteering = false; });
-    }
-    if (btnBrake) {
-      btnBrake.addEventListener("touchstart", (e) => { e.preventDefault(); this.isBraking = true; this.isMobileBraking = true; });
-      btnBrake.addEventListener("touchend", (e) => { e.preventDefault(); this.isBraking = false; this.isMobileBraking = false; });
-    }
-    if (btnFire) {
-      btnFire.addEventListener("touchstart", (e) => {
-        e.preventDefault();
-        if (this.combatSystem && !this.isTakedownTriggered) this.combatSystem.tryFireHarpoon();
-      });
-    }
+        // Unlock WebAudio on first mobile interaction
+        window.addEventListener("touchstart", () => {
+          if (this.audioSystem) {
+            this.audioSystem.init();
+            this.audioSystem.startBGM();
+          }
+        }, { once: true });
 
-    // Unhide mobile controls if touch device
-    if (typeof window !== "undefined" && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
-      const mobileUI = document.getElementById("mobile-controls");
-      if (mobileUI) mobileUI.style.display = "flex";
+        console.log("[SkiFree] MobileTouchController mounted successfully");
+      } catch (err) {
+        console.warn("[SkiFree] MobileTouchController init failed:", err);
+      }
     }
   }
 
@@ -555,10 +657,19 @@ export class SkiFreeApp {
     // 1. Skier Downhill Kinematics (Forward along -Z)
     const prevZ = this.playerPos.z;
     if (this.isTucking) {
-      this.speedMph = Scalar.Lerp(this.speedMph, this.maxSpeedMph, deltaTime * 1.5);
+      if (this.tuckStamina > 0.05) {
+        this.tuckStamina = Math.max(0, this.tuckStamina - deltaTime * 0.28);
+        this.speedMph = Scalar.Lerp(this.speedMph, this.maxSpeedMph, deltaTime * 1.5);
+      } else {
+        // Exhausted tuck stamina: cannot sustain aerodynamic crouch
+        this.isTucking = false;
+        this.speedMph = Scalar.Lerp(this.speedMph, 38, deltaTime * 0.8);
+      }
     } else if (this.isBraking) {
+      this.tuckStamina = Math.min(1.0, this.tuckStamina + deltaTime * 0.22);
       this.speedMph = Scalar.Lerp(this.speedMph, 8, deltaTime * 4.2);
     } else {
+      this.tuckStamina = Math.min(1.0, this.tuckStamina + deltaTime * 0.22);
       this.speedMph = Scalar.Lerp(this.speedMph, 38, deltaTime * 0.8);
     }
 
@@ -659,13 +770,56 @@ export class SkiFreeApp {
 
     // 3. Update Subsystems
     this.terrainSystem.update(this.playerPos.z, deltaTime);
-    this.cameraRig.update(this.playerPos, this.steerInput, this.speedMph, deltaTime, this.terrainSystem.getSlopePitchRad());
+    const isYetiActive = this.yetiEntity && this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead;
+    const yetiPos = this.yetiEntity ? this.yetiEntity.rootMesh.position : undefined;
+    this.cameraRig.update(
+      this.playerPos,
+      this.steerInput,
+      this.speedMph,
+      deltaTime,
+      this.terrainSystem.getSlopePitchRad(),
+      yetiPos,
+      isYetiActive
+    );
     this.yetiEntity.update(this.playerPos, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
+
+    // Update Realistic 3D Skier Avatar (matches thats_the_best_video_you_have.mp4)
+    const isTethered = Boolean(this.steamHarpoon && this.steamHarpoon.isTethered);
+    if (this.skierAvatar) {
+      this.skierAvatar.update(
+        this.playerPos,
+        this.steerInput,
+        this.speedMph,
+        this.isTucking,
+        this.isBraking,
+        deltaTime,
+        isTethered
+      );
+    }
+
+    const isThirdPerson = this.cameraRig.cameraMode === "third_person";
+    if (this.skierAvatar) {
+      this.skierAvatar.setVisible(isThirdPerson);
+    }
     if (this.fpvSkis) {
-      this.fpvSkis.update(this.steerInput, this.isTucking, this.isBraking, this.speedMph, this.cameraRig.isAimingRear, deltaTime);
+      this.fpvSkis.rootNode.setEnabled(!isThirdPerson);
+    }
+    if (this.steamHarpoon && this.steamHarpoon.gunRoot) {
+      this.steamHarpoon.gunRoot.setEnabled(!isThirdPerson);
+    }
+
+    if (this.fpvSkis && !isThirdPerson) {
+      this.fpvSkis.update(this.steerInput, this.isTucking, this.isBraking, this.speedMph, this.cameraRig.isAimingRear, deltaTime, isThirdPerson);
     }
     if (this.steamHarpoon) {
-      this.steamHarpoon.update(this.yetiEntity.rootMesh.position, this.cameraRig.isAimingRear, deltaTime);
+      const thirdPersonAnchor = isThirdPerson && this.skierAvatar ? this.skierAvatar.getTowlineAnchorWorldPosition() : undefined;
+      this.steamHarpoon.update(
+        this.yetiEntity.rootMesh.position,
+        this.cameraRig.isAimingRear,
+        deltaTime,
+        isThirdPerson,
+        thirdPersonAnchor
+      );
     }
     if (this.npcSystem) {
       this.npcSystem.update(this.playerPos.z, this.yetiEntity.rootMesh.position, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
@@ -781,6 +935,38 @@ export class SkiFreeApp {
         }
       }
     }
+
+    // 4. Competitive CS:GO / Fortnite Tactical HUD & Speed Line Updates
+    let hpRatio = 1.0;
+    if (this.limbStatus === LimbStatus.SKELETONIZED) hpRatio = 0.0;
+    else if (this.limbStatus === LimbStatus.BOTH_ARMS_LOST) hpRatio = 0.3;
+    else if (this.limbStatus === LimbStatus.LEFT_ARM_LOST) hpRatio = 0.65;
+
+    this.hudSystem.updateSegmentedGauges(hpRatio, this.tuckStamina);
+    this.hudSystem.updateCrosshair(this.speedMph, this.isTucking, deltaTime);
+    this.hudSystem.updateLockIndicator(this.cameraRig.isTargetLocked);
+
+    const compassYetiPos = yetiPos || { x: 0, z: -100 };
+    this.hudSystem.updateCompass(
+      this.cameraRig.camera.rotation.y,
+      this.playerPos.x,
+      this.playerPos.z,
+      compassYetiPos.x,
+      compassYetiPos.z,
+      isYetiActive
+    );
+
+    this.hudSystem.update(
+      this.speedMph,
+      this.currentLevel,
+      this.yetiEntity ? this.yetiEntity.hp : 0,
+      this.yetiEntity ? this.yetiEntity.maxHp : 5000,
+      this.combatSystem ? this.combatSystem.currentAmmo : 8,
+      this.combatSystem ? this.combatSystem.isReloading : false,
+      this.limbStatus
+    );
+
+    this.renderSpeedLines(deltaTime);
 
     // 5. Send 20Hz Input Packet to Cloudflare MountainDO
     this.networkSystem.sendInput(
@@ -978,6 +1164,7 @@ export class SkiFreeApp {
     // Alpine Starting Horn & Drop-In Camera Plunge
     this.audioSystem.playDropIn();
     this.cameraRig.addImpactShake(1.6);
+    this.openStartingGate();
 
     this.startNextLevel();
   }
@@ -992,6 +1179,8 @@ export class SkiFreeApp {
     this.isTakedownTriggered = false;
     this.isWaitingForDropIn = false;
     this.levelStartTime = Date.now();
+    this.isGateOpen = false;
+    if (this.startingGateBarrier) this.startingGateBarrier.position.y = 1.2;
 
     // Reset cinematic bars & banner
     const bars = document.getElementById("cinematic-bars");
@@ -1023,7 +1212,20 @@ export class SkiFreeApp {
 
     // Progressive level naming & Granby Ranch real run modeling
     const track = getGranbyTrack(this.currentLevel);
-    this.terrainSystem.applyTrack(track, this.playerPos.z);
+
+    // Reset player coordinates cleanly for the new summit drop-in
+    this.playerPos.x = 0;
+    this.playerPos.z = 0;
+    this.steerInput = 0;
+
+    this.terrainSystem.applyTrack(track, 0);
+
+    const initialTerrainY = this.terrainSystem.getTerrainHeightAt(0, 0);
+    this.playerPos.y = initialTerrainY;
+
+    // Reset Camera cleanly behind player at summit drop-in
+    this.cameraRig.camera.position.set(0, initialTerrainY + 1.55, 0);
+    this.cameraRig.camera.setTarget(new Vector3(0, initialTerrainY + 1.35, -20));
 
     // Dynamic Atmosphere & Weather Transitions Per Run
     const scene = this.engineManager.scene;
@@ -1034,10 +1236,15 @@ export class SkiFreeApp {
 
     // Adjust skier terminal speed & acceleration according to physical slope grade
     this.maxSpeedMph = Math.round(75 * track.baseSpeedMultiplier);
-    this.speedMph = Math.max(34 * track.baseSpeedMultiplier, this.speedMph);
+    this.speedMph = Math.max(34 * track.baseSpeedMultiplier, 36);
 
     // Spawn progressively harder Yeti ahead downhill
-    this.yetiEntity.startLevel(this.currentLevel, this.playerPos.z);
+    this.yetiEntity.startLevel(
+      this.currentLevel,
+      0,
+      track.trailWidth,
+      (x, z) => this.terrainSystem.getTerrainHeightAt(x, z)
+    );
 
     // Audio cue & impact shake for roar
     this.audioSystem.playYetiRoar();
@@ -1055,9 +1262,24 @@ export class SkiFreeApp {
     this.currentLevel = level;
     this.isTakedownTriggered = false;
 
+    this.playerPos.x = 0;
+    this.playerPos.z = 0;
+    this.steerInput = 0;
+
     const track = getGranbyTrack(level);
-    this.terrainSystem.applyTrack(track, this.playerPos.z);
-    this.yetiEntity.startLevel(level, this.playerPos.z);
+    this.terrainSystem.applyTrack(track, 0);
+
+    const initialTerrainY = this.terrainSystem.getTerrainHeightAt(0, 0);
+    this.playerPos.y = initialTerrainY;
+    this.cameraRig.camera.position.set(0, initialTerrainY + 1.55, 0);
+    this.cameraRig.camera.setTarget(new Vector3(0, initialTerrainY + 1.35, -20));
+
+    this.yetiEntity.startLevel(
+      level,
+      0,
+      track.trailWidth,
+      (x, z) => this.terrainSystem.getTerrainHeightAt(x, z)
+    );
 
     const scene = this.engineManager.scene;
     scene.fogMode = 2;
@@ -1066,7 +1288,7 @@ export class SkiFreeApp {
     scene.clearColor = new Color4(track.clearColor.r, track.clearColor.g, track.clearColor.b, 1.0);
 
     this.maxSpeedMph = Math.round(75 * track.baseSpeedMultiplier);
-    this.speedMph = Math.max(34 * track.baseSpeedMultiplier, this.speedMph);
+    this.speedMph = Math.max(34 * track.baseSpeedMultiplier, 36);
 
     this.audioSystem.playDropIn();
     this.cameraRig.addImpactShake(1.2);
@@ -1187,6 +1409,215 @@ export class SkiFreeApp {
     const elapsedSec = ((Date.now() - this.levelStartTime) / 1000).toFixed(1);
     if (statSummary) {
       statSummary.innerHTML = `RUN ${this.currentLevel} • SCORE: <span style="color:#ff007f; font-weight:900;">${this.totalScore.toLocaleString()} PTS</span> • TIME: <span style="color:#00f0ff;">${elapsedSec}s</span>`;
+    }
+  }
+
+  // ==========================================
+  // DOWNHILL WIND SPEED LINES CANVAS (CS:GO / FORTNITE SENSORY JUICE)
+  // ==========================================
+  private initSpeedLines(): void {
+    this.speedLinesCanvas = document.getElementById("speed-lines-canvas") as HTMLCanvasElement | null;
+    if (!this.speedLinesCanvas) return;
+
+    this.speedLinesCtx = this.speedLinesCanvas.getContext("2d");
+    const resizeCanvas = () => {
+      if (this.speedLinesCanvas) {
+        this.speedLinesCanvas.width = window.innerWidth;
+        this.speedLinesCanvas.height = window.innerHeight;
+      }
+    };
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    this.speedLines = [];
+    const count = 50;
+    for (let i = 0; i < count; i++) {
+      this.speedLines.push({
+        x: (Math.random() - 0.5) * window.innerWidth,
+        y: (Math.random() - 0.5) * window.innerHeight,
+        length: 25 + Math.random() * 65,
+        speed: 650 + Math.random() * 850
+      });
+    }
+  }
+
+  private renderSpeedLines(deltaTime: number): void {
+    if (!this.speedLinesCanvas || !this.speedLinesCtx) return;
+    const ctx = this.speedLinesCtx;
+    const width = this.speedLinesCanvas.width;
+    const height = this.speedLinesCanvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Only activate wind streaks when exceeding 35 MPH
+    if (this.speedMph <= 35) return;
+
+    const speedRatio = Math.min(1.0, (this.speedMph - 35) / 40);
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const maxRadius = Math.hypot(centerX, centerY);
+
+    ctx.lineWidth = 1.2 + speedRatio * 1.8;
+
+    for (let i = 0; i < this.speedLines.length; i++) {
+      const line = this.speedLines[i];
+      let dist = Math.hypot(line.x, line.y);
+      const angle = Math.atan2(line.y, line.x);
+
+      dist += line.speed * (0.6 + speedRatio * 0.8) * deltaTime;
+
+      if (dist > maxRadius) {
+        // Reset near center
+        const spawnRadius = 35 + Math.random() * 90;
+        const spawnAngle = Math.random() * Math.PI * 2;
+        line.x = Math.cos(spawnAngle) * spawnRadius;
+        line.y = Math.sin(spawnAngle) * spawnRadius;
+        dist = spawnRadius;
+      } else {
+        line.x = Math.cos(angle) * dist;
+        line.y = Math.sin(angle) * dist;
+      }
+
+      const alpha = Math.min(0.7, (dist / maxRadius) * (0.2 + speedRatio * 0.6));
+      ctx.strokeStyle = `rgba(220, 245, 255, ${alpha.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(centerX + line.x, centerY + line.y);
+      const tailX = centerX + Math.cos(angle) * Math.max(0, dist - line.length * speedRatio);
+      const tailY = centerY + Math.sin(angle) * Math.max(0, dist - line.length * speedRatio);
+      ctx.lineTo(tailX, tailY);
+      ctx.stroke();
+    }
+  }
+
+  // ==========================================
+  // COMPETITIVE POST-MATCH STATS SCREEN
+  // ==========================================
+  public showPostMatch(outcome: "victory" | "death"): void {
+    const stats = this.combatSystem ? this.combatSystem.getStats() : {
+      totalShots: 0,
+      hitsCount: 0,
+      headshotsCount: 0,
+      totalDamageDealt: 0,
+      accuracy: 0,
+      dps: 0
+    };
+
+    const distM = Math.abs(Math.round(this.playerPos.z));
+
+    // Dynamic S / A / B / C rank grading
+    let rank = "C";
+    if (this.totalScore >= 18000 && stats.accuracy >= 55) {
+      rank = "S";
+    } else if (this.totalScore >= 10000 && stats.accuracy >= 35) {
+      rank = "A";
+    } else if (this.totalScore >= 5000) {
+      rank = "B";
+    }
+
+    this.hudSystem.showPostMatchModal(
+      {
+        accuracy: stats.accuracy,
+        dps: stats.dps,
+        distance: distM,
+        totalShots: stats.totalShots,
+        hitsCount: stats.hitsCount,
+        headshotsCount: stats.headshotsCount,
+        rank
+      },
+      () => {
+        // onRestart
+        this.isPlayerDead = false;
+        this.isTakedownTriggered = false;
+        this.takedownTapProgress = 0;
+        this.speedMph = 30;
+        this.playerPos.x = 0;
+        this.playerPos.z = 0;
+        this.steerInput = 0;
+        const track = getGranbyTrack(this.currentLevel);
+        this.terrainSystem.applyTrack(track, 0);
+        const groundY = this.terrainSystem.getTerrainHeightAt(0, 0);
+        this.playerPos.y = groundY;
+        this.cameraRig.camera.position.set(0, groundY + 1.55, 0);
+        this.cameraRig.camera.setTarget(new Vector3(0, groundY + 1.35, -20));
+        this.yetiEntity.startLevel(
+          this.currentLevel,
+          0,
+          track.trailWidth,
+          (x, z) => this.terrainSystem.getTerrainHeightAt(x, z)
+        );
+        this.audioSystem.startBGM();
+      },
+      () => {
+        // onLobby
+        window.location.reload();
+      }
+    );
+  }
+
+  private setupStartingGate(scene: any): void {
+    const halfWidth = this.terrainSystem.currentTrack.trailWidth / 2;
+    const gateRoot = new Mesh("summitStartingGate", scene);
+    gateRoot.position.set(0, 0, 0);
+
+    const woodMat = new StandardMaterial("gateWoodMat", scene);
+    woodMat.diffuseColor = new Color3(0.35, 0.22, 0.12);
+
+    const barrierMat = new StandardMaterial("gateBarrierMat", scene);
+    barrierMat.diffuseColor = new Color3(0.9, 0.15, 0.1);
+    barrierMat.emissiveColor = new Color3(0.3, 0.05, 0.05);
+
+    const leftPost = MeshBuilder.CreateCylinder("gateLeftPost", { height: 7.0, diameter: 0.6 }, scene);
+    leftPost.material = woodMat;
+    leftPost.position.set(-halfWidth + 2.5, 3.5, 0);
+    leftPost.parent = gateRoot;
+
+    const rightPost = MeshBuilder.CreateCylinder("gateRightPost", { height: 7.0, diameter: 0.6 }, scene);
+    rightPost.material = woodMat;
+    rightPost.position.set(halfWidth - 2.5, 3.5, 0);
+    rightPost.parent = gateRoot;
+
+    const beam = MeshBuilder.CreateBox("gateCrossbeam", { width: halfWidth * 2 - 4.0, height: 0.8, depth: 0.6 }, scene);
+    beam.material = woodMat;
+    beam.position.set(0, 6.6, 0);
+    beam.parent = gateRoot;
+
+    const bannerTex = new DynamicTexture("gateBannerTex", { width: 512, height: 128 }, scene, false);
+    bannerTex.hasAlpha = true;
+    bannerTex.drawText("SUMMIT DROP-IN // START GATE", null, 80, "bold 32px monospace", "#ffd700", "rgba(10,15,30,0.9)", true);
+
+    const bannerPlane = MeshBuilder.CreatePlane("gateBannerPlane", { width: 14.0, height: 3.5 }, scene);
+    const bannerMat = new StandardMaterial("gateBannerMat", scene);
+    bannerMat.diffuseTexture = bannerTex;
+    bannerMat.emissiveColor = new Color3(0.8, 0.7, 0.2);
+    bannerMat.backFaceCulling = false;
+    bannerPlane.material = bannerMat;
+    bannerPlane.position.set(0, 6.6, -0.35);
+    bannerPlane.parent = gateRoot;
+
+    const barrier = MeshBuilder.CreateBox("gateBarrierBar", { width: halfWidth * 2 - 5.0, height: 0.35, depth: 0.35 }, scene);
+    barrier.material = barrierMat;
+    barrier.position.set(0, 1.2, 0);
+    barrier.parent = gateRoot;
+
+    this.startingGateMesh = gateRoot;
+    this.startingGateBarrier = barrier;
+    this.isGateOpen = false;
+  }
+
+  private openStartingGate(): void {
+    if (this.isGateOpen) return;
+    this.isGateOpen = true;
+    if (this.startingGateBarrier) {
+      const startTime = Date.now();
+      const liftInterval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed >= 1.0) {
+          if (this.startingGateBarrier) this.startingGateBarrier.position.y = 6.5;
+          clearInterval(liftInterval);
+        } else if (this.startingGateBarrier) {
+          this.startingGateBarrier.position.y = Scalar.Lerp(1.2, 6.5, elapsed);
+        }
+      }, 16);
     }
   }
 }

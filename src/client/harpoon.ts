@@ -262,8 +262,21 @@ export class SteamHarpoon {
   public update(
     yetiWorldPos: Vector3,
     isAimingRear: boolean,
-    deltaTime: number
+    deltaTime: number,
+    isThirdPerson: boolean = false,
+    thirdPersonAnchor?: Vector3
   ): void {
+    if (isThirdPerson) {
+      this.gunRoot.setEnabled(false);
+      // In third person, render towline from avatar's anchor if tethered
+      if (this.isTethered && thirdPersonAnchor) {
+        this.renderTowline(thirdPersonAnchor, yetiWorldPos);
+      } else if (this.towlineMesh) {
+        this.towlineMesh.dispose();
+        this.towlineMesh = null;
+      }
+      return;
+    }
     // Hide gun if player looks 180° backward without rifle
     this.gunRoot.setEnabled(!isAimingRear);
     if (isAimingRear) return;
@@ -285,39 +298,43 @@ export class SteamHarpoon {
     // 3. Dynamic Towline Steel Cable Rendering
     if (this.isTethered) {
       const gunMuzzleWorld = this.harpoonSpear.getAbsolutePosition();
-      const yetiTetherTarget = yetiWorldPos.add(new Vector3(0, 2.2, 0));
-
-      // Multi-segment catenary cable line with dynamic tension droop
-      const segments = 6;
-      const points: Vector3[] = [];
-      const tensionSag = Math.max(0.1, (1.0 - this.cableTension) * 1.8);
-
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const interp = Vector3.Lerp(gunMuzzleWorld, yetiTetherTarget, t);
-        // Parabolic droop in Y
-        const sag = Math.sin(t * Math.PI) * -tensionSag;
-        interp.y += sag;
-        points.push(interp);
-      }
-
-      if (!this.towlineMesh) {
-        this.towlineMesh = MeshBuilder.CreateLines(
-          "steelTowline",
-          { points, updatable: true },
-          this.scene
-        );
-        this.towlineMesh.color = new Color3(0.0, 0.95, 1.0); // Electric Cyan High-Tension Cable
-      } else {
-        this.towlineMesh = MeshBuilder.CreateLines(
-          "steelTowline",
-          { points, instance: this.towlineMesh },
-          this.scene
-        );
-      }
+      this.renderTowline(gunMuzzleWorld, yetiWorldPos);
     } else if (this.towlineMesh) {
       this.towlineMesh.dispose();
       this.towlineMesh = null;
+    }
+  }
+
+  private renderTowline(origin: Vector3, yetiWorldPos: Vector3): void {
+    const yetiTetherTarget = yetiWorldPos.add(new Vector3(0, 2.2, 0));
+
+    // Multi-segment catenary cable line with dynamic tension droop
+    const segments = 6;
+    const points: Vector3[] = [];
+    const tensionSag = Math.max(0.1, (1.0 - this.cableTension) * 1.8);
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const interp = Vector3.Lerp(origin, yetiTetherTarget, t);
+      // Parabolic droop in Y
+      const sag = Math.sin(t * Math.PI) * -tensionSag;
+      interp.y += sag;
+      points.push(interp);
+    }
+
+    if (!this.towlineMesh) {
+      this.towlineMesh = MeshBuilder.CreateLines(
+        "steelTowline",
+        { points, updatable: true },
+        this.scene
+      );
+      this.towlineMesh.color = new Color3(0.0, 0.95, 1.0); // Electric Cyan High-Tension Cable
+    } else {
+      this.towlineMesh = MeshBuilder.CreateLines(
+        "steelTowline",
+        { points, instance: this.towlineMesh },
+        this.scene
+      );
     }
   }
 }

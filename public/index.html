@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="SKI-FR33">
   <meta name="theme-color" content="#0a0e1a">
   <link rel="apple-touch-icon" href="/assets/yeti_v2.jpg">
+  <link rel="stylesheet" href="/mobile.css">
 
   <script>
     if ('serviceWorker' in navigator) {
@@ -510,6 +511,328 @@
       100% { opacity: 1; transform: translateX(0); }
     }
 
+    /* ========================================================= */
+    /* CS:GO & FORTNITE COMPETITIVE HUD & FEEDBACK JUICE        */
+    /* ========================================================= */
+
+    /* Directional Hitmarker Overlay */
+    .hitmarker-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      width: 44px;
+      height: 44px;
+      pointer-events: none;
+      z-index: 96;
+      opacity: 0;
+      transition: opacity 0.05s ease-out, transform 0.08s cubic-bezier(0.1, 0.9, 0.2, 1);
+    }
+    .hitmarker-container.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.15);
+    }
+    .hm-line {
+      position: absolute;
+      width: 8px;
+      height: 2px;
+      border-radius: 1px;
+    }
+    .hm-tl { top: 9px; left: 9px; transform: rotate(45deg); }
+    .hm-tr { top: 9px; right: 9px; transform: rotate(-45deg); }
+    .hm-bl { bottom: 9px; left: 9px; transform: rotate(-45deg); }
+    .hm-br { bottom: 9px; right: 9px; transform: rotate(45deg); }
+
+    .hm-white .hm-line {
+      background: #ffffff;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.95);
+    }
+    .hm-gold .hm-line {
+      background: #ffd700;
+      box-shadow: 0 0 10px #ff0055, 0 0 6px #ffd700;
+    }
+
+    /* Target Locked Crosshair & Auto-Aim Badge */
+    #csgo-crosshair.target-locked .ch-bar {
+      background: #00f0ff;
+      box-shadow: 0 0 8px #00f0ff, 0 0 14px rgba(0, 240, 255, 0.6);
+    }
+    #csgo-crosshair.target-locked .ch-dot {
+      background: #ffd700;
+      box-shadow: 0 0 8px #ffd700, 0 0 12px #ff0055;
+    }
+    .target-lock-badge {
+      position: absolute;
+      top: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Courier New', 'Consolas', monospace;
+      font-size: 10px;
+      font-weight: 900;
+      color: #00f0ff;
+      letter-spacing: 1.5px;
+      white-space: nowrap;
+      text-shadow: 0 0 8px #00f0ff;
+      background: rgba(4, 12, 24, 0.85);
+      border: 1px solid #00f0ff;
+      border-radius: 4px;
+      padding: 2px 6px;
+      pointer-events: none;
+      transition: opacity 0.15s ease-out;
+      opacity: 0;
+      animation: pulse-takedown-glow 1.2s infinite alternate;
+    }
+
+    /* Floating Damage Numbers */
+    .dmg-popup {
+      position: absolute;
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      pointer-events: none;
+      z-index: 97;
+      animation: dmgFloat 0.75s cubic-bezier(0.15, 0.85, 0.35, 1.2) forwards;
+    }
+    .dmg-normal {
+      color: #ffffff;
+      text-shadow: 0 0 8px #000, 2px 2px 0 #000;
+    }
+    .dmg-crit {
+      color: #ffd700;
+      font-size: 28px;
+      text-shadow: 0 0 12px #ff0055, 0 0 20px #ffea00, 2px 2px 0 #000;
+    }
+    .crit-tag {
+      font-size: 13px;
+      color: #ff0055;
+      text-shadow: 0 0 8px #ff0055;
+      margin-left: 4px;
+      vertical-align: super;
+    }
+    @keyframes dmgFloat {
+      0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); }
+      18% { opacity: 1; transform: translate(-50%, -16px) scale(1.25); }
+      70% { opacity: 0.95; transform: translate(-50%, -38px) scale(1.0); }
+      100% { opacity: 0; transform: translate(-50%, -55px) scale(0.9); }
+    }
+
+    /* Radial Reload Wheel */
+    .radial-reload-svg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 68px;
+      height: 68px;
+      pointer-events: none;
+      z-index: 94;
+    }
+    .reload-bg-circle {
+      stroke: rgba(255, 255, 255, 0.15);
+      stroke-width: 3.5;
+      fill: none;
+    }
+    .reload-progress-circle {
+      stroke: #00f0ff;
+      stroke-width: 4;
+      fill: none;
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 6px #00f0ff);
+      transition: stroke-dashoffset 0.05s linear;
+    }
+
+    /* Top-Right Tactical Action Feed */
+    .tactical-killfeed {
+      position: absolute;
+      top: 14px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+      z-index: 80;
+      font-family: 'Courier New', 'Consolas', monospace;
+    }
+    .killfeed-card {
+      background: rgba(8, 14, 26, 0.92);
+      border-left: 4px solid #00f0ff;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 900;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      animation: kfSlide 0.22s ease-out;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .killfeed-card.crit-event {
+      border-left-color: #ffd700;
+      background: rgba(26, 16, 8, 0.94);
+      box-shadow: 0 0 16px rgba(255, 215, 0, 0.4);
+    }
+    .kf-attacker { color: #00f0ff; text-shadow: 0 0 6px #00f0ff; }
+    .kf-icon { font-size: 13px; }
+    .kf-victim { color: #ff0055; text-shadow: 0 0 6px #ff0055; }
+    .kf-detail { color: #ffd700; font-size: 10px; margin-left: 6px; }
+    .killfeed-card.fade-out { opacity: 0; transform: translateX(25px); }
+    @keyframes kfSlide {
+      0% { opacity: 0; transform: translateX(30px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Downhill Threat Compass & Yeti Radar */
+    .threat-compass-container {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(320px, 75vw);
+      background: rgba(8, 14, 26, 0.88);
+      border: 1.5px solid rgba(0, 240, 255, 0.45);
+      border-radius: 8px;
+      padding: 4px 12px;
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 75;
+      box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      pointer-events: none;
+    }
+    .compass-tape {
+      position: relative;
+      width: 100%;
+      height: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      overflow: hidden;
+    }
+    .compass-marker {
+      font-size: 9px;
+      font-weight: 900;
+      color: #6a85a0;
+      letter-spacing: 1px;
+    }
+    .center-marker {
+      color: #00f0ff;
+      text-shadow: 0 0 8px #00f0ff;
+      font-weight: 900;
+    }
+    .compass-yeti-pip {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      font-size: 14px;
+      transition: transform 0.06s linear, opacity 0.2s;
+      filter: drop-shadow(0 0 8px #ff0033);
+      opacity: 0;
+    }
+    .compass-threat-badge {
+      font-size: 10px;
+      font-weight: 900;
+      color: #ffff00;
+      letter-spacing: 1px;
+      margin-top: 2px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .compass-threat-badge.threat-danger {
+      color: #ff0033;
+      text-shadow: 0 0 10px #ff0033;
+      animation: pulseDanger 0.4s infinite alternate;
+    }
+    @keyframes pulseDanger {
+      from { transform: scale(0.95); opacity: 0.8; }
+      to { transform: scale(1.05); opacity: 1; text-shadow: 0 0 16px #ff0033; }
+    }
+    .compass-degree-text {
+      font-size: 8px;
+      color: #88a0c0;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    /* Segmented Health & Tuck Stamina Gauges */
+    .segmented-gauge {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+      margin-top: 3px;
+    }
+    .gauge-seg {
+      width: 16px;
+      height: 8px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      transition: all 0.15s ease-out;
+    }
+    .hp-seg.active {
+      background: #00ff66;
+      box-shadow: 0 0 8px #00ff66;
+    }
+    .stamina-seg.active {
+      background: #00f0ff;
+      box-shadow: 0 0 8px #00f0ff;
+    }
+
+    /* Post-Match Competitive Stats Screen */
+    .rank-badge {
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      padding: 4px 14px;
+      border-radius: 6px;
+      letter-spacing: 2px;
+    }
+    .rank-s {
+      background: linear-gradient(135deg, #ffd700, #ff0055);
+      color: #000;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+    }
+    .rank-a {
+      background: #00f0ff;
+      color: #000;
+      box-shadow: 0 0 15px #00f0ff;
+    }
+    .rank-b {
+      background: #00ff66;
+      color: #000;
+      box-shadow: 0 0 12px #00ff66;
+    }
+    .rank-c {
+      background: #88a0c0;
+      color: #000;
+    }
+    .stat-card {
+      background: rgba(6, 12, 24, 0.9);
+      border: 1px solid #1a3050;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .stat-card-title {
+      font-size: 10px;
+      font-weight: 900;
+      color: #88a0c0;
+      letter-spacing: 1px;
+    }
+    .stat-card-value {
+      font-size: 20px;
+      font-weight: 900;
+      color: #00f0ff;
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+    }
+
     /* CS:GO Kinetic Knife Slash Screen Cut Overlay */
     #knife-slash-overlay {
       position: fixed;
@@ -695,6 +1018,9 @@
   </style>
 </head>
 <body>
+  <!-- Mobile Touch Controller Overlay Container -->
+  <div id="mobile-touch-container"></div>
+
   <!-- Cinematic Fullscreen Intro Video -->
   <video id="intro-video" src="/assets/media/teaser_trailer.mp4" autoplay muted playsinline loop style="position:fixed; top:0; left:0; width:100vw; height:100vh; object-fit:cover; z-index:1; pointer-events:auto; cursor:pointer;"></video>
 
@@ -838,19 +1164,8 @@
     </table>
   </div>
 
-  <!-- Mobile Touch Controls (Visible only on touch devices via CSS) -->
-  <div id="mobile-controls" style="display:none; position:fixed; bottom:20px; left:0; width:100vw; z-index:8500; justify-content:space-between; padding:0 30px; touch-action:none; pointer-events:none;">
-    <!-- Left side: Steer -->
-    <div style="display:flex; gap:16px; pointer-events:auto;">
-      <button id="btn-touch-left" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#fff; font-weight:bold; font-size:24px; backdrop-filter:blur(4px);">◀</button>
-      <button id="btn-touch-right" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(0,240,255,0.2); border:2px solid #00f0ff; color:#fff; font-weight:bold; font-size:24px; backdrop-filter:blur(4px);">▶</button>
-    </div>
-    <!-- Right side: Actions -->
-    <div style="display:flex; gap:16px; pointer-events:auto;">
-      <button id="btn-touch-brake" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(255,0,85,0.2); border:2px solid #ff0055; color:#fff; font-weight:bold; font-size:24px; backdrop-filter:blur(4px);">▼</button>
-      <button id="btn-touch-fire" class="touch-btn" style="width:80px; height:80px; border-radius:50%; background:rgba(255,170,0,0.2); border:2px solid #ffaa00; color:#fff; font-weight:900; font-size:16px; backdrop-filter:blur(4px);">FIRE</button>
-    </div>
-  </div>
+  <!-- High-Performance Mobile Touch Controller Overlay (Floating Joystick & Aim Zone) -->
+  <div id="mobile-touch-container" class="mobile-hud-overlay"></div>
 
   <!-- Babylon.js WebGPU / WebGL2 Viewport Canvas (Hidden until Drop In) -->
   <canvas id="renderCanvas" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; display:block; touch-action:none; outline:none;"></canvas>
@@ -920,6 +1235,9 @@
     </div>
   </div>
 
+  <!-- Downhill Wind Speed Lines Canvas -->
+  <canvas id="speed-lines-canvas" style="position:fixed; top:0; left:0; width:100vw; height:100vh; pointer-events:none; z-index:4; display:block;"></canvas>
+
   <!-- CS:GO Dynamic Crosshair -->
   <div id="csgo-crosshair">
     <div class="ch-bar ch-top" id="ch-top"></div>
@@ -929,19 +1247,117 @@
     <div class="ch-dot"></div>
   </div>
 
-  <!-- CS:GO Tactical Killfeed -->
-  <div id="csgo-killfeed"></div>
+  <!-- Directional Hitmarker Overlay -->
+  <div id="hitmarker-overlay" class="hitmarker-container">
+    <div class="hm-line hm-tl"></div>
+    <div class="hm-line hm-tr"></div>
+    <div class="hm-line hm-bl"></div>
+    <div class="hm-line hm-br"></div>
+  </div>
 
-  <!-- CS:GO Minimalist Bottom HUD -->
+  <!-- Radial Reload Progress Wheel -->
+  <svg id="radial-reload-wheel" class="radial-reload-svg" viewBox="0 0 64 64" style="display:none;">
+    <circle class="reload-bg-circle" cx="32" cy="32" r="26"></circle>
+    <circle class="reload-progress-circle" cx="32" cy="32" r="26"></circle>
+  </svg>
+
+  <!-- Top-Right Tactical Action Killfeed -->
+  <div id="tactical-killfeed" class="tactical-killfeed"></div>
+  <div id="csgo-killfeed" style="display:none;"></div>
+
+  <!-- Downhill Threat Compass & Yeti Radar -->
+  <div id="threat-compass-container" class="threat-compass-container">
+    <div class="compass-tape">
+      <span class="compass-marker">N</span>
+      <span class="compass-marker">NW</span>
+      <span class="compass-marker">W</span>
+      <span class="compass-marker">SW</span>
+      <span class="compass-marker center-marker">▼ DOWNHILL ▼</span>
+      <span class="compass-marker">SE</span>
+      <span class="compass-marker">E</span>
+      <span class="compass-marker">NE</span>
+      <div id="compass-yeti-pip" class="compass-yeti-pip">👹</div>
+    </div>
+    <div id="compass-threat-badge" class="compass-threat-badge"></div>
+    <div id="compass-degree-text" class="compass-degree-text">180° DOWNHILL</div>
+  </div>
+
+  <!-- CS:GO / Fortnite Tactical Bottom HUD -->
   <div id="csgo-tactical-hud">
     <div class="csgo-hud-block">
-      <span class="csgo-hud-label">+ HEALTH</span>
-      <span class="csgo-hud-val" id="csgo-hp-val">100</span>
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="display:flex; align-items:baseline; gap:8px;">
+          <span class="csgo-hud-label">+ HEALTH</span>
+          <span class="csgo-hud-val" id="csgo-hp-val">100</span>
+        </div>
+        <div id="segmented-hp-bar" class="segmented-gauge">
+          <div class="gauge-seg hp-seg active"></div>
+          <div class="gauge-seg hp-seg active"></div>
+          <div class="gauge-seg hp-seg active"></div>
+          <div class="gauge-seg hp-seg active"></div>
+          <div class="gauge-seg hp-seg active"></div>
+        </div>
+      </div>
     </div>
     <div class="csgo-hud-block">
-      <span class="csgo-hud-label">WEAPON</span>
-      <span class="csgo-hud-val" id="csgo-ammo-val">1</span>
-      <span class="csgo-ammo-sub">/ HARPOON [CABLE READY]</span>
+      <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+        <div style="display:flex; align-items:baseline; gap:8px;">
+          <span class="csgo-hud-label">WEAPON</span>
+          <span class="csgo-hud-val" id="csgo-ammo-val">8</span>
+          <span class="csgo-ammo-sub">/ HARPOON</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:9px; color:#00f0ff; font-weight:bold; letter-spacing:1px;">TUCK STAMINA</span>
+          <div id="segmented-stamina-bar" class="segmented-gauge">
+            <div class="gauge-seg stamina-seg active"></div>
+            <div class="gauge-seg stamina-seg active"></div>
+            <div class="gauge-seg stamina-seg active"></div>
+            <div class="gauge-seg stamina-seg active"></div>
+            <div class="gauge-seg stamina-seg active"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Competitive Post-Match Stats Modal -->
+  <div id="post-match-modal" class="hidden" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:120; background:rgba(4,8,16,0.88); backdrop-filter:blur(10px); display:none; justify-content:center; align-items:center; pointer-events:auto;">
+    <div style="background:rgba(8,16,30,0.96); border:2px solid #00f0ff; border-radius:16px; padding:28px; max-width:540px; width:90%; box-shadow:0 0 50px rgba(0,240,255,0.45), 0 20px 40px rgba(0,0,0,0.9); text-align:center;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid #1a3050; padding-bottom:12px;">
+        <div>
+          <h2 style="font-size:22px; font-weight:900; color:#00f0ff; text-shadow:0 0 12px #00f0ff; margin:0; letter-spacing:2px;">🏁 MATCH DEBRIEF</h2>
+          <span style="font-size:11px; color:#88a0c0; font-weight:bold; letter-spacing:1px;">COMPETITIVE TELEMETRY REPORT</span>
+        </div>
+        <div id="pm-rank-badge" class="rank-badge rank-s">S-TIER</div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0; text-align:left;">
+        <div class="stat-card">
+          <span class="stat-card-title">🎯 ACCURACY</span>
+          <span class="stat-card-value" id="pm-accuracy-val">0.0%</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">⚔️ DAMAGE / SEC (DPS)</span>
+          <span class="stat-card-value" id="pm-dps-val">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">🏔️ DOWNHILL DISTANCE</span>
+          <span class="stat-card-value" id="pm-distance-val">0m</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card-title">💥 SHOTS (HITS / TOTAL)</span>
+          <span class="stat-card-value" id="pm-shots-val">0 / 0</span>
+        </div>
+        <div class="stat-card" style="grid-column: span 2;">
+          <span class="stat-card-title">✨ HEADSHOT CRITICALS</span>
+          <span class="stat-card-value" id="pm-crits-val" style="color:#ffd700;">0</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:20px;">
+        <button id="pm-btn-restart" class="modal-btn modal-btn-ready" style="flex:1; padding:14px; font-size:15px; font-weight:900; letter-spacing:1px; cursor:pointer;" type="button">PLAY AGAIN 🚀</button>
+        <button id="pm-btn-lobby" class="modal-btn" style="flex:1; padding:14px; font-size:15px; font-weight:900; letter-spacing:1px; background:rgba(255,0,85,0.2); border-color:#ff0055; color:#ff0055; cursor:pointer;" type="button">RETURN TO LOBBY 🚡</button>
+      </div>
     </div>
   </div>
 
@@ -1132,7 +1548,7 @@
 
 
   <!-- Boot TypeScript + Babylon.js Game Engine -->
-  <script type="module" src="/bundle.js?v=2.3.0"></script>
+  <script type="module" src="/bundle.js?v=2.4.1"></script>
 </body>
 </html>
 

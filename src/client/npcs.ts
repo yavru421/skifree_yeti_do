@@ -15,7 +15,9 @@ import {
   Scalar,
   ParticleSystem,
   Texture,
-  Ray
+  Ray,
+  DynamicTexture,
+  LinesMesh
 } from "@babylonjs/core";
 
 export const NPC_COLORS = [
@@ -30,6 +32,32 @@ export interface DetachedGear {
   velocity: Vector3;
   angularVelocity: Vector3;
   isGrounded: boolean;
+}
+
+export interface RemotePlayerInstance {
+  id: string;
+  callsign: string;
+  rootMesh: Mesh;
+  bodyMesh: Mesh;
+  headMesh: Mesh;
+  leftSkiMesh: Mesh;
+  rightSkiMesh: Mesh;
+  nametagPlane: Mesh;
+  nametagTexture: DynamicTexture;
+  towlineMesh: LinesMesh | null;
+  x: number;
+  y: number;
+  z: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  rotationY: number;
+  targetRotationY: number;
+  speed: number;
+  hp: number;
+  isTethered: boolean;
+  isDragging: boolean;
+  lastPacketTime: number;
 }
 
 export interface NPCInstance {
@@ -74,8 +102,145 @@ export class NPCSystem {
     }
   }
 
-  public updatePlayers(_skiers: any[]): void {
-    // Hook for syncing remote network skiers
+  public remotePlayers: Map<string, RemotePlayerInstance> = new Map();
+
+  public updatePlayers(skiers: any[]): void {
+    if (!skiers || !Array.isArray(skiers)) return;
+    const now = Date.now();
+    const activeIds = new Set<string>();
+
+    for (const skier of skiers) {
+      const id = skier.id || skier.callsign;
+      if (!id) continue;
+      activeIds.add(id);
+
+      let player = this.remotePlayers.get(id);
+      if (!player) {
+        player = this.spawnRemotePlayer(id, skier.callsign || id, skier.x ?? 0, skier.y ?? 0, skier.z ?? 0);
+        this.remotePlayers.set(id, player);
+      }
+
+      player.targetX = typeof skier.x === "number" ? skier.x : player.x;
+      player.targetY = typeof skier.y === "number" ? skier.y : player.y;
+      player.targetZ = typeof skier.z === "number" ? skier.z : player.z;
+      if (typeof skier.rotationY === "number") {
+        player.targetRotationY = skier.rotationY;
+      }
+      player.speed = skier.speed ?? player.speed;
+      player.hp = skier.hp ?? player.hp;
+      player.isTethered = Boolean(skier.isTethered);
+      player.isDragging = Boolean(skier.isDragging);
+      player.lastPacketTime = now;
+    }
+
+    for (const [id, player] of this.remotePlayers.entries()) {
+      if (!activeIds.has(id) && now - player.lastPacketTime > 3500) {
+        this.disposeRemotePlayer(player);
+        this.remotePlayers.delete(id);
+      }
+    }
+  }
+
+  private spawnRemotePlayer(id: string, callsign: string, x: number, y: number, z: number): RemotePlayerInstance {
+    const root = new Mesh(`remoteSkier_${id}`, this.scene);
+    root.position.set(x, y, z);
+
+    let hash = 0;
+    for (let i = 0; i < callsign.length; i++) {
+      hash = callsign.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorPalette = ["#00e5ff", "#ff007f", "#76ff03", "#ff9100", "#d500f9", "#00e676", "#3d5afe"];
+    const jacketHex = colorPalette[Math.abs(hash) % colorPalette.length];
+
+    const jacketMat = new StandardMaterial(`remoteJacket_${id}`, this.scene);
+    jacketMat.diffuseColor = Color3.FromHexString(jacketHex);
+    jacketMat.specularColor = new Color3(0.4, 0.4, 0.4);
+
+    const gearMat = new StandardMaterial(`remoteGear_${id}`, this.scene);
+    gearMat.diffuseColor = new Color3(0.12, 0.14, 0.18);
+
+    const body = MeshBuilder.CreateBox(`remoteBody_${id}`, { width: 0.85, height: 1.15, depth: 0.52 }, this.scene);
+    body.material = jacketMat;
+    body.position.set(0, 1.05, 0.05);
+    body.rotation.x = 0.12;
+    body.parent = root;
+
+    const head = MeshBuilder.CreateSphere(`remoteHead_${id}`, { diameter: 0.52 }, this.scene);
+    head.material = jacketMat;
+    head.position.set(0, 1.85, 0.15);
+    head.parent = root;
+
+    const goggleMat = new StandardMaterial(`remoteGoggle_${id}`, this.scene);
+    goggleMat.diffuseColor = new Color3(0.05, 0.2, 0.35);
+    goggleMat.specularColor = new Color3(0.9, 0.95, 1.0);
+    goggleMat.specularPower = 64;
+    const goggles = MeshBuilder.CreateBox(`remoteGoggles_${id}`, { width: 0.48, height: 0.16, depth: 0.22 }, this.scene);
+    goggles.material = goggleMat;
+    goggles.position.set(0, 1.86, -0.16);
+    goggles.parent = root;
+
+    const leftSki = MeshBuilder.CreateBox(`remoteLeftSki_${id}`, { width: 0.14, height: 0.04, depth: 1.8 }, this.scene);
+    leftSki.material = gearMat;
+    leftSki.position.set(-0.26, 0.02, 0);
+    leftSki.parent = root;
+
+    const rightSki = MeshBuilder.CreateBox(`remoteRightSki_${id}`, { width: 0.14, height: 0.04, depth: 1.8 }, this.scene);
+    rightSki.material = gearMat;
+    rightSki.position.set(0.26, 0.02, 0);
+    rightSki.parent = root;
+
+    const tex = new DynamicTexture(`remoteNametagTex_${id}`, { width: 256, height: 64 }, this.scene, false);
+    tex.hasAlpha = true;
+    tex.drawText(callsign.toUpperCase(), null, 42, "bold 28px monospace", jacketHex, "rgba(8,12,24,0.85)", true);
+
+    const nametagPlane = MeshBuilder.CreatePlane(`remoteNametagPlane_${id}`, { width: 2.2, height: 0.55 }, this.scene);
+    const nametagMat = new StandardMaterial(`remoteNametagMat_${id}`, this.scene);
+    nametagMat.diffuseTexture = tex;
+    nametagMat.emissiveColor = new Color3(0.6, 0.9, 1.0);
+    nametagMat.backFaceCulling = false;
+    nametagPlane.material = nametagMat;
+    nametagPlane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    nametagPlane.position.set(0, 2.45, 0);
+    nametagPlane.parent = root;
+
+    return {
+      id,
+      callsign,
+      rootMesh: root,
+      bodyMesh: body,
+      headMesh: head,
+      leftSkiMesh: leftSki,
+      rightSkiMesh: rightSki,
+      nametagPlane,
+      nametagTexture: tex,
+      towlineMesh: null,
+      x,
+      y,
+      z,
+      targetX: x,
+      targetY: y,
+      targetZ: z,
+      rotationY: Math.PI,
+      targetRotationY: Math.PI,
+      speed: 35,
+      hp: 100,
+      isTethered: false,
+      isDragging: false,
+      lastPacketTime: Date.now()
+    };
+  }
+
+  private disposeRemotePlayer(player: RemotePlayerInstance): void {
+    if (player.towlineMesh) {
+      player.towlineMesh.dispose();
+      player.towlineMesh = null;
+    }
+    if (player.nametagTexture) {
+      player.nametagTexture.dispose();
+    }
+    if (player.rootMesh) {
+      player.rootMesh.dispose();
+    }
   }
 
   private initParticleSystems(): void {
@@ -413,6 +578,43 @@ export class NPCSystem {
 
   public update(playerZ: number, yetiPos: Vector3, deltaTime: number, terrainHeightFn?: (x: number, z: number) => number): void {
     const dt = Math.min(deltaTime, 0.1);
+
+    // Update Remote Network Players
+    for (const player of this.remotePlayers.values()) {
+      player.x = Scalar.Lerp(player.x, player.targetX, dt * 14.0);
+      player.y = Scalar.Lerp(player.y, player.targetY, dt * 14.0);
+      player.z = Scalar.Lerp(player.z, player.targetZ, dt * 14.0);
+      player.rotationY = Scalar.Lerp(player.rotationY, player.targetRotationY, dt * 10.0);
+
+      if (terrainHeightFn) {
+        const groundH = terrainHeightFn(player.x, player.z);
+        player.y = Math.max(player.y, groundH);
+      }
+
+      player.rootMesh.position.set(player.x, player.y, player.z);
+      player.rootMesh.rotation.y = player.rotationY;
+
+      if (player.isTethered && yetiPos) {
+        const startPos = player.rootMesh.position.add(new Vector3(0, 1.1, -0.3));
+        const endPos = yetiPos.add(new Vector3(0, 2.2, 0));
+        if (!player.towlineMesh) {
+          player.towlineMesh = MeshBuilder.CreateLines(
+            `remoteTow_${player.id}`,
+            { points: [startPos, endPos], updatable: true },
+            this.scene
+          );
+          player.towlineMesh.color = new Color3(1.0, 0.84, 0.0);
+        } else {
+          MeshBuilder.CreateLines(
+            `remoteTow_${player.id}`,
+            { points: [startPos, endPos], instance: player.towlineMesh }
+          );
+        }
+      } else if (player.towlineMesh) {
+        player.towlineMesh.dispose();
+        player.towlineMesh = null;
+      }
+    }
 
     for (const npc of this.npcs) {
       if (!npc.isKnockedOver) {

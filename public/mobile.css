@@ -1,0 +1,463 @@
+/* public/mobile.css */
+:root {
+  --neon-cyan: #00f3ff;
+  --neon-magenta: #ff0055;
+  --neon-yellow: #ffea00;
+  --bg-dark: #0a0a12;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: #fff;
+  font-family: 'Courier New', Courier, monospace;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.crt-overlay::before {
+  content: ' ';
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  background-size: 100% 4px;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.app-screen {
+  position: absolute;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: calc(var(--safe-top) + 10px) calc(var(--safe-right) + 10px) calc(var(--safe-bottom) + 10px) calc(var(--safe-left) + 10px);
+}
+
+.hidden { display: none !important; }
+
+.retro-container {
+  background: rgba(15, 15, 25, 0.94);
+  border: 2px solid var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.35);
+  padding: clamp(14px, 3vh, 24px);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.glitch-title {
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  color: var(--neon-cyan);
+  text-shadow: 2px 2px var(--neon-magenta);
+  margin: 0;
+}
+
+.sub-title {
+  font-size: clamp(0.75rem, 2vw, 1rem);
+  color: var(--neon-yellow);
+  letter-spacing: 3px;
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+.input-group {
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.input-group label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--neon-cyan);
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+.input-group input, .action-card input {
+  width: 100%;
+  padding: 10px;
+  background: #000;
+  border: 1px solid var(--neon-cyan);
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.action-card {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px dashed rgba(0, 243, 255, 0.4);
+  border-radius: 6px;
+}
+
+.action-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: var(--neon-yellow);
+  letter-spacing: 1px;
+}
+
+.retro-btn {
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+  font-size: 1.05rem;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  border-radius: 4px;
+  transition: transform 0.08s;
+  touch-action: manipulation;
+}
+
+.retro-btn:active {
+  transform: scale(0.96);
+}
+
+.retro-btn.primary {
+  background: var(--neon-cyan);
+  color: #000;
+  box-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.retro-btn.secondary {
+  background: var(--neon-magenta);
+  color: #fff;
+  box-shadow: 0 0 10px var(--neon-magenta);
+}
+
+.retro-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.highlight {
+  color: var(--neon-yellow);
+  text-shadow: 0 0 8px var(--neon-yellow);
+}
+
+.preset-selector {
+  margin: 12px 0;
+  text-align: left;
+}
+
+.preset-selector label {
+  display: block;
+  font-size: 0.8rem;
+  color: #88a0c0;
+  margin-bottom: 6px;
+}
+
+.preset-btn {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: #000;
+  border: 1px solid #556688;
+  color: #88a0c0;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 4px;
+  touch-action: manipulation;
+}
+
+.preset-btn.active {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  background: rgba(0, 243, 255, 0.15);
+  box-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+}
+
+.roster-section {
+  margin: 12px 0;
+  text-align: left;
+}
+
+.roster-section h3 {
+  font-size: 0.85rem;
+  color: var(--neon-cyan);
+  margin-bottom: 8px;
+}
+
+.roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.player-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid #334466;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.player-card.local-player {
+  border-color: var(--neon-yellow);
+}
+
+.player-status.ready {
+  color: #39ff14;
+  font-weight: bold;
+}
+
+.player-status.not-ready {
+  color: #ff0055;
+  font-weight: bold;
+}
+
+.lobby-controls {
+  margin-top: 14px;
+}
+
+/* ===================================================
+   PRO MOBILE TOUCH HUD (Floating Joystick + Aim Drag)
+   =================================================== */
+.mobile-hud-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Left Zone: Full touch capture for dynamic floating joystick */
+.touch-zone.left-zone {
+  pointer-events: auto;
+  position: relative;
+  width: 50%;
+  height: 100%;
+  touch-action: none;
+}
+
+.joystick-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: block;
+}
+
+/* Gyro / Motion controls docked to safe top-left corner */
+.gyro-controls-bar {
+  position: absolute;
+  top: calc(var(--safe-top) + 12px);
+  left: calc(var(--safe-left) + 16px);
+  display: flex;
+  gap: 8px;
+  z-index: 25;
+  pointer-events: auto;
+}
+
+.gyro-toggle-btn, .gyro-calib-btn {
+  background: rgba(10, 20, 35, 0.82);
+  border: 1.5px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 6px 12px;
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s, background 0.15s, box-shadow 0.15s;
+}
+
+.gyro-toggle-btn.active, .gyro-calib-btn.active {
+  background: var(--neon-cyan);
+  color: #000;
+  box-shadow: 0 0 14px var(--neon-cyan);
+}
+
+.gyro-toggle-btn:active, .gyro-calib-btn:active {
+  transform: scale(0.94);
+}
+
+/* Right Zone: Touch Aim Drag Area */
+.touch-zone.right-zone {
+  pointer-events: auto;
+  position: relative;
+  width: 50%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* Action Button Cluster pinned to safe bottom-right */
+.action-cluster {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 20px);
+  right: calc(var(--safe-right) + 20px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  pointer-events: auto;
+  z-index: 25;
+}
+
+.hud-btn {
+  font-family: inherit;
+  font-weight: 900;
+  touch-action: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.08s, box-shadow 0.15s, background 0.15s;
+  box-sizing: border-box;
+}
+
+.hud-btn:active {
+  transform: scale(0.92);
+}
+
+.fire-btn {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  border: 3px solid var(--neon-magenta);
+  background: rgba(255, 0, 85, 0.28);
+  color: #fff;
+  box-shadow: 0 0 18px rgba(255, 0, 85, 0.65), inset 0 0 12px rgba(255, 0, 85, 0.4);
+  font-size: 1.15rem;
+  letter-spacing: 1px;
+  backdrop-filter: blur(8px);
+}
+
+.fire-btn.active, .fire-btn:active {
+  background: var(--neon-magenta);
+  color: #fff;
+  box-shadow: 0 0 35px var(--neon-magenta), inset 0 0 20px #fff;
+}
+
+.rear-btn {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid var(--neon-cyan);
+  background: rgba(0, 243, 255, 0.18);
+  color: var(--neon-cyan);
+  font-size: 0.75rem;
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.rear-btn.active {
+  background: var(--neon-cyan);
+  color: #000;
+  box-shadow: 0 0 16px var(--neon-cyan);
+}
+
+.reload-btn {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid var(--neon-yellow);
+  background: rgba(255, 234, 0, 0.18);
+  color: var(--neon-yellow);
+  font-size: 0.75rem;
+  box-shadow: 0 0 10px rgba(255, 234, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.reload-btn.active, .reload-btn:active {
+  background: var(--neon-yellow);
+  color: #000;
+  box-shadow: 0 0 18px var(--neon-yellow);
+}
+
+/* ===================================================
+   RESPONSIVE LANDSCAPE TUNING FOR MOBILE VIEWPORTS
+   =================================================== */
+@media (max-height: 520px) and (orientation: landscape) {
+  #boss-hud {
+    top: calc(var(--safe-top) + 4px) !important;
+    width: min(360px, 60vw) !important;
+    padding: 3px 8px !important;
+  }
+  .hud-top-sides {
+    margin-top: calc(var(--safe-top) + 20px) !important;
+  }
+  #race-hud {
+    top: calc(var(--safe-top) + 4px) !important;
+    padding: 3px 8px !important;
+  }
+  #threat-compass-container {
+    top: calc(var(--safe-top) + 4px) !important;
+  }
+  #minimap-container {
+    left: calc(var(--safe-left) + 8px) !important;
+    height: min(160px, 40vh) !important;
+  }
+  /* Offset takedown button on mobile landscape to keep center clear */
+  #takedown-tap-container {
+    bottom: calc(var(--safe-bottom) + 12px) !important;
+    left: auto !important;
+    right: calc(var(--safe-right) + 110px) !important;
+    transform: none !important;
+  }
+  #btn-takedown-tap {
+    width: 100px !important;
+    height: 100px !important;
+    font-size: 13px !important;
+  }
+  .action-cluster {
+    bottom: calc(var(--safe-bottom) + 10px);
+    right: calc(var(--safe-right) + 10px);
+    gap: 8px;
+  }
+  .fire-btn {
+    width: 72px;
+    height: 72px;
+    font-size: 1rem;
+  }
+  .rear-btn, .reload-btn {
+    width: 52px;
+    height: 52px;
+    font-size: 0.7rem;
+  }
+  /* Modals must scroll comfortably on landscape */
+  .modal-box, #start-modal, #death-modal, #level-clear-modal, #menu-modal, #claim-score-modal, #feedback-modal, #standings-modal {
+    max-height: 86vh !important;
+    overflow-y: auto !important;
+  }
+}

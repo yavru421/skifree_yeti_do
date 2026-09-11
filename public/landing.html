@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SkiFree 2: The Hunt for the Yeti - MVP Beta</title>
+  <link rel="stylesheet" href="/mobile.css">
+</head>
+<body class="crt-overlay">
+
+  <!-- Screen 1: Landing Menu -->
+  <div id="screen-landing" class="app-screen">
+    <div class="retro-container">
+      <h1 class="glitch-title">SkiFree 2</h1>
+      <h2 class="sub-title">THE HUNT FOR THE YETI</h2>
+
+      <div class="input-group">
+        <label for="input-callsign">CALLSIGN / HANDLE</label>
+        <input type="text" id="input-callsign" maxlength="12" placeholder="Skier_42">
+      </div>
+
+      <div class="action-card">
+        <h3>HOST NEW LOBBY</h3>
+        <button id="btn-create-room" class="retro-btn primary">CREATE ROOM</button>
+      </div>
+
+      <div class="action-card">
+        <h3>JOIN EXISTING LOBBY</h3>
+        <form id="form-join-room">
+          <input type="text" id="input-room-code" maxlength="7" placeholder="YETI-42" style="text-transform: uppercase;">
+          <button type="submit" class="retro-btn secondary">JOIN ROOM</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Waiting Lobby Room -->
+  <div id="screen-waiting-lobby" class="app-screen hidden">
+    <div class="retro-container">
+      <h2>LOBBY ROOM: <span id="display-room-code" class="highlight">------</span></h2>
+
+      <div class="preset-selector">
+        <label>DIFFICULTY PRESET:</label>
+        <button class="preset-btn active" data-preset="EASY">EASY (20-45 MPH)</button>
+        <button class="preset-btn" data-preset="MEDIUM">MEDIUM (28-60 MPH)</button>
+        <button class="preset-btn" data-preset="PRO">PRO (38-85 MPH)</button>
+      </div>
+
+      <div class="roster-section">
+        <h3>CONNECTED SKIERS</h3>
+        <div id="lobby-player-roster" class="roster-list">
+          <!-- Dynamically populated by LobbyUI.ts -->
+        </div>
+      </div>
+
+      <div class="lobby-controls">
+        <button id="btn-toggle-ready" class="retro-btn secondary">TOGGLE READY</button>
+        <button id="btn-start-game" class="retro-btn primary hidden" disabled>START MATCH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: Active 3D Gameplay Canvas -->
+  <div id="screen-game-canvas" class="app-screen hidden">
+    <canvas id="renderCanvas"></canvas>
+    <div id="touch-hud-overlay"></div>
+  </div>
+
+  <script type="module" src="/bundle.js"></script>
+</body>
+</html>

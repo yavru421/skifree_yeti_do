@@ -20,7 +20,8 @@ import {
   Vector3,
   Mesh,
   InstancedMesh,
-  ParticleSystem
+  ParticleSystem,
+  VertexData
 } from "@babylonjs/core";
 import { PowerUpType } from "./types";
 import { GranbyTrackConfig, getGranbyTrack } from "./granbyTracks";
@@ -112,6 +113,7 @@ export class TerrainSystem {
     mountainMat.emissiveTexture = mountainMat.diffuseTexture;
     mountainMat.specularColor = new Color3(0.1, 0.1, 0.15);
     mountainMat.backFaceCulling = false;
+    mountainMat.fogEnabled = false;
 
     this.mountainDomeMesh = MeshBuilder.CreatePlane("mountainHorizon", { width: 2800, height: 750 }, this.scene);
     this.mountainDomeMesh.material = mountainMat;
@@ -301,8 +303,14 @@ export class TerrainSystem {
       positions[i + 1] = this.getTerrainHeightAt(vx, worldZ);
     }
     chunk.updateVerticesData("position", positions);
-    // Note: Recomputing normals every frame for procedural terrain is expensive.
-    // For flat-shaded or high-speed CS:GO aesthetic, the original normals or simple shader is sufficient.
+
+    // Dynamically recalculate true surface normals so lighting, shadows, and specular glints stay clean and razor-sharp
+    const indices = chunk.getIndices();
+    const normals = chunk.getVerticesData("normal");
+    if (indices && normals) {
+      VertexData.ComputeNormals(positions, indices, normals);
+      chunk.updateVerticesData("normal", normals);
+    }
   }
 
   public applyTrack(track: GranbyTrackConfig, playerZ: number = 0): void {
@@ -315,22 +323,30 @@ export class TerrainSystem {
 
     // 2. Snow Surface Tint & Corduroy Pattern
     if (this.snowMat) {
+      if (this.snowMat.diffuseTexture) {
+        (this.snowMat.diffuseTexture as Texture).uScale = track.snowCorduroyScale;
+        (this.snowMat.diffuseTexture as Texture).vScale = track.snowCorduroyScale;
+      }
+      if (this.snowMat.bumpTexture) {
+        (this.snowMat.bumpTexture as Texture).uScale = track.snowCorduroyScale;
+        (this.snowMat.bumpTexture as Texture).vScale = track.snowCorduroyScale;
+      }
       if (track.level === 1) {
         // Quick Draw: Bright pristine corduroy groomer in Colorado sunshine
         this.snowMat.diffuseColor = new Color3(1.0, 1.0, 1.0);
         this.snowMat.specularColor = new Color3(0.3, 0.3, 0.35);
       } else if (track.level === 2) {
-        // Jackalope: High-speed alpine bluebird snow
-        this.snowMat.diffuseColor = new Color3(0.92, 0.96, 1.0);
-        this.snowMat.specularColor = new Color3(0.4, 0.45, 0.55);
+        // Jackalope: High-speed alpine bluebird snow (bright snow white with subtle icy glint)
+        this.snowMat.diffuseColor = new Color3(0.98, 0.99, 1.0);
+        this.snowMat.specularColor = new Color3(0.5, 0.55, 0.65);
       } else if (track.level === 3) {
         // Rodeo: Steep dusk alpenglow, violet tint
-        this.snowMat.diffuseColor = new Color3(0.85, 0.80, 0.92);
+        this.snowMat.diffuseColor = new Color3(0.90, 0.88, 0.95);
         this.snowMat.specularColor = new Color3(0.5, 0.35, 0.5);
       } else {
         // High Roller Glades: Deep blizzard shadow powder
-        this.snowMat.diffuseColor = new Color3(0.74, 0.80, 0.88);
-        this.snowMat.specularColor = new Color3(0.2, 0.25, 0.35);
+        this.snowMat.diffuseColor = new Color3(0.85, 0.88, 0.94);
+        this.snowMat.specularColor = new Color3(0.3, 0.35, 0.45);
       }
     }
 
@@ -619,6 +635,7 @@ export class TerrainSystem {
     }
     if (this.mountainDomeMesh) {
       this.mountainDomeMesh.position.z = playerZ - 950;
+      this.mountainDomeMesh.position.y = this.getTerrainHeightAt(0, playerZ - 950) + 180;
     }
 
     // 2. Recalculate chunks relative to player downhill position (-Z)

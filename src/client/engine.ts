@@ -109,6 +109,15 @@ export class EngineManager {
     }
 
     const scene = new Scene(engine);
+
+    // Dynamic Mobile Hardware Scaling: Cap high-DPI displays to 1.5x to preserve 60 FPS on mobile
+    const isMobile = typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    if (isMobile && dpr > 1.5) {
+      engine.setHardwareScalingLevel(dpr / 1.5);
+      console.log(`[Engine] Mobile resolution scaling applied: hardwareScalingLevel=${(dpr / 1.5).toFixed(2)}`);
+    }
+
     return new EngineManager(canvas, engine, scene);
   }
 

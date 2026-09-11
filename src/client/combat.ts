@@ -1,8 +1,9 @@
 /**
  * SkiFree Yeti DO - Precision Rifle & Raycast Combat System
  * Implements authoritative hitscan detection, magazine reload (8 rounds),
- * muzzle flash point-light dynamics, bullet tracers, and server hit dispatch.
- * Supports Left Click, PointerDown, Touch, Spacebar, and Enter.
+ * muzzle flash point-light dynamics, CS:GO-style dynamic bloom & recoil triggers,
+ * Fortnite-style directional hitmarkers and floating damage counters,
+ * and comprehensive competitive combat analytics (Accuracy %, DPS, Crits).
  */
 
 import {
@@ -24,6 +25,13 @@ export class CombatSystem {
   private onFireCallback: () => void;
   private onHitCallback: (packet: HitscanPacket) => void;
 
+  // Competitive Visual & Audio Juice Callbacks
+  public onHitmarker: ((isHeadshot: boolean, damage: number) => void) | null = null;
+  public onBloomKick: (() => void) | null = null;
+  public onRecoil: (() => void) | null = null;
+  public onReloadStart: ((durationMs: number) => void) | null = null;
+  public onReloadEnd: (() => void) | null = null;
+
   // Weapon State
   public currentAmmo: number = 8;
   public maxAmmo: number = 8;
@@ -31,6 +39,13 @@ export class CombatSystem {
   private reloadTimeMs: number = 1600;
   private lastShotTime: number = 0;
   private fireCooldownMs: number = 180; // Rate limit anti-cheat parity
+
+  // Competitive Match Telemetry
+  public totalShots: number = 0;
+  public hitsCount: number = 0;
+  public headshotsCount: number = 0;
+  public totalDamageDealt: number = 0;
+  public combatStartTime: number = 0;
 
   // Visual Effects
   private muzzleFlashLight: PointLight | null = null;
@@ -56,6 +71,27 @@ export class CombatSystem {
     this.npcSystem = npcSystem;
   }
 
+  public getStats(): {
+    totalShots: number;
+    hitsCount: number;
+    headshotsCount: number;
+    totalDamageDealt: number;
+    accuracy: number;
+    dps: number;
+  } {
+    const accuracy = this.totalShots > 0 ? (this.hitsCount / this.totalShots) * 100 : 0;
+    const elapsedSec = this.combatStartTime > 0 ? Math.max(1, (performance.now() - this.combatStartTime) / 1000) : 1;
+    const dps = Math.round(this.totalDamageDealt / elapsedSec);
+    return {
+      totalShots: this.totalShots,
+      hitsCount: this.hitsCount,
+      headshotsCount: this.headshotsCount,
+      totalDamageDealt: this.totalDamageDealt,
+      accuracy: Math.round(accuracy * 10) / 10,
+      dps
+    };
+  }
+
   private initVFX(): void {
     // Dynamic muzzle flash light
     this.muzzleFlashLight = new PointLight("muzzleFlash", new Vector3(0, 0, 0), this.scene);
@@ -78,9 +114,9 @@ export class CombatSystem {
       this.fire();
     };
 
-    // 1. Pointer Down (Desktop mouse & mobile touch)
+    // 1. Pointer Down (Desktop mouse only - mobile firing is handled by dedicated touch controls)
     window.addEventListener("pointerdown", (e: PointerEvent) => {
-      if (e.button === 0 || e.pointerType === "touch") {
+      if (e.pointerType !== "touch" && e.button === 0) {
         tryFire(e);
       }
     });
@@ -113,8 +149,16 @@ export class CombatSystem {
       return false;
     }
 
+    if (this.combatStartTime === 0) {
+      this.combatStartTime = now;
+    }
+    this.totalShots++;
     this.currentAmmo--;
     this.lastShotTime = now;
+
+    // Trigger weapon dynamic bloom & camera screen recoil
+    if (this.onBloomKick) this.onBloomKick();
+    if (this.onRecoil) this.onRecoil();
 
     // ALWAYS TRIGGER ON-FIRE CALLBACK (Sound, Harpoon Recoil, Steam Vent Puff)
     this.onFireCallback();
@@ -130,7 +174,24 @@ export class CombatSystem {
 
     // 2. Raycast from camera along look vector
     const camera = this.scene.activeCamera!;
-    const ray = camera.getForwardRay(350);
+    let ray = camera.getForwardRay(350);
+
+    // 2b. Smart Auto-Aim Cone Magnetism (High-Precision Hit Registration on Mobile & PC)
+    if (this.yeti) {
+      const headPos = this.yeti.getHeadWorldPosition();
+      const bodyPos = this.yeti.getBodyWorldPosition();
+      const distToHead = this.distancePointToRay(headPos, ray.origin, ray.direction);
+      const distToBody = this.distancePointToRay(bodyPos, ray.origin, ray.direction);
+      const distToYeti = Vector3.Distance(ray.origin, bodyPos);
+
+      // Auto-Aim Cone Magnetism (within 250m and within 6.0m radius of ray)
+      if (distToYeti < 250 && (distToHead < 6.0 || distToBody < 6.0)) {
+        // Snap directly to head if crosshair is angled toward head, otherwise torso
+        const aimTarget = distToHead <= distToBody ? headPos : bodyPos;
+        const autoAimDir = aimTarget.subtract(ray.origin).normalize();
+        ray = new Ray(ray.origin, autoAimDir, 350);
+      }
+    }
 
     // 3. Test intersection against Yeti Hitbox
     this.evaluateHitscan(ray, now);
@@ -153,14 +214,25 @@ export class CombatSystem {
 
     if (distToHeadRay < 2.4 && distHead < 350) {
       const flankCheck = this.yeti.evaluateFlankVulnerability(ray.origin.x);
+      const totalDmg = flankCheck.damage + 200;
+      this.hitsCount++;
+      this.headshotsCount++;
+      this.totalDamageDealt += totalDmg;
+
       this.triggerDeflectFeedback(flankCheck.message);
       this.yeti.triggerHitFeedback(true);
+
+      // Trigger gold headshot hitmarker & floating number
+      if (this.onHitmarker) {
+        this.onHitmarker(true, totalDmg);
+      }
+
       this.onHitCallback({
         type: "hitscan",
         target: "yeti",
         hitPart: "head",
-        damage: flankCheck.damage + 200,
-        isCritical: flankCheck.isCritical,
+        damage: totalDmg,
+        isCritical: true,
         distance: distHead,
         rayOrigin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
         rayDir: { x: ray.direction.x, y: ray.direction.y, z: ray.direction.z },
@@ -175,13 +247,24 @@ export class CombatSystem {
 
     if (distToBodyRay < 4.2 && distBody < 350) {
       const flankCheck = this.yeti.evaluateFlankVulnerability(ray.origin.x);
+      const totalDmg = flankCheck.damage;
+      this.hitsCount++;
+      if (flankCheck.isCritical) this.headshotsCount++;
+      this.totalDamageDealt += totalDmg;
+
       this.triggerDeflectFeedback(flankCheck.message);
       this.yeti.triggerHitFeedback(flankCheck.isCritical);
+
+      // Trigger white body hitmarker (or gold if flank crit)
+      if (this.onHitmarker) {
+        this.onHitmarker(flankCheck.isCritical, totalDmg);
+      }
+
       this.onHitCallback({
         type: "hitscan",
         target: "yeti",
         hitPart: "body",
-        damage: flankCheck.damage,
+        damage: totalDmg,
         isCritical: flankCheck.isCritical,
         distance: distBody,
         rayOrigin: { x: ray.origin.x, y: ray.origin.y, z: ray.origin.z },
@@ -208,9 +291,16 @@ export class CombatSystem {
   public reload(): void {
     if (this.isReloading || this.currentAmmo === this.maxAmmo) return;
     this.isReloading = true;
+    if (this.onReloadStart) {
+      this.onReloadStart(this.reloadTimeMs);
+    }
+
     setTimeout(() => {
       this.currentAmmo = this.maxAmmo;
       this.isReloading = false;
+      if (this.onReloadEnd) {
+        this.onReloadEnd();
+      }
     }, this.reloadTimeMs);
   }
 

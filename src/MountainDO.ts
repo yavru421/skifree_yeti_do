@@ -7,6 +7,28 @@ export interface Env {
   ASSETS: Fetcher;
 }
 
+export interface PlayerAttachment {
+  playerId: string;
+  callsign: string;
+  roomCode: string;
+  isReady: boolean;
+  isHost: boolean;
+  x: number;
+  z: number;
+  speed: number;
+  limbsLost: number; // 0=Intact, 1=Left Arm, 2=Right Arm, 3=Skeleton
+}
+
+export interface YetiState {
+  x: number;
+  z: number;
+  hp: number;
+  maxHp: number;
+  wave: number;
+  state: 'CHARGING' | 'STAGGERED' | 'RETREATING' | 'DEAD';
+  staggerTimer: number;
+}
+
 interface PlayerState {
   callsign: string;
   x: number;
@@ -38,6 +60,9 @@ interface HistoryFrame {
 }
 
 export class MountainDO extends DurableObject<Env> {
+  private roomCode: string = "GLOBAL";
+  private lobbyStatus: 'WAITING' | 'IN_GAME' | 'GAME_OVER' = 'WAITING';
+  private preset: 'EASY' | 'MEDIUM' | 'PRO' = 'MEDIUM';
   private players: Map<string, PlayerState> = new Map();
   private tick = 0;
   private currentWave = 1;
@@ -62,8 +87,21 @@ export class MountainDO extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    this.roomCode = (ctx.id as any).name || "GLOBAL";
 
     this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS room_metadata (
+        room_code TEXT PRIMARY KEY,
+        created_at INTEGER,
+        status TEXT
+      );
+      CREATE TABLE IF NOT EXISTS match_kills (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        killer TEXT,
+        wave INTEGER,
+        damage INTEGER,
+        created_at INTEGER
+      );
       CREATE TABLE IF NOT EXISTS match_telemetry (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         callsign TEXT,
@@ -87,16 +125,53 @@ export class MountainDO extends DurableObject<Env> {
 
   public async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/info") {
+      return new Response(JSON.stringify({
+        roomCode: this.roomCode,
+        status: this.lobbyStatus,
+        playerCount: this.ctx.getWebSockets().length,
+        wave: this.currentWave
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+
     if (url.pathname === "/ws") {
-      const callsign = url.searchParams.get("callsign");
-      if (!callsign || !/^[a-zA-Z0-9_\- ]{1,16}$/.test(callsign)) {
-        return new Response("Invalid Callsign", { status: 400 });
+      const upgradeHeader = request.headers.get("Upgrade");
+      if (upgradeHeader !== "websocket") {
+        return new Response("Expected WebSocket upgrade", { status: 426 });
       }
+
+      const callsign = this.sanitizeCallsign(url.searchParams.get("callsign") || "Skier");
+      const playerId = crypto.randomUUID();
 
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
 
       this.ctx.acceptWebSocket(server, [callsign]);
+
+      const existingSockets = this.ctx.getWebSockets();
+      const isHost = existingSockets.length === 1;
+
+      const attachment: PlayerAttachment = {
+        playerId,
+        callsign,
+        roomCode: this.roomCode,
+        isReady: isHost,
+        isHost,
+        x: (Math.random() - 0.5) * 20,
+        z: 0,
+        speed: 0,
+        limbsLost: 0
+      };
+
+      if ((server as any).serializeAttachment) {
+        (server as any).serializeAttachment(attachment);
+      }
 
       // If room is fresh or previous Yeti was felled, reset to full health!
       if (this.players.size === 0 || this.yeti.state === "DEAD") {
@@ -109,7 +184,7 @@ export class MountainDO extends DurableObject<Env> {
 
       this.players.set(callsign, {
         callsign,
-        x: 0,
+        x: attachment.x,
         y: 50,
         z: 0,
         vx: 0,
@@ -123,6 +198,10 @@ export class MountainDO extends DurableObject<Env> {
         isDragging: false,
         ws: server
       });
+
+      server.send(JSON.stringify({ type: "INIT_SESSION", playerId }));
+
+      this.broadcastLobbyState();
 
       return new Response(null, { status: 101, webSocket: client });
     }
@@ -279,8 +358,12 @@ export class MountainDO extends DurableObject<Env> {
       const len = Math.sqrt(dx * dx + dz * dz) || 1;
 
       const waveSpeedBonus = (this.currentWave - 1) * 3.5;
-      let baseSpeed = 25 + waveSpeedBonus;
-      if (this.yeti.state === "BERSERK") baseSpeed = 40 + waveSpeedBonus * 1.5;
+      let presetBase = 28;
+      if (this.preset === "EASY") presetBase = 20;
+      else if (this.preset === "PRO") presetBase = 38;
+
+      let baseSpeed = presetBase + waveSpeedBonus;
+      if (this.yeti.state === "BERSERK") baseSpeed = (presetBase * 1.5) + waveSpeedBonus * 1.5;
       if (this.yeti.state === "RETREATING") baseSpeed = -15;
 
       const effectiveSpeed = baseSpeed * this.yeti.dragFactor;
@@ -339,6 +422,71 @@ export class MountainDO extends DurableObject<Env> {
     if (!callsign) return;
     const player = this.players.get(callsign);
     if (!player) return;
+
+    if (data.type === "SET_PRESET") {
+      if (data.preset && ["EASY", "MEDIUM", "PRO"].includes(data.preset)) {
+        this.preset = data.preset;
+        this.broadcastLobbyState();
+      }
+      return;
+    }
+
+    if (data.type === "START_GAME") {
+      const attachment = (ws as any).deserializeAttachment ? ((ws as any).deserializeAttachment() as PlayerAttachment | null) : null;
+      if ((!attachment || attachment.isHost) && this.lobbyStatus === "WAITING") {
+        this.lobbyStatus = "IN_GAME";
+        this.ctx.storage.setAlarm(Date.now() + 50);
+        this.broadcast({ type: "GAME_START_SIGNAL", roomCode: this.roomCode });
+        this.broadcast({ type: "GAME_STARTED", roomCode: this.roomCode });
+      }
+      return;
+    }
+
+    if (data.type === "TOGGLE_READY") {
+      const attachment = (ws as any).deserializeAttachment ? ((ws as any).deserializeAttachment() as PlayerAttachment | null) : null;
+      if (attachment) {
+        attachment.isReady = !attachment.isReady;
+        if ((ws as any).serializeAttachment) (ws as any).serializeAttachment(attachment);
+      }
+      this.broadcastLobbyState();
+      return;
+    }
+
+    if (data.type === "PLAYER_INPUT") {
+      const attachment = (ws as any).deserializeAttachment ? ((ws as any).deserializeAttachment() as PlayerAttachment | null) : null;
+      if (this.lobbyStatus === "IN_GAME" && attachment) {
+        const steerX = Math.max(-1, Math.min(1, data.steerX || 0));
+        const throttleY = Math.max(-1, Math.min(1, data.throttleY || 0));
+        attachment.x += steerX * 0.8;
+        attachment.speed = Math.max(10, Math.min(85, attachment.speed + throttleY * 1.5));
+        attachment.z += attachment.speed * 0.05;
+        if ((ws as any).serializeAttachment) (ws as any).serializeAttachment(attachment);
+      }
+      return;
+    }
+
+    if (data.type === "SHOOT_RAYCAST") {
+      if (this.yeti.state !== "DEAD") {
+        const damage = Math.floor(400 + Math.random() * 600);
+        this.yeti.hp -= damage;
+        const attachment = (ws as any).deserializeAttachment ? ((ws as any).deserializeAttachment() as PlayerAttachment | null) : null;
+        const shooter = attachment?.callsign || callsign || "Skier";
+        if (this.yeti.hp <= 0) {
+          this.yeti.hp = 0;
+          this.yeti.state = "DEAD";
+          this.ctx.storage.sql.exec(
+            "INSERT INTO match_kills (killer, wave, damage, created_at) VALUES (?, ?, ?, ?)",
+            shooter, this.currentWave, damage, Date.now()
+          );
+          this.onYetiKilled(shooter);
+          setTimeout(() => this.spawnNextWave(), 3000);
+        } else {
+          this.yeti.state = "STAGGERED";
+          this.yeti.staggerTimer = 1.0;
+        }
+      }
+      return;
+    }
 
     if (data.type === "input") {
       const steerInput = Math.max(-1.0, Math.min(1.0, data.steerInput ?? data.steer ?? 0));
@@ -502,8 +650,76 @@ export class MountainDO extends DurableObject<Env> {
   }
 
   public webSocketClose(ws: WebSocket) {
+    const attachment = (ws as any).deserializeAttachment ? ((ws as any).deserializeAttachment() as PlayerAttachment | null) : null;
     this.players.forEach((p, id) => {
       if (p.ws === ws) this.players.delete(id);
     });
+
+    if (attachment && attachment.isHost) {
+      // Migrate host role to next connected player
+      const remaining = this.ctx.getWebSockets().filter((s) => s !== ws);
+      if (remaining.length > 0) {
+        const nextHostAttachment = (remaining[0] as any).deserializeAttachment ? ((remaining[0] as any).deserializeAttachment() as PlayerAttachment | null) : null;
+        if (nextHostAttachment) {
+          nextHostAttachment.isHost = true;
+          nextHostAttachment.isReady = true;
+          if ((remaining[0] as any).serializeAttachment) {
+            (remaining[0] as any).serializeAttachment(nextHostAttachment);
+          }
+        }
+      }
+    }
+
+    this.broadcastLobbyState();
+  }
+
+  private broadcastLobbyState(): void {
+    const sockets = this.ctx.getWebSockets();
+    const players = sockets
+      .map((s) => ((s as any).deserializeAttachment ? ((s as any).deserializeAttachment() as PlayerAttachment) : null))
+      .filter(Boolean) as PlayerAttachment[];
+
+    this.broadcast({
+      type: "LOBBY_STATE_SYNC",
+      lobbyState: {
+        roomCode: this.roomCode,
+        status: this.lobbyStatus,
+        preset: this.preset,
+        players: players.map((p) => ({
+          id: p.playerId,
+          callsign: p.callsign,
+          isReady: p.isReady,
+          isHost: p.isHost
+        }))
+      },
+      roomCode: this.roomCode,
+      status: this.lobbyStatus,
+      players
+    });
+  }
+
+  private broadcast(data: any): void {
+    const payload = JSON.stringify(data);
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(payload);
+        } catch {
+          // Socket write error ignored
+        }
+      }
+    }
+  }
+
+  private sanitizeCallsign(raw: string): string {
+    return raw.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().substring(0, 12) || "Skier";
+  }
+
+  private spawnNextWave(): void {
+    this.currentWave += 1;
+    this.yeti.maxHp = Math.floor(3000 * Math.pow(1.35, this.currentWave - 1));
+    this.yeti.hp = this.yeti.maxHp;
+    this.yeti.state = "CHARGING";
+    this.broadcast({ type: "WAVE_START", wave: this.currentWave, maxHp: this.yeti.maxHp });
   }
 }
