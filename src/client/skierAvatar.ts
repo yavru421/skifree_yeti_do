@@ -752,4 +752,17 @@ export class SkierAvatar {
       this.rootNode.position.z - 1.10
     );
   }
+
+  public resetCombatState(): void {
+    this.isAimingGun = false;
+    this.isCutsceneVictory = false;
+    this.targetRiflePos.set(0.14, 1.28, 0.28);
+    this.targetRifleRot.set(0.25, 0.35, 0.85);
+    this.currentRiflePos.set(0.14, 1.28, 0.28);
+    this.currentRifleRot.set(0.25, 0.35, 0.85);
+    this.rifleRoot.position.set(0.14, 1.28, 0.28);
+    this.rifleRoot.rotation.set(0.25, 0.35, 0.85);
+    this.leftPole.setEnabled(true);
+    this.rightPole.setEnabled(true);
+  }
 }

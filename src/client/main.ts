@@ -404,6 +404,11 @@ export class SkiFreeApp {
       const key = e.key.toLowerCase();
       keys[key] = true;
       if (key === " " || key === "enter" || key === "f") {
+        if (this.isWaitingForDropIn) {
+          e.preventDefault();
+          this.executeDropIn();
+          return;
+        }
         if (this.steamHarpoon && this.steamHarpoon.isTethered && !this.isTakedownTriggered) {
           e.preventDefault();
           this.handleTakedownTap();
@@ -1144,17 +1149,41 @@ export class SkiFreeApp {
       this.isWaitingForDropIn = true;
       this.modalMountTime = Date.now();
 
-      // Slight pause countdown (3 seconds) before auto-restarting at the next level
-      let pauseSeconds = 3;
+      // Clear combat state & harpoon tether
+      if (this.steamHarpoon) {
+        this.steamHarpoon.reset();
+      }
+      if (this.skierAvatar) {
+        this.skierAvatar.resetCombatState();
+      }
+
+      // Fetch & populate Edge Leaderboard on Level Clear Modal
+      this.fetchAndRenderClearLeaderboard();
+
+      // Hook 1-click Claim Score button on level clear modal
+      const btnClearClaim = document.getElementById("btn-level-clear-claim");
+      if (btnClearClaim) {
+        btnClearClaim.onclick = (e) => {
+          e.stopPropagation();
+          this.openClaimModal("level_clear");
+        };
+      }
+
+      // Generous 25-second countdown with immediate Space / Click drop-in
+      let pauseSeconds = 25;
       const btnDropIn = document.getElementById("btn-drop-in");
       if (btnDropIn) {
-        btnDropIn.innerHTML = `⛷️ NEXT RUN DROPPING IN: ${pauseSeconds}s... [SPACE TO DROP NOW]`;
+        btnDropIn.innerHTML = `⛷️ NEXT RUN DROPPING IN: ${pauseSeconds}s... [SPACE / CLICK TO DROP IN]`;
+        btnDropIn.onclick = (e) => {
+          e.stopPropagation();
+          this.executeDropIn();
+        };
       }
 
       this.dropInCountdownInterval = window.setInterval(() => {
         pauseSeconds--;
         if (btnDropIn && pauseSeconds > 0) {
-          btnDropIn.innerHTML = `⛷️ NEXT RUN DROPPING IN: ${pauseSeconds}s... [SPACE TO DROP NOW]`;
+          btnDropIn.innerHTML = `⛷️ NEXT RUN DROPPING IN: ${pauseSeconds}s... [SPACE / CLICK TO DROP IN]`;
         }
         if (pauseSeconds <= 0) {
           if (this.dropInCountdownInterval) {
@@ -1169,6 +1198,64 @@ export class SkiFreeApp {
     }, 5000);
   }
 
+  private async fetchAndRenderClearLeaderboard(): Promise<void> {
+    try {
+      let entries: any[] = [];
+      const res = await fetch("/api/scores");
+      if (res.ok) {
+        entries = (await res.json()) as any[];
+      } else {
+        const fallbackRes = await fetch("/status");
+        if (fallbackRes.ok) {
+          const fbData = (await fallbackRes.json()) as any;
+          entries = fbData.telemetry || [];
+        }
+      }
+
+      const rowsEl = document.getElementById("clear-leaderboard-rows");
+      if (!rowsEl) return;
+
+      const currentCallsign = (localStorage.getItem("skifree_callsign") || "").toUpperCase();
+      const filtered = entries
+        .filter((t: any) => t.wave === this.currentLevel || !t.wave)
+        .slice(0, 5);
+
+      if (filtered.length === 0) {
+        rowsEl.innerHTML = `<div style="text-align: center; color: #88a0c0; font-style: italic; padding: 8px;">No standings recorded for Level ${this.currentLevel} yet. Claim your score!</div>`;
+        return;
+      }
+
+      rowsEl.innerHTML = "";
+      filtered.forEach((entry: any, idx: number) => {
+        const isMe = currentCallsign && (entry.callsign || "").toUpperCase() === currentCallsign;
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.justifyContent = "space-between";
+        row.style.alignItems = "center";
+        row.style.padding = "6px 10px";
+        row.style.borderRadius = "4px";
+        row.style.background = isMe ? "rgba(0, 240, 255, 0.18)" : "rgba(255, 255, 255, 0.03)";
+        row.style.border = isMe ? "1px solid rgba(0, 240, 255, 0.5)" : "1px solid rgba(255, 255, 255, 0.05)";
+
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`;
+        const timeStr = entry.time_ms ? (entry.time_ms / 1000).toFixed(1) + "s" : "-";
+        row.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 900; color: #ffd700; width: 22px;">${medal}</span>
+            <span style="font-weight: 800; color: ${isMe ? '#ffff00' : '#ffffff'};">${isMe ? '⭐ ' : ''}${entry.callsign || 'UNKNOWN'}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <span style="color: #00f0ff; font-family: monospace; font-size: 11px;">⏱️ ${timeStr}</span>
+            <span style="color: #ff0055; font-weight: 900; font-family: monospace;">${(entry.score || 0).toLocaleString()} PTS</span>
+          </div>
+        `;
+        rowsEl.appendChild(row);
+      });
+    } catch (err) {
+      console.warn("[SkiFree] Error loading level clear leaderboard:", err);
+    }
+  }
+
   private executeDropIn(): void {
     if (!this.isWaitingForDropIn && !this.isTakedownTriggered) return;
     if (this.dropInCountdownInterval) {
@@ -1181,6 +1268,14 @@ export class SkiFreeApp {
     }
     this.isWaitingForDropIn = false;
     this.isTakedownTriggered = false;
+
+    // Reset harpoon and skier combat state
+    if (this.steamHarpoon) {
+      this.steamHarpoon.reset();
+    }
+    if (this.skierAvatar) {
+      this.skierAvatar.resetCombatState();
+    }
 
     if (this.networkSystem) {
       this.networkSystem.sendDropIn();
@@ -1208,6 +1303,14 @@ export class SkiFreeApp {
     if (this.nextLevelTimeout) {
       clearTimeout(this.nextLevelTimeout);
       this.nextLevelTimeout = null;
+    }
+
+    // Reset harpoon and skier combat state so next level starts completely clean
+    if (this.steamHarpoon) {
+      this.steamHarpoon.reset();
+    }
+    if (this.skierAvatar) {
+      this.skierAvatar.resetCombatState();
     }
 
     this.currentLevel++;
@@ -1296,6 +1399,14 @@ export class SkiFreeApp {
     if (level < 1 || level > 4) return;
     this.currentLevel = level;
     this.isTakedownTriggered = false;
+
+    // Reset harpoon and skier combat state
+    if (this.steamHarpoon) {
+      this.steamHarpoon.reset();
+    }
+    if (this.skierAvatar) {
+      this.skierAvatar.resetCombatState();
+    }
 
     this.playerPos.x = 0;
     this.playerPos.z = 0;

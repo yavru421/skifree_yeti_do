@@ -259,6 +259,17 @@ export class SteamHarpoon {
     }
   }
 
+  public reset(): void {
+    this.detachTowline();
+    this.cableTension = 0.5;
+    this.recoilOffset = 0;
+    this.swayCycle = 0;
+    if (this.gunRoot) {
+      this.gunRoot.position.set(0.40, -0.40, 0.95);
+      this.gunRoot.rotation.set(-0.04, -0.03, 0.02);
+    }
+  }
+
   public update(
     yetiWorldPos: Vector3,
     isAimingRear: boolean,
