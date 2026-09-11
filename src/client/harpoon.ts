@@ -309,7 +309,13 @@ export class SteamHarpoon {
     // 3. Dynamic Towline Steel Cable Rendering
     if (this.isTethered) {
       const gunMuzzleWorld = this.harpoonSpear.getAbsolutePosition();
-      this.renderTowline(gunMuzzleWorld, yetiWorldPos);
+      const dist = Vector3.Distance(gunMuzzleWorld, yetiWorldPos);
+      if (dist < 120) {
+        this.renderTowline(gunMuzzleWorld, yetiWorldPos);
+      } else if (this.towlineMesh) {
+        this.towlineMesh.dispose();
+        this.towlineMesh = null;
+      }
     } else if (this.towlineMesh) {
       this.towlineMesh.dispose();
       this.towlineMesh = null;
@@ -339,13 +345,14 @@ export class SteamHarpoon {
         { points, updatable: true },
         this.scene
       );
-      this.towlineMesh.color = new Color3(0.0, 0.95, 1.0); // Electric Cyan High-Tension Cable
+      this.towlineMesh.color = new Color3(0.55, 0.58, 0.65); // High-Tensile Braided Steel Cable
     } else {
       this.towlineMesh = MeshBuilder.CreateLines(
         "steelTowline",
         { points, instance: this.towlineMesh },
         this.scene
       );
+      this.towlineMesh.color = new Color3(0.55, 0.58, 0.65);
     }
   }
 }
