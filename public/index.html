@@ -16,8 +16,9 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(reg => {
-          console.log('[PWA] Service Worker registered:', reg.scope);
+        navigator.serviceWorker.register('/sw.js?v=2.5.0').then(reg => {
+          reg.update();
+          console.log('[PWA] Service Worker registered & updated:', reg.scope);
         }).catch(err => console.error('[PWA] Service Worker error:', err));
       });
     }
@@ -1354,7 +1355,12 @@
         </div>
       </div>
 
-      <div style="display:flex; gap:12px; margin-top:20px;">
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button id="pm-btn-share" class="modal-btn modal-btn-ready" style="flex:1; padding:10px; font-size:12px; font-weight:900;" type="button">📤 SHARE RUN</button>
+        <button id="pm-btn-steam" class="modal-btn" style="flex:1; padding:10px; font-size:12px; font-weight:900; background:linear-gradient(135deg, #1b2838, #2a475e); border:1px solid #66c0f4; color:#66c0f4;" type="button">⭐ WISHLIST ON STEAM</button>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:12px;">
         <button id="pm-btn-restart" class="modal-btn modal-btn-ready" style="flex:1; padding:14px; font-size:15px; font-weight:900; letter-spacing:1px; cursor:pointer;" type="button">PLAY AGAIN 🚀</button>
         <button id="pm-btn-lobby" class="modal-btn" style="flex:1; padding:14px; font-size:15px; font-weight:900; letter-spacing:1px; background:rgba(255,0,85,0.2); border-color:#ff0055; color:#ff0055; cursor:pointer;" type="button">RETURN TO LOBBY 🚡</button>
       </div>
@@ -1531,9 +1537,35 @@
     <!-- Death Modal -->
     <div id="death-modal" class="hidden">
       <div class="modal-title" style="color:#ff0033;" id="death-title">💀 RUN FAILED</div>
-      <p id="death-stat" style="color:#fff; font-size:13px; margin: 10px 0; text-align:center;"></p>
-      <button class="modal-btn" id="btn-respawn" type="button">RESPAWN & DROP AGAIN</button>
-      <button class="modal-btn modal-btn-ready" id="btn-claim-from-death" style="margin-top:8px;" type="button">🏆 PUBLISH SCORE TO LEADERBOARD</button>
+      <p id="death-stat" style="color:#fff; font-size:13px; margin: 8px 0; text-align:center;"></p>
+
+      <!-- Vector Run Summary Card -->
+      <div id="death-summary-card" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0; background:rgba(0,240,255,0.06); border:1px solid #1a3050; border-radius:8px; padding:10px; text-align:left;">
+        <div class="stat-card" style="padding:6px 10px;">
+          <span class="stat-card-title">🏔️ DISTANCE</span>
+          <span class="stat-card-value" id="death-dist-val" style="font-size:16px;">0m</span>
+        </div>
+        <div class="stat-card" style="padding:6px 10px;">
+          <span class="stat-card-title">⚡ TOP SPEED</span>
+          <span class="stat-card-value" id="death-speed-val" style="font-size:16px;">0 MPH</span>
+        </div>
+        <div class="stat-card" style="padding:6px 10px;">
+          <span class="stat-card-title">⚠️ CLOSE CALLS</span>
+          <span class="stat-card-value" id="death-closecalls-val" style="font-size:16px; color:#ffaa00;">0</span>
+        </div>
+        <div class="stat-card" style="padding:6px 10px;">
+          <span class="stat-card-title">⏱️ SURVIVAL TIME</span>
+          <span class="stat-card-value" id="death-time-val" style="font-size:16px; color:#39ff14;">0.0s</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <button class="modal-btn modal-btn-ready" id="btn-death-share" style="flex:1; padding:10px; font-size:12px; font-weight:900;" type="button">📤 SHARE RUN</button>
+        <button class="modal-btn" id="btn-death-steam" style="flex:1; padding:10px; font-size:12px; font-weight:900; background:linear-gradient(135deg, #1b2838, #2a475e); border:1px solid #66c0f4; color:#66c0f4;" type="button">⭐ WISHLIST ON STEAM</button>
+      </div>
+
+      <button class="modal-btn" id="btn-respawn" type="button">RESPAWN & DROP AGAIN ⛷️</button>
+      <button class="modal-btn modal-btn-ready" id="btn-claim-from-death" style="margin-top:8px; font-size:12px;" type="button">🏆 PUBLISH SCORE TO LEADERBOARD</button>
       <button class="modal-btn" id="btn-report-from-death" style="margin-top:8px; background:rgba(0,240,255,0.15); border:1px solid #00f0ff; color:#00f0ff; font-size:11px;" type="button">🐛 REPORT GLITCH / BETA ISSUE</button>
     </div>
 
@@ -1571,7 +1603,7 @@
 
 
   <!-- Boot TypeScript + Babylon.js Game Engine -->
-  <script type="module" src="/bundle.js?v=2.4.1"></script>
+  <script type="module" src="/bundle.js?v=2.5.0"></script>
 </body>
 </html>
 

@@ -58,6 +58,7 @@ export class YetiEntity {
   public isSprinting: boolean = false;
   private sprintDuration: number = 0;
   public onSprintStateChange?: (isSprinting: boolean) => void;
+  public onFootfall?: (distMeters: number) => void;
 
   // Skeletal Transform Nodes for Organic Bone Kinematics
   private hipsNode: TransformNode | null = null;
@@ -363,21 +364,37 @@ export class YetiEntity {
       const distToSkier = Math.hypot(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
       const isAttackingClose = (isPouncing || isSwiping || isRoaring || distToSkier < 6.5);
 
-      // Trigger pounce lunge or claw swipe when skier gets within striking range
-      if (this.state === YetiAIState.CHARGING && distToSkier < 15.0) {
-        this.state = Math.random() < 0.5 ? YetiAIState.POUNCE_CHARGE : YetiAIState.CLAW_SWIPE;
-        setTimeout(() => {
-          if (this.state === YetiAIState.POUNCE_CHARGE || this.state === YetiAIState.CLAW_SWIPE) {
-            this.state = this.hp < 1200 ? YetiAIState.BERSERK : YetiAIState.CHARGING;
-          }
-        }, 1600);
-      } else if (this.state === YetiAIState.BERSERK && Math.random() < 0.008) {
-        this.state = YetiAIState.ROAR_STORM;
-        setTimeout(() => {
-          if (this.state === YetiAIState.ROAR_STORM) {
-            this.state = YetiAIState.BERSERK;
-          }
-        }, 2000);
+      // Footfall audio pulse triggered at galloping stride paw-plants
+      if (Math.sin(this.runCycle * 2) > 0.93) {
+        this.onFootfall?.(distToSkier);
+      }
+
+      // Local 60 FPS Yeti Predator AI: Stalking -> Flank Bounding -> Boulder Launch -> Frenzy Charge
+      if (this.hp <= 0) {
+        this.state = YetiAIState.DEAD;
+      } else if (distToSkier < 8.0 || (this.hp < this.maxHp * 0.4 && distToSkier < 18.0)) {
+        // FRENZY CHARGE: rapid lunge closing in for the takedown
+        this.state = YetiAIState.BERSERK;
+      } else if (distToSkier >= 8.0 && distToSkier < 14.0) {
+        // BOULDER LAUNCH / ROAR STORM: beast rears and unleashes blizzard roar
+        if (this.state !== YetiAIState.ROAR_STORM && Math.random() < 0.02) {
+          this.state = YetiAIState.ROAR_STORM;
+          setTimeout(() => {
+            if (this.state === YetiAIState.ROAR_STORM) {
+              this.state = distToSkier < 12.0 ? YetiAIState.BERSERK : YetiAIState.POUNCE_CHARGE;
+            }
+          }, 1600);
+        }
+      } else if (distToSkier >= 14.0 && distToSkier < 24.0) {
+        // FLANK BOUNDING: weaves across the fall line to protect exposed weak points
+        if (this.state === YetiAIState.CHARGING || this.state === YetiAIState.BERSERK) {
+          this.state = YetiAIState.POUNCE_CHARGE;
+        }
+      } else {
+        // STALKING: relentless downhill pursuit matching ski fall line
+        if (this.state !== YetiAIState.ROAR_STORM) {
+          this.state = YetiAIState.CHARGING;
+        }
       }
 
       // Vertical leap or crouch depending on attack state

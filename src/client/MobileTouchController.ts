@@ -34,6 +34,7 @@ export interface MobileTouchControllerOptions {
   onShoot?: () => void;
   onFire?: () => void;
   onReload?: () => void;
+  onJumpTrick?: () => void;
   onAimDelta?: (delta: TouchAimDelta) => void;
 }
 
@@ -51,10 +52,14 @@ export class MobileTouchController {
   private maxRadius = 60; // Max displacement pixel radius
   private deadZoneRadius = 8;
   private joystickVisible: boolean = false;
+  private lastCarveHapticTime: number = 0;
+  private lastProximityPulseTime: number = 0;
 
-  // Touch Aim Drag State (Right Zone)
+  // Touch Aim Drag & Jump Tap State (Right Zone)
   private aimTouchId: number | null = null;
   private lastAimPos = { x: 0, y: 0 };
+  private startAimPos = { x: 0, y: 0 };
+  private aimStartTime: number = 0;
   private aimSensitivity = 0.0035;
 
   // Gyro / DeviceOrientation State
@@ -81,6 +86,7 @@ export class MobileTouchController {
   public onReloadObservable: Observable<void> = new Observable<void>();
   public onRearviewToggleObservable: Observable<boolean> = new Observable<boolean>();
   public onAimDeltaObservable: Observable<TouchAimDelta> = new Observable<TouchAimDelta>();
+  public onJumpTrickObservable: Observable<void> = new Observable<void>();
 
   constructor(
     containerIdOrOptions: string | MobileTouchControllerOptions = 'mobile-touch-container',
@@ -121,6 +127,9 @@ export class MobileTouchController {
     }
     if (options?.onAimDelta) {
       this.onAimDeltaObservable.add((delta) => options!.onAimDelta!(delta));
+    }
+    if (options?.onJumpTrick) {
+      this.onJumpTrickObservable.add(() => options!.onJumpTrick!());
     }
 
     this.initHUD();
@@ -307,6 +316,8 @@ export class MobileTouchController {
       const touch = e.changedTouches[0];
       this.aimTouchId = touch.identifier;
       this.lastAimPos = { x: touch.clientX, y: touch.clientY };
+      this.startAimPos = { x: touch.clientX, y: touch.clientY };
+      this.aimStartTime = performance.now();
     }, { passive: false });
 
     // 2. TOUCH MOVE (Window-level to prevent edge-slip sticking)
@@ -355,6 +366,17 @@ export class MobileTouchController {
         }
 
         if (touch.identifier === this.aimTouchId) {
+          const duration = performance.now() - this.aimStartTime;
+          const dragDist = Math.hypot(touch.clientX - this.startAimPos.x, touch.clientY - this.startAimPos.y);
+          if (duration < 300 && dragDist < 18) {
+            // Tap on Right Screen = Jump / Trick!
+            this.triggerJumpHaptic();
+            this.onJumpTrickObservable.notifyObservers();
+          } else if (dragDist >= 18) {
+            // Drag to aim and release to loose the steam harpoon!
+            this.triggerHapticFeedback([30]);
+            this.onFireObservable.notifyObservers();
+          }
           this.aimTouchId = null;
         }
       }
@@ -388,8 +410,13 @@ export class MobileTouchController {
     // Apply gentle curve for fine precision at small angles, snappy response at edges
     this.state.steerX = Number((Math.sign(normalizedX) * Math.pow(Math.abs(normalizedX), 1.15)).toFixed(2));
 
-    // Decoupled Y throttle (Up = Tuck / +1.0, Down = Snowplow Brake / -1.0)
-    const rawDy = -dy;
+    // Biometric Haptic: Micro-vibration pulses (15ms) on hard ski edge carving bite
+    if (Math.abs(this.state.steerX) >= 0.70) {
+      this.triggerCarveHaptic();
+    }
+
+    // Decoupled Y throttle (Drag Down = Speed Tuck / +1.0, Push Up = Snowplow Brake / -1.0)
+    const rawDy = dy;
     const clampedDy = Math.max(-this.maxRadius, Math.min(this.maxRadius, rawDy));
     const normalizedY = Math.sign(clampedDy) * Math.min(1.0, Math.max(0, (Math.abs(clampedDy) - this.deadZoneRadius) / activeRadius));
     this.state.throttleY = Number(normalizedY.toFixed(2));
@@ -643,6 +670,42 @@ export class MobileTouchController {
         navigator.vibrate(pattern);
       } catch {
         // Haptics not allowed without user activation
+      }
+    }
+  }
+
+  public triggerCarveHaptic(): void {
+    const now = performance.now();
+    if (now - this.lastCarveHapticTime > 140) {
+      this.lastCarveHapticTime = now;
+      this.triggerHapticFeedback([15]);
+    }
+  }
+
+  public triggerJumpHaptic(): void {
+    this.triggerHapticFeedback([25]);
+  }
+
+  public triggerLandingHaptic(): void {
+    this.triggerHapticFeedback([45]);
+  }
+
+  public triggerYetiProximityPulse(distMeters: number): void {
+    const now = performance.now();
+    if (distMeters <= 3.5) {
+      if (now - this.lastProximityPulseTime > 250) {
+        this.lastProximityPulseTime = now;
+        this.triggerHapticFeedback([80]);
+      }
+    } else if (distMeters <= 10.0) {
+      if (now - this.lastProximityPulseTime > 500) {
+        this.lastProximityPulseTime = now;
+        this.triggerHapticFeedback([50]);
+      }
+    } else if (distMeters <= 25.0) {
+      if (now - this.lastProximityPulseTime > 1000) {
+        this.lastProximityPulseTime = now;
+        this.triggerHapticFeedback([30]);
       }
     }
   }

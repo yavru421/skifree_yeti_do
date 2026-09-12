@@ -155,6 +155,10 @@ export class CameraRig {
     this.cutsceneTimer = 0;
   }
 
+  public triggerNearMiss(): void {
+    this.addImpactShake(0.65);
+  }
+
   public update(
     playerPosition: Vector3,
     steerInput: number,
@@ -162,7 +166,8 @@ export class CameraRig {
     deltaTime: number,
     slopePitchRad: number = 0,
     targetPos?: Vector3,
-    isTargetActive?: boolean
+    isTargetActive?: boolean,
+    isTucking: boolean = false
   ): void {
     this.currentSpeed = speedMph;
 
@@ -216,7 +221,8 @@ export class CameraRig {
       // Elevated downhill perspective framing skier in lower third with expansive slope visibility
       const speedPullBack = (speedMph / 60) * 0.45;
       const followDist = 4.85 + speedPullBack;
-      const followHeight = 2.85;
+      const tuckDrop = isTucking ? 0.72 : 0;
+      const followHeight = 2.85 - tuckDrop;
       const targetX = playerPosition.x + (this.isAimingRear ? 0 : this.aimYawOffset * 1.8);
       const targetY = playerPosition.y + followHeight + mogulChatter * 0.2;
       const targetZ = playerPosition.z + (this.isAimingRear ? -followDist : followDist);
@@ -225,8 +231,8 @@ export class CameraRig {
       this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 12.0));
       this.camera.position.z = Scalar.Lerp(this.camera.position.z, targetZ, Math.min(1.0, deltaTime * 14.0));
     } else {
-      // Classic FPV eye level
-      const eyeHeight = 1.55;
+      // Classic FPV eye level with aerodynamic tuck drop
+      const eyeHeight = isTucking ? 1.05 : 1.55;
       const targetY = playerPosition.y + eyeHeight + mogulChatter;
       this.camera.position.x = Scalar.Lerp(this.camera.position.x, playerPosition.x, Math.min(1.0, deltaTime * 16.0));
       this.camera.position.y = Scalar.Lerp(this.camera.position.y, targetY, Math.min(1.0, deltaTime * 14.0));
@@ -250,15 +256,16 @@ export class CameraRig {
 
     // 2. Camera Bank / Roll on carving
     if (isThirdPerson) {
-      this.targetRoll = -steerInput * 0.04; // Subtle bank to keep horizon stable
+      this.targetRoll = -steerInput * 0.08; // Dynamic bank to keep horizon kinetic (~5 deg)
     } else {
-      this.targetRoll = -steerInput * 0.14; // Visceral FPV bank into turn (~8 deg)
+      this.targetRoll = -steerInput * 0.22; // Visceral FPV bank into turn (~13 deg)
     }
     this.currentRoll = Scalar.Lerp(this.currentRoll, this.targetRoll, Math.min(1.0, deltaTime * 10.0));
     this.camera.rotation.z = this.currentRoll + shakeRoll;
 
-    // 3. Dynamic FOV based on downhill speed (speed warp sensation: 0.85 -> 1.07 rad)
-    const targetFov = this.baseFov + (speedMph / 100) * 0.22;
+    // 3. Dynamic FOV based on downhill speed (60 deg [1.05 rad] -> 88 deg [1.54 rad])
+    const fovRatio = Math.max(0, Math.min(1.0, (speedMph - 20) / 60));
+    const targetFov = 1.05 + fovRatio * 0.49;
     this.camera.fov = Scalar.Lerp(this.camera.fov, targetFov, Math.min(1.0, deltaTime * 8.0));
 
     // 4. Yeti Auto-Lock & Target Framing (Upper Torso/Head vs Scenic Horizon)

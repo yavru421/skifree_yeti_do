@@ -8,14 +8,6 @@
     "directory": "./public",
     "binding": "ASSETS"
   },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "MOUNTAIN_DO",
-        "class_name": "MountainDO"
-      }
-    ]
-  },
   "d1_databases": [
     {
       "binding": "DB",

@@ -9,6 +9,10 @@ export class AudioSystem {
   private ctx: AudioContext | null = null;
   private bgmAudio: HTMLAudioElement | null = null;
   private isMuted: boolean = false;
+  private windGain: GainNode | null = null;
+  private windFilter: BiquadFilterNode | null = null;
+  private windSource: AudioBufferSourceNode | null = null;
+  private lastFootfallTime: number = 0;
 
   constructor() {
     // Initialized on first user interaction
@@ -19,12 +23,64 @@ export class AudioSystem {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContextClass) {
       this.ctx = new AudioContextClass();
+      this.initWindRush();
     }
 
-    // Background Waltz Stream
-    this.bgmAudio = new Audio("/assets/media/waltz_on_the_slope.mp3");
-    this.bgmAudio.loop = true;
-    this.bgmAudio.volume = 0.35;
+    // Background Waltz Stream (optional graceful fallback)
+    try {
+      this.bgmAudio = new Audio("/assets/media/waltz_on_the_slope.mp3");
+      this.bgmAudio.loop = true;
+      this.bgmAudio.volume = 0.35;
+    } catch {}
+  }
+
+  private initWindRush(): void {
+    if (!this.ctx) return;
+    try {
+      // 2-second procedural pink noise loop for dynamic downhill wind rush
+      const bufferSize = this.ctx.sampleRate * 2;
+      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        data[i] = (b0 + b1 + b2 + white * 0.5362) * 0.12;
+      }
+
+      this.windSource = this.ctx.createBufferSource();
+      this.windSource.buffer = noiseBuffer;
+      this.windSource.loop = true;
+
+      this.windFilter = this.ctx.createBiquadFilter();
+      this.windFilter.type = "lowpass";
+      this.windFilter.frequency.value = 160;
+      this.windFilter.Q.value = 1.2;
+
+      this.windGain = this.ctx.createGain();
+      this.windGain.gain.value = 0.0;
+
+      this.windSource.connect(this.windFilter);
+      this.windFilter.connect(this.windGain);
+      this.windGain.connect(this.ctx.destination);
+
+      this.windSource.start();
+    } catch {
+      // Ignore initial autoplay restrictions
+    }
+  }
+
+  public updateWindRush(speedMph: number): void {
+    if (!this.ctx || !this.windGain || !this.windFilter || this.isMuted) return;
+    const now = this.ctx.currentTime;
+    const normSpeed = Math.max(0, Math.min(1.0, (speedMph - 18) / 62));
+    const targetGain = Math.pow(normSpeed, 1.25) * 0.32;
+    const targetFreq = 160 + normSpeed * 750;
+
+    this.windGain.gain.setTargetAtTime(targetGain, now, 0.08);
+    this.windFilter.frequency.setTargetAtTime(targetFreq, now, 0.08);
   }
 
   public startBGM(): void {
@@ -37,35 +93,123 @@ export class AudioSystem {
 
   private lastCarveTime: number = 0;
 
-  public playSkiCarve(speedRatio: number): void {
+  /**
+   * Procedural Alpine Snow Carve:
+   * Bandpass-filtered white noise where center frequency dynamically pitches up
+   * during sharp carves ($550Hz -> 2200Hz).
+   */
+  public playSkiCarve(speedRatio: number, sharpness: number = 1.0): void {
     if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
-    if (now - this.lastCarveTime < 0.08) return; // Max 12.5Hz to prevent WebAudio node flooding
+    if (now - this.lastCarveTime < 0.07) return; // Max ~14Hz
     this.lastCarveTime = now;
     try {
+      const bufferSize = Math.floor(this.ctx.sampleRate * 0.16);
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.04));
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = 520 + speedRatio * 850 + sharpness * 650;
+      filter.Q.value = 2.2;
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.09 * speedRatio * Math.max(0.6, sharpness), now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + 0.16);
+    } catch {
+      // Ignore WebAudio dropouts
+    }
+  }
+
+  /**
+   * Sub-Bass Resonant Rumble when the Yeti lands heavy footfalls nearby:
+   * 54Hz -> 22Hz bass punch + snow compaction transient.
+   */
+  public playYetiFootfall(distMeters: number): void {
+    if (!this.ctx || this.isMuted || distMeters > 45) return;
+    const now = this.ctx.currentTime;
+    if (now - this.lastFootfallTime < 0.28) return;
+    this.lastFootfallTime = now;
+
+    try {
+      const proximity = Math.max(0, 1 - distMeters / 45);
+      const volume = Math.pow(proximity, 1.3) * 0.65;
+
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = "sine";
+      subOsc.frequency.setValueAtTime(54, now);
+      subOsc.frequency.exponentialRampToValueAtTime(22, now + 0.26);
+
+      subGain.gain.setValueAtTime(volume, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+
+      subOsc.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.28);
+    } catch {}
+  }
+
+  public playJumpWhoosh(): void {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
 
       filter.type = "bandpass";
-      filter.frequency.value = 450 + speedRatio * 350;
-      filter.Q.value = 1.8;
+      filter.frequency.setValueAtTime(320, now);
+      filter.frequency.exponentialRampToValueAtTime(950, now + 0.12);
+      filter.frequency.exponentialRampToValueAtTime(300, now + 0.35);
+      filter.Q.value = 1.5;
 
       osc.type = "sawtooth";
-      osc.frequency.value = 65 + speedRatio * 40;
+      osc.frequency.setValueAtTime(80, now);
+      osc.frequency.exponentialRampToValueAtTime(220, now + 0.15);
 
-      gain.gain.setValueAtTime(0.04 * speedRatio, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(this.ctx.destination);
 
-      osc.start();
-      osc.stop(now + 0.18);
-    } catch {
-      // Ignore WebAudio dropouts
-    }
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } catch {}
+  }
+
+  public playJumpLanding(): void {
+    if (!this.ctx || this.isMuted) return;
+    try {
+      const now = this.ctx.currentTime;
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = "sine";
+      subOsc.frequency.setValueAtTime(75, now);
+      subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.18);
+      subGain.gain.setValueAtTime(0.45, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      subOsc.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.2);
+    } catch {}
   }
 
   /**

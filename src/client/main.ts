@@ -13,7 +13,6 @@ import { CameraRig } from "./camera";
 import { YetiEntity } from "./yeti";
 import { CombatSystem } from "./combat";
 import { AudioSystem } from "./audio";
-import { NetworkSystem } from "./network";
 import { FPVSkis } from "./skis";
 import { SteamHarpoon } from "./harpoon";
 import { NPCSystem } from "./npcs";
@@ -31,7 +30,6 @@ export class SkiFreeApp {
   private yetiEntity!: YetiEntity;
   private combatSystem!: CombatSystem;
   private audioSystem!: AudioSystem;
-  private networkSystem!: NetworkSystem;
   private fpvSkis!: FPVSkis;
   private steamHarpoon!: SteamHarpoon;
   private skierAvatar!: SkierAvatar;
@@ -52,6 +50,12 @@ export class SkiFreeApp {
   private isTucking: boolean = false;
   private isBraking: boolean = false;
   private tuckStamina: number = 1.0;
+  private playerJumpY: number = 0;
+  private playerJumpVelY: number = 0;
+  private isJumping: boolean = false;
+  private closeCallsCount: number = 0;
+  private maxSpeedMphRecorded: number = 0;
+  private lastNearMissTime: number = 0;
 
   // Downhill Wind Speed Lines
   private speedLinesCanvas: HTMLCanvasElement | null = null;
@@ -125,6 +129,10 @@ export class SkiFreeApp {
     this.yetiEntity.onSprintStateChange = (sprinting: boolean) => {
       this.handleBeastSprintChange(sprinting);
     };
+    this.yetiEntity.onFootfall = (distMeters: number) => {
+      this.audioSystem.playYetiFootfall(distMeters);
+      this.mobileTouchController?.triggerYetiProximityPulse(distMeters);
+    };
 
     // 6b. FPV Skis, Steam Harpoon, 3D Skier Avatar & NPC System
     this.fpvSkis = new FPVSkis(scene, this.cameraRig.camera);
@@ -141,20 +149,8 @@ export class SkiFreeApp {
     // 7b. Summit Starting Gate (Alpine Drop-In Barrier)
     this.setupStartingGate(scene);
 
-    // 8. Network System (20Hz WebSocket to MountainDO)
-    this.networkSystem = new NetworkSystem(this.callsign, this.roomId, (packet: any) => {
-      if (this.npcSystem && packet.skiers) {
-        this.npcSystem.updatePlayers(packet.skiers.filter((s: any) => s.callsign !== this.callsign && s.id !== this.callsign));
-      }
-      if (this.yetiEntity && packet.yeti) {
-        this.yetiEntity.syncNetState(packet.yeti);
-        const serverWave = typeof packet.wave === "number" ? packet.wave : (packet.yeti && typeof packet.yeti.wave === "number" ? packet.yeti.wave : null);
-        if (serverWave !== null && serverWave > this.currentLevel && !this.isWaitingForDropIn && !this.isTakedownTriggered) {
-          this.switchTrack(serverWave);
-        }
-      }
-    });
-    this.networkSystem.connect();
+    // 8. Zero-Liability Decoupled Simulation: 100% Local Havok Physics & Yeti AI
+    console.log("[SkiFree] Local Alpine Simulation Active — 0ms Edge Latency, $0.00 Liability");
 
     // 9. Precision Combat
     this.combatSystem = new CombatSystem(
@@ -194,10 +190,6 @@ export class SkiFreeApp {
 
         if ((isFelled || this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) && !this.isTakedownTriggered) {
           this.triggerYetiTakedown();
-        }
-
-        if (this.networkSystem) {
-          this.networkSystem.sendHitscan(packet);
         }
       },
       this.npcSystem
@@ -390,11 +382,73 @@ export class SkiFreeApp {
       if (backdrop) backdrop.classList.remove("hidden");
       if (deathModal) deathModal.classList.remove("hidden");
       if (deathTitle) deathTitle.textContent = "💀 YETI TAKEDOWN! RUN FAILED";
+
+      const distM = Math.abs(Math.round(this.playerPos.z));
+      const topSpeed = Math.round(this.maxSpeedMphRecorded);
+      const survivalTimeSec = ((Date.now() - this.levelStartTime) / 1000).toFixed(1);
+
       if (deathStat) {
-        const distM = Math.abs(Math.round(this.playerPos.z));
-        deathStat.innerHTML = `THE ALPINE BEAST POUNCED DOWN THE FALL-LINE AND TOOK YOU DOWN!<br>DISTANCE: <b>${distM}M</b> • SCORE: <b>${this.totalScore.toLocaleString()} PTS</b>`;
+        deathStat.innerHTML = `THE ALPINE BEAST POUNCED DOWN THE FALL-LINE AND TOOK YOU DOWN!<br>SCORE: <b>${this.totalScore.toLocaleString()} PTS</b>`;
+      }
+
+      const distVal = document.getElementById("death-dist-val");
+      const speedVal = document.getElementById("death-speed-val");
+      const closeCallsVal = document.getElementById("death-closecalls-val");
+      const timeVal = document.getElementById("death-time-val");
+
+      if (distVal) distVal.textContent = `${distM}m`;
+      if (speedVal) speedVal.textContent = `${topSpeed} MPH`;
+      if (closeCallsVal) closeCallsVal.textContent = `${this.closeCallsCount}`;
+      if (timeVal) timeVal.textContent = `${survivalTimeSec}s`;
+
+      const btnShare = document.getElementById("btn-death-share");
+      if (btnShare) {
+        btnShare.onclick = () => {
+          this.shareRunStats({
+            distanceM: distM,
+            topSpeedMph: topSpeed,
+            closeCalls: this.closeCallsCount,
+            timeSec: parseFloat(survivalTimeSec),
+            score: this.totalScore
+          });
+        };
+      }
+      const btnSteam = document.getElementById("btn-death-steam");
+      if (btnSteam) {
+        btnSteam.onclick = () => {
+          window.open("https://store.steampowered.com/app/skifree_yeti", "_blank");
+        };
       }
     }, 400);
+  }
+
+  private triggerPlayerJump(): void {
+    if (this.isJumping || this.isPlayerDead || this.isTakedownTriggered) return;
+    this.isJumping = true;
+    const launchPower = 11.5 + (this.speedMph / 80) * 4.5;
+    this.playerJumpVelY = launchPower;
+    this.playerJumpY = 0.1;
+    if (this.mobileTouchController) {
+      this.mobileTouchController.triggerJumpHaptic();
+    }
+    if (this.audioSystem) {
+      this.audioSystem.playJumpWhoosh();
+    }
+  }
+
+  private shareRunStats(stats: { distanceM: number; topSpeedMph: number; closeCalls: number; timeSec: number; score: number }): void {
+    const text = `🎿 SKI-FR33: PHASE II\n🏔️ Distance: ${stats.distanceM}m\n⚡ Top Speed: ${stats.topSpeedMph} MPH\n⚠️ Close Calls: ${stats.closeCalls}\n⏱️ Survival Time: ${stats.timeSec}s\n🏆 Score: ${stats.score.toLocaleString()} PTS\n\nCan you survive the Yeti? Play free at https://yeti.dondlingergc.com`;
+    if (navigator.share) {
+      navigator.share({
+        title: "SKI-FR33: Phase II Run Telemetry",
+        text: text,
+        url: "https://yeti.dondlingergc.com"
+      }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert("✅ Run telemetry copied to clipboard! Share anywhere.");
+      }).catch(() => {});
+    }
   }
 
   private setupSkierControls(): void {
@@ -413,6 +467,9 @@ export class SkiFreeApp {
           e.preventDefault();
           this.handleTakedownTap();
         } else if (key === " ") {
+          e.preventDefault();
+          this.triggerPlayerJump();
+        } else if (key === "f") {
           e.preventDefault();
           if (this.combatSystem && !this.isTakedownTriggered) {
             this.combatSystem.tryFireHarpoon();
@@ -507,6 +564,26 @@ export class SkiFreeApp {
       btnSkipClaim.addEventListener("click", () => {
         document.getElementById("claim-score-modal")?.classList.add("hidden");
         document.getElementById("modal-backdrop")?.classList.add("hidden");
+      });
+    }
+
+    const pmBtnShare = document.getElementById("pm-btn-share");
+    if (pmBtnShare) {
+      pmBtnShare.addEventListener("click", () => {
+        this.shareRunStats({
+          distanceM: Math.abs(Math.round(this.playerPos.z)),
+          topSpeedMph: Math.round(this.maxSpeedMphRecorded),
+          closeCalls: this.closeCallsCount,
+          timeSec: Math.max(1, (Date.now() - this.levelStartTime) / 1000),
+          score: this.totalScore
+        });
+      });
+    }
+
+    const pmBtnSteam = document.getElementById("pm-btn-steam");
+    if (pmBtnSteam) {
+      pmBtnSteam.addEventListener("click", () => {
+        window.open("https://store.steampowered.com/app/skifree_yeti", "_blank");
       });
     }
 
@@ -611,6 +688,9 @@ export class SkiFreeApp {
               this.combatSystem.tryFireHarpoon();
             }
           },
+          onJumpTrick: () => {
+            this.triggerPlayerJump();
+          },
           onReload: () => {
             if (this.combatSystem) {
               this.combatSystem.reload();
@@ -687,19 +767,50 @@ export class SkiFreeApp {
     const halfWidth = this.terrainSystem.currentTrack.trailWidth / 2;
     this.playerPos.x = Scalar.Clamp(this.playerPos.x, -halfWidth, halfWidth); // Bound within slope
 
+    // Jump Ballistics & Airtime Trick Physics
+    if (this.isJumping) {
+      this.playerJumpVelY -= 28.0 * deltaTime; // Gravity (m/s^2)
+      this.playerJumpY += this.playerJumpVelY * deltaTime;
+      if (this.playerJumpY <= 0) {
+        this.playerJumpY = 0;
+        this.playerJumpVelY = 0;
+        this.isJumping = false;
+        if (this.mobileTouchController) {
+          this.mobileTouchController.triggerLandingHaptic();
+        }
+        if (this.audioSystem) {
+          this.audioSystem.playJumpLanding();
+        }
+        this.cameraRig.addImpactShake(0.14);
+      }
+    }
+
     // 3D Mogul Mound Vertical Bump & Ski Suspension
     const terrainH = this.terrainSystem.getTerrainHeightAt(this.playerPos.x, this.playerPos.z);
     const mogulH = this.terrainSystem.getMogulHeightAt(this.playerPos.x, this.playerPos.z);
-    this.playerPos.y = Scalar.Lerp(this.playerPos.y, terrainH + mogulH, deltaTime * 14.0);
-    if (mogulH > 0.35) {
+    const groundY = Scalar.Lerp(this.playerPos.y - this.playerJumpY, terrainH + mogulH, deltaTime * 14.0);
+    this.playerPos.y = groundY + this.playerJumpY;
+    if (mogulH > 0.35 && !this.isJumping) {
       this.cameraRig.addImpactShake(0.06 * (this.speedMph / 35));
       this.speedMph = Math.max(16, this.speedMph - deltaTime * 5.0); // Mogul carving resistance
     }
 
-    // Sound effect on carving
+    // Auto launch off high moguls / kickers if speeding
+    if (mogulH > 0.75 && !this.isJumping && this.speedMph > 40) {
+      this.triggerPlayerJump();
+    }
+
+    // Sound effect on carving & tactile haptic on hard carve bite
     if (Math.abs(this.steerInput) > 0.1) {
       this.audioSystem.playSkiCarve(this.speedMph / this.maxSpeedMph);
     }
+    if (Math.abs(this.steerInput) >= 0.70 && this.mobileTouchController) {
+      this.mobileTouchController.triggerCarveHaptic();
+    }
+
+    // Procedural pink-noise wind rush scaling with downhill speed
+    this.audioSystem.updateWindRush(this.speedMph);
+    this.maxSpeedMphRecorded = Math.max(this.maxSpeedMphRecorded, this.speedMph);
 
     // Live Granby Ranch Elevation Tracking
     const currentElev = Math.round(this.terrainSystem.currentTrack.baseElevationFt - (Math.abs(this.playerPos.z) * 0.16));
@@ -784,7 +895,8 @@ export class SkiFreeApp {
       deltaTime,
       this.terrainSystem.getSlopePitchRad(),
       yetiPos,
-      isYetiActive
+      isYetiActive,
+      this.isTucking
     );
     this.yetiEntity.update(this.playerPos, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
 
@@ -838,18 +950,26 @@ export class SkiFreeApp {
     if (this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
       if (distToYeti < 3.8) {
         this.triggerPlayerMauledByYeti();
-      } else if ((this.yetiEntity.state === YetiAIState.POUNCE_CHARGE || this.yetiEntity.state === YetiAIState.CLAW_SWIPE) && distToYeti < 9.0) {
-        this.cameraRig.addImpactShake(0.85);
-        const clawOverlay = document.getElementById("claw-overlay");
-        if (clawOverlay && !clawOverlay.classList.contains("slash-active")) {
-          clawOverlay.classList.add("slash-active");
-          clawOverlay.style.display = "block";
-          setTimeout(() => {
-            if (clawOverlay) {
-              clawOverlay.classList.remove("slash-active");
-              clawOverlay.style.display = "none";
-            }
-          }, 500);
+      } else {
+        if (distToYeti < 9.5 && Date.now() - this.lastNearMissTime > 1500) {
+          this.lastNearMissTime = Date.now();
+          this.closeCallsCount++;
+          this.cameraRig.triggerNearMiss();
+          this.mobileTouchController?.triggerYetiProximityPulse(distToYeti);
+        }
+        if ((this.yetiEntity.state === YetiAIState.POUNCE_CHARGE || this.yetiEntity.state === YetiAIState.CLAW_SWIPE) && distToYeti < 9.0) {
+          this.cameraRig.addImpactShake(0.85);
+          const clawOverlay = document.getElementById("claw-overlay");
+          if (clawOverlay && !clawOverlay.classList.contains("slash-active")) {
+            clawOverlay.classList.add("slash-active");
+            clawOverlay.style.display = "block";
+            setTimeout(() => {
+              if (clawOverlay) {
+                clawOverlay.classList.remove("slash-active");
+                clawOverlay.style.display = "none";
+              }
+            }, 500);
+          }
         }
       }
     }
@@ -975,15 +1095,6 @@ export class SkiFreeApp {
     );
 
     this.renderSpeedLines(deltaTime);
-
-    // 5. Send 20Hz Input Packet to Cloudflare MountainDO
-    this.networkSystem.sendInput(
-      this.steerInput,
-      this.isTucking,
-      this.isBraking,
-      this.cameraRig.camera.rotation.y,
-      this.cameraRig.isAimingRear
-    );
   }
 
   private triggerYetiTakedown(): void {
@@ -1277,9 +1388,7 @@ export class SkiFreeApp {
       this.skierAvatar.resetCombatState();
     }
 
-    if (this.networkSystem) {
-      this.networkSystem.sendDropIn();
-    }
+    // 100% Client-side local drop-in: Zero network latency, zero edge alarms
 
     this.cameraRig.stopCutscene();
     if (this.skierAvatar) {
@@ -1884,8 +1993,9 @@ if (typeof window !== "undefined") {
   }
 
   const enterBtn = document.getElementById("btn-skip-intro");
+  const lobbyUi = document.getElementById("lobby-ui");
   if (enterBtn) {
-    enterBtn.addEventListener("click", () => {
+    const triggerDropIn = () => {
       // Hide Lobby UI, Destroy Videos, Mount Canvas
       document.getElementById("lobby-ui")?.classList.add("hidden");
       document.getElementById("standings-modal")?.classList.add("hidden");
@@ -1898,7 +2008,20 @@ if (typeof window !== "undefined") {
       
       // Initialize Engine
       SkiFreeApp.start().catch((err) => console.error("[SkiFree] Boot error:", err));
-    });
+    };
+
+    enterBtn.addEventListener("click", triggerDropIn);
+
+    // Instant PWA drop-in (<300ms time-to-first-carve) on tapping intro video or background
+    if (introVideo) {
+      introVideo.addEventListener("pointerdown", triggerDropIn);
+    }
+    if (lobbyUi) {
+      lobbyUi.addEventListener("pointerdown", (e) => {
+        if ((e.target as HTMLElement).closest("button, input, a, select, textarea, table")) return;
+        triggerDropIn();
+      });
+    }
   }
 
   const unmuteBtn = document.getElementById("btn-unmute-intro");

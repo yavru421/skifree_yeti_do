@@ -1,107 +1,26 @@
-import { MountainDO, Env } from "./MountainDO";
-
-export { MountainDO };
+export interface Env {
+  DB: D1Database;
+  ASSETS: Fetcher;
+}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // WebMCP Interceptor / Bridge.js endpoint handler
-    if (url.pathname === "/mcp" || url.pathname === "/mcp/") {
-      if (request.method === "OPTIONS") {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*"
-          }
-        });
-      }
-      return new Response(JSON.stringify({
-        jsonrpc: "2.0",
-        result: {
-          tools: []
-        }
-      }), {
+    // Global CORS Preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
         headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "*"
         }
       });
     }
 
-    // API: Create new Lobby Room Code
-    if (url.pathname === "/api/lobby/create" && request.method === "POST") {
-      const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      return new Response(JSON.stringify({ roomCode }), {
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        }
-      });
-    }
-
-    // API: Validate Lobby Room Code
-    if (url.pathname === "/api/lobby/validate" && request.method === "GET") {
-      const roomParam = url.searchParams.get("room");
-      if (!roomParam || roomParam.trim().length < 4) {
-        return new Response(JSON.stringify({ valid: false, error: "Invalid room code" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      }
-      const roomCode = roomParam.trim().toUpperCase();
-      try {
-        const id = env.MOUNTAIN_DO.idFromName(roomCode);
-        const stub = env.MOUNTAIN_DO.get(id);
-        const infoRes = await stub.fetch(new Request("https://internal/api/info"));
-        const infoData = await infoRes.json();
-        return new Response(JSON.stringify({ valid: true, roomCode, info: infoData }), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ valid: true, roomCode }), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-        });
-      }
-    }
-
-    if (url.pathname === "/landing" || url.pathname === "/landing.html") {
-      url.pathname = "/landing.html";
-      return env.ASSETS.fetch(new Request(url.toString(), request));
-    }
-
-    if (url.pathname === "/ws" || url.pathname === "/status" || url.pathname === "/api/telemetry") {
-      if (request.method === "OPTIONS") {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*"
-          }
-        });
-      }
-      const roomParam = url.searchParams.get("room");
-      const roomCode = (roomParam && roomParam.trim().length > 0 ? roomParam.trim() : "global-mountain-lobby").toUpperCase();
-      const id = env.MOUNTAIN_DO.idFromName(roomCode);
-      const stub = env.MOUNTAIN_DO.get(id);
-      return stub.fetch(request);
-    }
-
+    // API: Global Leaderboard (Stateless D1)
     if (url.pathname === "/api/scores") {
-      if (request.method === "OPTIONS") {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*"
-          }
-        });
-      }
-
       if (request.method === "POST") {
         try {
           const body: any = await request.json();
@@ -112,22 +31,10 @@ export default {
           const time_ms = typeof body.time_ms === "number" ? Math.max(0, Math.round(body.time_ms)) : null;
           const now = Date.now();
 
-          // Insert into D1
-          await env.DB.prepare(
-            `INSERT INTO global_leaderboard (callsign, wave, score, time_ms, timestamp) VALUES (?, ?, ?, ?, ?)`
-          ).bind(callsign, wave, score, time_ms, now).run();
-
-          // Sync into MountainDO storage & lobby
-          try {
-            const id = env.MOUNTAIN_DO.idFromName("global-mountain-lobby");
-            const stub = env.MOUNTAIN_DO.get(id);
-            await stub.fetch(new Request("https://internal/record-score", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ callsign, wave, score, time_ms, timestamp: now })
-            }));
-          } catch (doErr) {
-            console.warn("[Index] DO sync error:", doErr);
+          if (env.DB) {
+            await env.DB.prepare(
+              `INSERT INTO global_leaderboard (callsign, wave, score, time_ms, timestamp) VALUES (?, ?, ?, ?, ?)`
+            ).bind(callsign, wave, score, time_ms, now).run();
           }
 
           return new Response(JSON.stringify({ success: true, callsign, score, wave }), {
@@ -150,16 +57,21 @@ export default {
 
       // GET /api/scores
       try {
-        const { results } = await env.DB.prepare(
-          `SELECT callsign, wave, score, time_ms, timestamp FROM global_leaderboard ORDER BY score DESC LIMIT 50`
-        ).all();
+        if (env.DB) {
+          const { results } = await env.DB.prepare(
+            `SELECT callsign, wave, score, time_ms, timestamp FROM global_leaderboard ORDER BY score DESC LIMIT 50`
+          ).all();
 
-        return new Response(JSON.stringify(results), {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "public, max-age=5"
-          }
+          return new Response(JSON.stringify(results || []), {
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=15"
+            }
+          });
+        }
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), {
@@ -169,93 +81,63 @@ export default {
       }
     }
 
+    // API: Beta Player Feedback (Stateless D1)
     if (url.pathname === "/api/feedback") {
-      if (request.method === "OPTIONS") {
-        return new Response(null, {
-          status: 204,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "*"
-          }
-        });
-      }
-
       if (request.method === "POST") {
         try {
           const body: any = await request.json();
           const rawCallsign = typeof body.callsign === "string" ? body.callsign.trim() : "";
           const callsign = rawCallsign.replace(/[^a-zA-Z0-9_\- ]/g, "").slice(0, 16) || "SKIER_BETA";
-          
           const allowedCategories = ["bug", "balance", "idea", "audio_visual", "other"];
           const rawCategory = typeof body.category === "string" ? body.category.toLowerCase().trim() : "bug";
           const category = allowedCategories.includes(rawCategory) ? rawCategory : "bug";
-
           const rawTitle = typeof body.title === "string" ? body.title.trim() : "";
           const title = rawTitle.slice(0, 100) || "Player Feedback";
-
           const rawDetails = typeof body.details === "string" ? body.details.trim() : "";
           if (!rawDetails) {
             return new Response(JSON.stringify({ error: "Details description is required" }), {
               status: 400,
-              headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-              }
+              headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
             });
           }
           const details = rawDetails.slice(0, 1500);
-
-          let deviceInfo = "";
-          if (body.device_info) {
-            deviceInfo = typeof body.device_info === "string" 
-              ? body.device_info.slice(0, 300) 
-              : JSON.stringify(body.device_info).slice(0, 300);
-          }
-
+          const deviceInfo = body.device_info ? String(body.device_info).slice(0, 300) : "";
           const now = Date.now();
 
-          const insertRes = await env.DB.prepare(
-            `INSERT INTO beta_feedback (callsign, category, title, details, status, device_info, timestamp) VALUES (?, ?, ?, ?, 'open', ?, ?)`
-          ).bind(callsign, category, title, details, deviceInfo, now).run();
+          if (env.DB) {
+            await env.DB.prepare(
+              `INSERT INTO beta_feedback (callsign, category, title, details, status, device_info, timestamp) VALUES (?, ?, ?, ?, 'open', ?, ?)`
+            ).bind(callsign, category, title, details, deviceInfo, now).run();
+          }
 
-          return new Response(JSON.stringify({
-            success: true,
-            id: insertRes.meta?.last_row_id || null,
-            callsign,
-            category,
-            title,
-            timestamp: now
-          }), {
+          return new Response(JSON.stringify({ success: true, callsign, category, title, timestamp: now }), {
             status: 201,
-            headers: {
-              "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*"
-            }
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
           });
         } catch (err: any) {
           return new Response(JSON.stringify({ error: err.message }), {
             status: 400,
-            headers: {
-              "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*"
-            }
+            headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
           });
         }
       }
 
       // GET /api/feedback
       try {
-        const { results } = await env.DB.prepare(
-          `SELECT id, callsign, category, title, details, status, device_info, timestamp FROM beta_feedback ORDER BY timestamp DESC LIMIT 50`
-        ).all();
-
-        return new Response(JSON.stringify(results || []), {
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "public, max-age=5"
-          }
+        if (env.DB) {
+          const { results } = await env.DB.prepare(
+            `SELECT id, callsign, category, title, details, status, device_info, timestamp FROM beta_feedback ORDER BY timestamp DESC LIMIT 50`
+          ).all();
+          return new Response(JSON.stringify(results || []), {
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=15"
+            }
+          });
+        }
+        return new Response(JSON.stringify([]), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err.message }), {
@@ -265,12 +147,13 @@ export default {
       }
     }
 
-    // Stale path alias fallback: rewrite /dist/bundle.js to /bundle.js
+    // Rewrite /dist/bundle.js to /bundle.js
     if (url.pathname === "/dist/bundle.js") {
       url.pathname = "/bundle.js";
       return env.ASSETS.fetch(new Request(url.toString(), request));
     }
 
+    // Default: Serve static PWA assets from /public
     return env.ASSETS.fetch(request);
   }
 };

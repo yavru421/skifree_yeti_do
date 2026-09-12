@@ -1,10 +1,9 @@
-const CACHE_NAME = 'ski-fr33-phase2-v3';
+const CACHE_NAME = 'ski-fr33-phase2-v5-zero-liability';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/assets/yeti_v2.jpg',
-  '/bundle.js'
+  '/assets/yeti_v2.jpg'
 ];
 
 self.addEventListener('install', (e) => {
@@ -20,7 +19,12 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log('[SW] Purging stale cache:', key);
+            return caches.delete(key);
+          }
+        })
       );
     })
   );
@@ -36,6 +40,22 @@ self.addEventListener('fetch', (e) => {
     e.request.url.includes('/assets/media/') ||
     e.request.headers.get('range')
   ) {
+    return;
+  }
+
+  // Network-First for application bundle to guarantee zero stale cache lockups
+  if (e.request.url.includes('bundle.js')) {
+    e.respondWith(
+      fetch(e.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(e.request))
+    );
     return;
   }
   
