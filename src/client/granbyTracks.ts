@@ -34,6 +34,7 @@ export interface GranbyTrackConfig {
   rollAmplitude: number;       // Contour ridges amplitude
   description: string;
   yetiBehaviorDesc: string;
+  courseLengthM: number;       // Distance down the mountain to the Finish Archway
 }
 
 export const GRANBY_TRACKS: GranbyTrackConfig[] = [
@@ -64,7 +65,8 @@ export const GRANBY_TRACKS: GranbyTrackConfig[] = [
     archTitle: "QUICK DRAW • WEST MOUNTAIN",
     archSubtitle: "ELEV 8,200' • 12° PITCH • BEGINNER GROOMER",
     description: "Wide, sweeping beginner run off Quick Draw Express. Gentle pitch, open aspen meadows.",
-    yetiBehaviorDesc: "Stalking in peripheral tree lines at 38 MPH."
+    yetiBehaviorDesc: "Stalking in peripheral tree lines at 38 MPH.",
+    courseLengthM: 1200
   },
   {
     level: 2,
@@ -93,7 +95,8 @@ export const GRANBY_TRACKS: GranbyTrackConfig[] = [
     archTitle: "JACKALOPE • EAST MOUNTAIN",
     archSubtitle: "ELEV 8,650' • 15° PITCH • ROLLING CRUISER",
     description: "Rolling intermediate cruiser off East Mountain Express. High-speed carving corridors and alpine meadows.",
-    yetiBehaviorDesc: "Aggressive bounding pursuit • Frost breath bursts at 45 MPH."
+    yetiBehaviorDesc: "Aggressive bounding pursuit • Frost breath bursts at 45 MPH.",
+    courseLengthM: 1600
   },
   {
     level: 3,
@@ -122,7 +125,8 @@ export const GRANBY_TRACKS: GranbyTrackConfig[] = [
     archTitle: "RODEO • EAST MOUNTAIN",
     archSubtitle: "ELEV 9,000' • 20° PITCH • CAUTION: HEAVY MOGULS",
     description: "Steep North-facing fall line. Heavy pine glades, natural rock ledges, and bump fields.",
-    yetiBehaviorDesc: "Berserk lunges • Leaping intercepts across gates."
+    yetiBehaviorDesc: "Berserk lunges • Leaping intercepts across gates.",
+    courseLengthM: 2000
   },
   {
     level: 4,
@@ -151,7 +155,8 @@ export const GRANBY_TRACKS: GranbyTrackConfig[] = [
     archTitle: "HIGH ROLLER GLADES • APEX PEAK",
     archSubtitle: "ELEV 9,200' • 25° PITCH • EXTREME ALPINE GAUNTLET",
     description: "Extreme tree chute gauntlet on Granby's highest ridge. Narrow corridors, zero margin for error.",
-    yetiBehaviorDesc: "Colossus of the Peak • Relentless 58 MPH rampage."
+    yetiBehaviorDesc: "Colossus of the Peak • Relentless 58 MPH rampage.",
+    courseLengthM: 2500
   }
 ];
 

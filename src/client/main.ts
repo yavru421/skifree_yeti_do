@@ -812,11 +812,41 @@ export class SkiFreeApp {
     this.audioSystem.updateWindRush(this.speedMph);
     this.maxSpeedMphRecorded = Math.max(this.maxSpeedMphRecorded, this.speedMph);
 
-    // Live Granby Ranch Elevation Tracking
-    const currentElev = Math.round(this.terrainSystem.currentTrack.baseElevationFt - (Math.abs(this.playerPos.z) * 0.16));
+    // Live Granby Ranch Elevation Tracking & Course Distance
+    const currentTrack = this.terrainSystem.currentTrack;
+    const distanceDownslope = Math.abs(this.playerPos.z);
+    const distToFinish = Math.max(0, currentTrack.courseLengthM - distanceDownslope);
+    const currentElev = Math.round(currentTrack.baseElevationFt - (distanceDownslope * 0.16));
     const statsEl = document.getElementById("hud-granby-stats");
     if (statsEl) {
-      statsEl.textContent = `${this.terrainSystem.currentTrack.mountainArea.toUpperCase()} • ELEV ${currentElev.toLocaleString()}' • ${this.terrainSystem.currentTrack.slopeGradeDeg}° PITCH`;
+      statsEl.textContent = `${currentTrack.mountainArea.toUpperCase()} • ELEV ${currentElev.toLocaleString()}' • FINISH: ${Math.round(distToFinish)}m`;
+    }
+
+    // 2026 Visual Standards: Dynamic Speed FOV Warping & Wind Rush
+    if (this.cameraRig && this.cameraRig.camera) {
+      const targetFov = 0.85 + Math.max(0, (this.speedMph - 35) / 50) * 0.28;
+      this.cameraRig.camera.fov = Scalar.Lerp(this.cameraRig.camera.fov, targetFov, deltaTime * 4.0);
+    }
+
+    // Yeti Turnaround Ambush Showdown: Turn on the skier 220m before the finish line!
+    if (distToFinish <= 220 && distToFinish > 0 && !this.yetiEntity.isAmbushing && this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
+      this.yetiEntity.triggerAmbushTurnaround(this.playerPos);
+      this.audioSystem.playYetiRoar();
+      this.cameraRig.addImpactShake(1.6);
+      const prompt = document.getElementById("tow-action-prompt");
+      if (prompt) {
+        prompt.classList.remove("hidden");
+        prompt.innerHTML = `⚠️ <span style="color:#ff0033; font-weight:900; font-size:1.2em;">BEAST TURNAROUND AMBUSH!</span><br><span style="color:#ffff00; font-weight:800;">THE YETI HAS TURNED AROUND AND IS CHARGING DIRECTLY AT YOU! SURVIVE TO THE FINISH!</span>`;
+      }
+      if (this.hudSystem && this.hudSystem.addKillfeedMessage) {
+        this.hudSystem.addKillfeedMessage(`⚠️ YETI TURNAROUND! AMBUSH BEFORE THE FINISH GATE!`);
+      }
+    }
+
+    // Finish Line Crossing Check
+    if (distanceDownslope >= currentTrack.courseLengthM && !this.isTakedownTriggered && !this.isPlayerDead) {
+      console.log("[SkiFree] SKIER CROSSED THE FINISH LINE ALIVE! LEVEL CLEARED!");
+      this.triggerYetiTakedown();
     }
 
     // Check if Yeti is dead -> trigger takedown immediately!
@@ -948,17 +978,23 @@ export class SkiFreeApp {
     // 3a. Yeti Attack Proximity & Takedown Check
     const distToYeti = Math.hypot(this.playerPos.x - this.yetiEntity.rootMesh.position.x, this.playerPos.z - this.yetiEntity.rootMesh.position.z);
     if (this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
-      if (distToYeti < 3.8) {
+      const isLethalState = this.yetiEntity.state === YetiAIState.AMBUSH_SHOWDOWN ||
+                            this.yetiEntity.state === YetiAIState.BERSERK ||
+                            this.yetiEntity.state === YetiAIState.POUNCE_CHARGE ||
+                            this.yetiEntity.state === YetiAIState.CLAW_SWIPE ||
+                            this.yetiEntity.isAmbushing;
+      const killRadius = isLethalState ? 5.2 : 4.6;
+      if (distToYeti < killRadius) {
         this.triggerPlayerMauledByYeti();
       } else {
-        if (distToYeti < 9.5 && Date.now() - this.lastNearMissTime > 1500) {
+        if (distToYeti < 10.0 && Date.now() - this.lastNearMissTime > 1500) {
           this.lastNearMissTime = Date.now();
           this.closeCallsCount++;
           this.cameraRig.triggerNearMiss();
           this.mobileTouchController?.triggerYetiProximityPulse(distToYeti);
         }
-        if ((this.yetiEntity.state === YetiAIState.POUNCE_CHARGE || this.yetiEntity.state === YetiAIState.CLAW_SWIPE) && distToYeti < 9.0) {
-          this.cameraRig.addImpactShake(0.85);
+        if (isLethalState && distToYeti < 11.0) {
+          this.cameraRig.addImpactShake(0.95);
           const clawOverlay = document.getElementById("claw-overlay");
           if (clawOverlay && !clawOverlay.classList.contains("slash-active")) {
             clawOverlay.classList.add("slash-active");

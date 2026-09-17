@@ -67,6 +67,13 @@ export class YetiEntity {
   private headNode: TransformNode | null = null;
   private leftArmNode: TransformNode | null = null;
   private rightArmNode: TransformNode | null = null;
+  private leftUpLegNode: TransformNode | null = null;
+  private rightUpLegNode: TransformNode | null = null;
+  private leftLegNode: TransformNode | null = null;
+  private rightLegNode: TransformNode | null = null;
+  private leftFootNode: TransformNode | null = null;
+  private rightFootNode: TransformNode | null = null;
+  public isAmbushing: boolean = false;
 
   // Flank Weak-Spot Vulnerability (Requires carving back and forth to hit)
   public vulnerableFlank: "LEFT" | "RIGHT" = "LEFT";
@@ -136,6 +143,12 @@ export class YetiEntity {
         this.headNode = (result.transformNodes.find((tn) => tn.name === "Yeti_Head") as TransformNode) || null;
         this.leftArmNode = (result.transformNodes.find((tn) => tn.name === "Yeti_LeftArm") as TransformNode) || null;
         this.rightArmNode = (result.transformNodes.find((tn) => tn.name === "Yeti_RightArm") as TransformNode) || null;
+        this.leftUpLegNode = (result.transformNodes.find((tn) => tn.name === "Yeti_LeftUpLeg" || tn.name.toLowerCase().includes("leftupleg") || tn.name.toLowerCase().includes("thigh_l")) as TransformNode) || null;
+        this.rightUpLegNode = (result.transformNodes.find((tn) => tn.name === "Yeti_RightUpLeg" || tn.name.toLowerCase().includes("rightupleg") || tn.name.toLowerCase().includes("thigh_r")) as TransformNode) || null;
+        this.leftLegNode = (result.transformNodes.find((tn) => tn.name === "Yeti_LeftLeg" || tn.name.toLowerCase().includes("leftleg") || tn.name.toLowerCase().includes("calf_l")) as TransformNode) || null;
+        this.rightLegNode = (result.transformNodes.find((tn) => tn.name === "Yeti_RightLeg" || tn.name.toLowerCase().includes("rightleg") || tn.name.toLowerCase().includes("calf_r")) as TransformNode) || null;
+        this.leftFootNode = (result.transformNodes.find((tn) => tn.name === "Yeti_LeftFoot" || tn.name.toLowerCase().includes("leftfoot") || tn.name.toLowerCase().includes("foot_l")) as TransformNode) || null;
+        this.rightFootNode = (result.transformNodes.find((tn) => tn.name === "Yeti_RightFoot" || tn.name.toLowerCase().includes("rightfoot") || tn.name.toLowerCase().includes("foot_r")) as TransformNode) || null;
 
         // Predator Glowing Red Eye Spotlights (scaled to 3.8m boss, eye level Y ~ 3.1m, Z ~ 0.8m)
         this.eyeLightL = new PointLight("yetiEyeL", new Vector3(-0.35, 3.1, 0.8), this.scene);
@@ -280,6 +293,17 @@ export class YetiEntity {
     if (this.animGroups.length > 0) this.animGroups[0].start(true);
   }
 
+  public triggerAmbushTurnaround(playerPos: Vector3): void {
+    if (this.state === YetiAIState.DEAD || this.state === YetiAIState.AMBUSH_SHOWDOWN) return;
+    this.state = YetiAIState.AMBUSH_SHOWDOWN;
+    this.isAmbushing = true;
+    this.isSprinting = true;
+    if (this.breathParticles) this.breathParticles.emitRate = 120;
+    if (this.eyeLightL) this.eyeLightL.intensity = 8.5;
+    if (this.eyeLightR) this.eyeLightR.intensity = 8.5;
+    console.log("[Yeti] AMBUSH SHOWDOWN ACTIVATED! Beast turned around 180° to charge oncoming skier!");
+  }
+
   public applyDrag(dragReduction: number, deltaTime: number): void {
     // Player is braking ('S') and carving, applying massive drag torque through the steel towline!
     // On higher levels, the beast resists the towline drag!
@@ -318,199 +342,222 @@ export class YetiEntity {
       }
 
       // Forward motion integrated from dragSpeed + sprint surge
-      const sprintBonus = this.isSprinting ? Math.min(22, 10 + (this.wave - 1) * 3.5) : 0;
+      const sprintBonus = (this.isSprinting || this.isAmbushing) ? Math.min(26, 12 + (this.wave - 1) * 4.0) : 0;
       const effectiveMph = this.dragSpeed + sprintBonus;
       const forwardSpeedUnitsPerSec = (effectiveMph * 0.44704) * 2.2;
-      this.rootMesh.position.z -= forwardSpeedUnitsPerSec * deltaTime;
 
-      // Elastic dynamic leash boundary (scales with wave so beast does not throttle to 35 MPH)
-      const maxLeashDist = 55 + (this.wave - 1) * 15;
-      if (distZ > maxLeashDist) {
-        // Beast is pulling too far ahead down the slope; cable tension slows it to base speed
-        this.rootMesh.position.z = playerPos.z - maxLeashDist;
-        this.dragSpeed = Math.min(this.dragSpeed, this.baseSpeed);
-      } else if (distZ < 5) {
-        // Skier right on beast's tail; surge forward downhill
-        this.rootMesh.position.z = playerPos.z - 5;
-        this.dragSpeed = Math.max(this.dragSpeed, this.baseSpeed + 8);
+      // Check if beast is in AMBUSH_SHOWDOWN (Turned on the skier before finish line)
+      const isAmbush = this.state === YetiAIState.AMBUSH_SHOWDOWN || this.isAmbushing;
+      if (isAmbush) {
+        // UPHILL AMBUSH CHARGE: Beast turned around 180° and charges uphill directly into oncoming skier!
+        const ambushSpeed = (this.baseSpeed + 28) * 0.44704 * 2.2;
+        const dx = playerPos.x - this.rootMesh.position.x;
+        const dz = playerPos.z - this.rootMesh.position.z;
+        const len = Math.hypot(dx, dz) || 1.0;
+        this.rootMesh.position.x += (dx / len) * ambushSpeed * deltaTime;
+        this.rootMesh.position.z += (dz / len) * ambushSpeed * deltaTime;
+      } else {
+        this.rootMesh.position.z -= forwardSpeedUnitsPerSec * deltaTime;
+
+        // Dynamic leash boundary: only slow if beast pulls way too far ahead
+        const maxLeashDist = 55 + (this.wave - 1) * 15;
+        if (distZ > maxLeashDist) {
+          this.rootMesh.position.z = playerPos.z - maxLeashDist;
+          this.dragSpeed = Math.min(this.dragSpeed, this.baseSpeed);
+        } else if (distZ < 7.0) {
+          // Skier right on the beast! Beast snaps into aggressive pounce counter-attack!
+          if (this.state !== YetiAIState.BERSERK && this.state !== YetiAIState.POUNCE_CHARGE) {
+            this.state = YetiAIState.BERSERK;
+          }
+        }
+
+        // Natural mountain corridor weaving (scales with level difficulty)
+        const weaveFreq = 0.55 * (1 + (this.wave - 1) * 0.22);
+        const weaveAmp = Math.min(30, 10 + (this.wave - 1) * 4.0);
+        const targetX = Math.sin(this.runCycle * weaveFreq) * weaveAmp;
+        this.rootMesh.position.x = Scalar.Lerp(this.rootMesh.position.x, targetX, deltaTime * (2.5 + (this.wave - 1) * 0.4));
+        this.rootMesh.position.x = Scalar.Clamp(this.rootMesh.position.x, -120, 120);
       }
 
-      // Natural mountain corridor weaving (scales with level difficulty)
-      const weaveFreq = 0.55 * (1 + (this.wave - 1) * 0.22);
-      const weaveAmp = Math.min(30, 10 + (this.wave - 1) * 4.0);
-      const targetX = Math.sin(this.runCycle * weaveFreq) * weaveAmp;
-      this.rootMesh.position.x = Scalar.Lerp(this.rootMesh.position.x, targetX, deltaTime * (2.5 + (this.wave - 1) * 0.4));
-      this.rootMesh.position.x = Scalar.Clamp(this.rootMesh.position.x, -120, 120);
-
-      // Stride cadence dynamically scaled to downhill velocity
-      const strideCadence = Math.max(3.6, (effectiveMph / 38) * 5.8);
+      // Dynamic Stride cadence scaled to locomotion speed
+      const strideCadence = Math.max(4.0, (effectiveMph / 32) * 6.5);
       this.runCycle += deltaTime * strideCadence;
 
       // =======================================================================
       // 2. ORGANIC 3D PREDATORY LOCOMOTION & VISCERAL LEAN KINEMATICS
       // =======================================================================
 
-      // 2a. Smooth Vertical Mogul & Fall-Line Anchoring (Eliminate rigid arcade hop)
+      // 2a. Smooth Vertical Mogul & Fall-Line Anchoring with Dynamic Bounding (NO MORE FLOATING)
       let groundY = 0;
       if (terrainHeightFn) {
         groundY = terrainHeightFn(this.rootMesh.position.x, this.rootMesh.position.z);
       }
-      // Micro-stride paw plant compression + muscular pounce spring
-      const isPouncing = this.state === YetiAIState.POUNCE_CHARGE;
+      const isPouncing = this.state === YetiAIState.POUNCE_CHARGE || isAmbush;
       const isSwiping = this.state === YetiAIState.CLAW_SWIPE;
       const isRoaring = this.state === YetiAIState.ROAR_STORM;
 
       // Distance to skier
       const distToSkier = Math.hypot(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
-      const isAttackingClose = (isPouncing || isSwiping || isRoaring || distToSkier < 6.5);
+      const isAttackingClose = (isPouncing || isSwiping || isRoaring || isAmbush || distToSkier < 9.0);
 
-      // Footfall audio pulse triggered at galloping stride paw-plants
-      if (Math.sin(this.runCycle * 2) > 0.93) {
+      // Footfall audio pulse triggered at galloping stride paw-plants + heavy snow kickup
+      if (Math.sin(this.runCycle * 2) > 0.86) {
         this.onFootfall?.(distToSkier);
+        if (this.snowFootParticles) {
+          this.snowFootParticles.manualEmitCount = (isPouncing || this.isSprinting || isAmbush) ? 35 : 18;
+        }
       }
 
       // Local 60 FPS Yeti Predator AI: Stalking -> Flank Bounding -> Boulder Launch -> Frenzy Charge
       if (this.hp <= 0) {
         this.state = YetiAIState.DEAD;
-      } else if (distToSkier < 8.0 || (this.hp < this.maxHp * 0.4 && distToSkier < 18.0)) {
-        // FRENZY CHARGE: rapid lunge closing in for the takedown
-        this.state = YetiAIState.BERSERK;
-      } else if (distToSkier >= 8.0 && distToSkier < 14.0) {
-        // BOULDER LAUNCH / ROAR STORM: beast rears and unleashes blizzard roar
-        if (this.state !== YetiAIState.ROAR_STORM && Math.random() < 0.02) {
-          this.state = YetiAIState.ROAR_STORM;
-          setTimeout(() => {
-            if (this.state === YetiAIState.ROAR_STORM) {
-              this.state = distToSkier < 12.0 ? YetiAIState.BERSERK : YetiAIState.POUNCE_CHARGE;
-            }
-          }, 1600);
-        }
-      } else if (distToSkier >= 14.0 && distToSkier < 24.0) {
-        // FLANK BOUNDING: weaves across the fall line to protect exposed weak points
-        if (this.state === YetiAIState.CHARGING || this.state === YetiAIState.BERSERK) {
-          this.state = YetiAIState.POUNCE_CHARGE;
-        }
-      } else {
-        // STALKING: relentless downhill pursuit matching ski fall line
-        if (this.state !== YetiAIState.ROAR_STORM) {
-          this.state = YetiAIState.CHARGING;
+      } else if (!isAmbush) {
+        if (distToSkier < 8.0 || (this.hp < this.maxHp * 0.4 && distToSkier < 18.0)) {
+          this.state = YetiAIState.BERSERK;
+        } else if (distToSkier >= 8.0 && distToSkier < 14.0) {
+          if (this.state !== YetiAIState.ROAR_STORM && Math.random() < 0.02) {
+            this.state = YetiAIState.ROAR_STORM;
+            setTimeout(() => {
+              if (this.state === YetiAIState.ROAR_STORM) {
+                this.state = distToSkier < 12.0 ? YetiAIState.BERSERK : YetiAIState.POUNCE_CHARGE;
+              }
+            }, 1600);
+          }
+        } else if (distToSkier >= 14.0 && distToSkier < 24.0) {
+          if (this.state === YetiAIState.CHARGING || this.state === YetiAIState.BERSERK) {
+            this.state = YetiAIState.POUNCE_CHARGE;
+          }
+        } else {
+          if (this.state !== YetiAIState.ROAR_STORM) {
+            this.state = YetiAIState.CHARGING;
+          }
         }
       }
 
-      // Vertical leap or crouch depending on attack state
+      // Vertical Stride Bounding: heavy, authentic quadrupedal bounding rises and falls on the snow
+      const strideBounce = Math.abs(Math.sin(this.runCycle * 2)) * 0.28;
       let pounceLeapY = 0;
       if (isPouncing) {
-        pounceLeapY = Math.sin(this.runCycle * 2.5) > 0 ? 0.75 : -0.15; // Explosive vertical leap down the fall line
+        pounceLeapY = Math.sin(this.runCycle * 2.5) > 0 ? 0.75 : -0.15;
       }
+      const pawPlantCompression = Math.sin(this.runCycle * 2) * 0.06;
+      const targetY = groundY + 0.14 + strideBounce - pawPlantCompression + pounceLeapY;
+      this.rootMesh.position.y = Scalar.Lerp(this.rootMesh.position.y, targetY, Math.min(1.0, deltaTime * 14.0));
 
-      const pawPlantCompression = Math.sin(this.runCycle * 2) * 0.025;
-      const targetY = groundY + 0.12 + pawPlantCompression + pounceLeapY;
-      this.rootMesh.position.y = Scalar.Lerp(this.rootMesh.position.y, targetY, Math.min(1.0, deltaTime * 12.0));
-
-      if (isPouncing) {
-        // Explosive forward & lateral pounce leap directly at skier to close distance for maul takedown
+      if (isPouncing && !isAmbush) {
+        // Explosive lateral pounce directly at skier
         this.rootMesh.position.x = Scalar.Lerp(this.rootMesh.position.x, playerPos.x, deltaTime * 5.0);
-        const pounceSurge = (this.baseSpeed + 24) * 0.44704 * 2.2;
-        if (playerPos.z < this.rootMesh.position.z) {
-          this.rootMesh.position.z -= pounceSurge * deltaTime * 0.75;
-        } else {
-          this.rootMesh.position.z += pounceSurge * deltaTime * 0.75;
-        }
       }
 
       // 2b. Forward Charging & Stalking Posture (Pitch on X)
-      // Low stalking center of gravity that deepens dynamically with speed
-      let targetPitch = 0.16 + (effectiveMph / 65) * 0.09;
-      if (this.state === YetiAIState.BERSERK || isPouncing) {
-        targetPitch += 0.22; // Aggressive predatory pounce lunge forward
+      let targetPitch = 0.20 + (effectiveMph / 65) * 0.10;
+      if (this.state === YetiAIState.BERSERK || isPouncing || isAmbush) {
+        targetPitch += 0.24; // Aggressive predatory pounce lunge forward
       } else if (isRoaring) {
-        targetPitch -= 0.18; // Head thrown back in roar
+        targetPitch -= 0.20; // Head thrown back in roar
       } else if (this.state === YetiAIState.STAGGERED) {
-        targetPitch -= 0.25; // Reeling back on heavy hit
+        targetPitch -= 0.25;
       }
-      // Subtle organic thoracic stride surge
-      targetPitch += Math.sin(this.runCycle) * 0.02;
+      targetPitch += Math.sin(this.runCycle) * 0.03;
       this.rootMesh.rotation.x = Scalar.Lerp(this.rootMesh.rotation.x, targetPitch, Math.min(1.0, deltaTime * 5.5));
 
       // 2c. Visceral Lateral Banking into Turns (Roll on Z)
-      const lateralDelta = targetX - this.rootMesh.position.x;
+      const currentTargetX = isAmbush ? playerPos.x : (Math.sin(this.runCycle * 0.55) * 15);
+      const lateralDelta = currentTargetX - this.rootMesh.position.x;
       const turnBank = -Scalar.Clamp(lateralDelta * 0.035, -0.22, 0.22);
-      const shoulderSway = Math.cos(this.runCycle) * 0.025;
+      const shoulderSway = Math.cos(this.runCycle) * 0.035;
       const targetRoll = turnBank + shoulderSway + (isSwiping ? (lateralDelta > 0 ? 0.15 : -0.15) : 0);
       this.rootMesh.rotation.z = Scalar.Lerp(this.rootMesh.rotation.z, targetRoll, Math.min(1.0, deltaTime * 4.5));
 
-      // 2d. Downhill Forward Facing & Attack Orientation (Yaw on Y)
-      // When running downhill, face along -Z (Math.PI) angled into the lateral weave;
-      // when counter-attacking or extremely close, face uphill toward skier!
+      // 2d. Downhill Forward Facing vs Uphill Ambush Facing (Yaw on Y)
       let targetAngle: number;
-      if (isAttackingClose) {
+      if (isAttackingClose || isAmbush) {
+        // Face uphill directly toward the oncoming skier!
         targetAngle = Math.atan2(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
       } else {
-        const lateralSpeed = (targetX - this.rootMesh.position.x) * 2.5;
+        const lateralSpeed = (currentTargetX - this.rootMesh.position.x) * 2.5;
         targetAngle = Math.PI + Math.atan2(-lateralSpeed, forwardSpeedUnitsPerSec);
       }
 
       let diffAngle = targetAngle - this.rootMesh.rotation.y;
       while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
       while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
-      this.rootMesh.rotation.y += diffAngle * Math.min(1.0, deltaTime * (isAttackingClose ? 8.0 : 4.5));
+      this.rootMesh.rotation.y += diffAngle * Math.min(1.0, deltaTime * (isAttackingClose ? 9.0 : 4.5));
 
       // 2e. Native Skeletal Animation Blending & Speed Tracking
       if (this.animGroups.length > 0) {
-        const animRate = Scalar.Clamp(effectiveMph / 25, 0.85, 2.4);
-        this.animGroups[0].speedRatio = (isPouncing || isSwiping || this.isSprinting) ? animRate * 1.5 : animRate;
+        const animRate = Scalar.Clamp(effectiveMph / 25, 0.85, 2.5);
+        this.animGroups[0].speedRatio = (isPouncing || isSwiping || this.isSprinting || isAmbush) ? animRate * 1.6 : animRate;
       }
 
-      // 2f. Skeletal Node Articulation (Head glance at pursuer, arm reach, visceral claw swat)
+      // 2f. Organic Skeletal Leg Kinematics (Left & Right Thighs, Knees, Feet Plantar Flexion - NO FLOATING)
+      if (this.leftUpLegNode && this.rightUpLegNode) {
+        const legStride = Math.sin(this.runCycle) * 0.85;
+        this.leftUpLegNode.rotation.x = legStride;
+        this.rightUpLegNode.rotation.x = -legStride;
+      }
+      if (this.leftLegNode && this.rightLegNode) {
+        const leftKnee = Math.max(0, -Math.sin(this.runCycle) * 1.30);
+        const rightKnee = Math.max(0, Math.sin(this.runCycle) * 1.30);
+        this.leftLegNode.rotation.x = leftKnee;
+        this.rightLegNode.rotation.x = rightKnee;
+      }
+      if (this.leftFootNode && this.rightFootNode) {
+        this.leftFootNode.rotation.x = Math.sin(this.runCycle) * 0.45;
+        this.rightFootNode.rotation.x = -Math.sin(this.runCycle) * 0.45;
+      }
+      if (this.hipsNode) {
+        this.hipsNode.position.y = -Math.abs(Math.sin(this.runCycle * 2)) * 0.18;
+        this.hipsNode.rotation.z = Math.sin(this.runCycle) * 0.12;
+        this.hipsNode.rotation.y = Math.cos(this.runCycle) * 0.15;
+      }
+
+      // 2g. Upper Body & Arm Articulation
       if (this.headNode) {
         const headPitch = isRoaring ? -0.35 : 0;
         const lookAtSkierAngle = Math.atan2(playerPos.x - this.rootMesh.position.x, playerPos.z - this.rootMesh.position.z);
         let lookYaw = lookAtSkierAngle - this.rootMesh.rotation.y;
         while (lookYaw < -Math.PI) lookYaw += Math.PI * 2;
         while (lookYaw > Math.PI) lookYaw -= Math.PI * 2;
-        this.headNode.rotation.y = Scalar.Lerp(this.headNode.rotation.y, Scalar.Clamp(lookYaw * 0.45, -0.9, 0.9), Math.min(1.0, deltaTime * 5.5));
+        this.headNode.rotation.y = Scalar.Lerp(this.headNode.rotation.y, Scalar.Clamp(lookYaw * 0.45, -0.9, 0.9), Math.min(1.0, deltaTime * 6.0));
         this.headNode.rotation.x = headPitch;
       }
       if (this.leftArmNode && this.rightArmNode) {
-        if (isSwiping) {
+        if (isSwiping || isAmbush) {
           // Massive overhead claw swipe arc
-          const swipeSwing = Math.sin(this.runCycle * 4) * 1.2;
-          this.leftArmNode.rotation.x = -0.6 + swipeSwing;
-          this.rightArmNode.rotation.x = -0.6 - swipeSwing;
+          const swipeSwing = Math.sin(this.runCycle * 4) * 1.3;
+          this.leftArmNode.rotation.x = -0.7 + swipeSwing;
+          this.rightArmNode.rotation.x = -0.7 - swipeSwing;
           this.leftArmNode.rotation.z = 0.45;
           this.rightArmNode.rotation.z = -0.45;
         } else if (isPouncing) {
-          // Extended reaching claws ready to grasp
-          this.leftArmNode.rotation.x = -0.85;
-          this.rightArmNode.rotation.x = -0.85;
-          this.leftArmNode.rotation.z = 0.25;
-          this.rightArmNode.rotation.z = -0.25;
+          // Extended reaching claws ready to maul
+          this.leftArmNode.rotation.x = -0.95;
+          this.rightArmNode.rotation.x = -0.95;
+          this.leftArmNode.rotation.z = 0.28;
+          this.rightArmNode.rotation.z = -0.28;
         } else {
-          const armReach = Math.sin(this.runCycle) * 0.14;
-          this.leftArmNode.rotation.x = 0.15 + armReach;
-          this.rightArmNode.rotation.x = 0.15 - armReach;
-          this.leftArmNode.rotation.z = 0.05;
-          this.rightArmNode.rotation.z = -0.05;
+          // Front paw strides opposite to hind legs
+          const armStride = Math.sin(this.runCycle) * 0.75;
+          this.leftArmNode.rotation.x = -0.30 - armStride;
+          this.rightArmNode.rotation.x = -0.30 + armStride;
+          this.leftArmNode.rotation.z = 0.08;
+          this.rightArmNode.rotation.z = -0.08;
         }
       }
       if (this.spineNode) {
-        const spineFlex = (isPouncing ? -0.15 : (isRoaring ? 0.12 : Math.sin(this.runCycle * 2) * 0.035));
+        const spineFlex = (isPouncing || isAmbush ? -0.20 : (isRoaring ? 0.22 : Math.sin(this.runCycle * 2) * 0.06));
         this.spineNode.rotation.x = spineFlex;
       }
 
-      // Volumetric Breath Mist Boost during Roar & Pounce
+      // Volumetric Breath Mist Boost during Roar & Ambush
       if (this.breathParticles) {
-        this.breathParticles.emitRate = isRoaring ? 95 : (isPouncing || this.isSprinting ? 50 : 18);
+        this.breathParticles.emitRate = isRoaring ? 95 : (isPouncing || this.isSprinting || isAmbush ? 60 : 20);
       }
       if (this.eyeLightL && this.eyeLightR) {
-        const eyeIntensity = (isRoaring || this.state === YetiAIState.BERSERK || this.isSprinting) ? 6.5 : 3.5;
+        const eyeIntensity = (isRoaring || this.state === YetiAIState.BERSERK || this.isSprinting || isAmbush) ? 7.5 : 3.5;
         this.eyeLightL.intensity = eyeIntensity;
         this.eyeLightR.intensity = eyeIntensity;
-      }
-
-      // Alternating paw snow kickup on stride downbeats
-      if (Math.sin(this.runCycle) < -0.85 && this.snowFootParticles) {
-        this.snowFootParticles.manualEmitCount = (isPouncing || this.isSprinting) ? 16 : 6;
       }
     } else {
       // =======================================================================
