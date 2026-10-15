@@ -74,6 +74,7 @@ export class YetiEntity {
   private leftFootNode: TransformNode | null = null;
   private rightFootNode: TransformNode | null = null;
   public isAmbushing: boolean = false;
+  public isTethered: boolean = false;
 
   // Flank Weak-Spot Vulnerability (Requires carving back and forth to hit)
   public vulnerableFlank: "LEFT" | "RIGHT" = "LEFT";
@@ -252,6 +253,8 @@ export class YetiEntity {
     this.state = YetiAIState.CHARGING;
     this.sprintCooldownTimer = 0;
     this.isSprinting = false;
+    this.isAmbushing = false;
+    this.isTethered = false;
     this.sprintDuration = 0;
     if (this.onSprintStateChange) this.onSprintStateChange(false);
 
@@ -293,8 +296,20 @@ export class YetiEntity {
     if (this.animGroups.length > 0) this.animGroups[0].start(true);
   }
 
+  public triggerHarpoonSurge(): void {
+    if (this.state === YetiAIState.DEAD) return;
+    this.isTethered = true;
+    this.isAmbushing = false;
+    this.state = YetiAIState.CHARGING;
+    this.isSprinting = true;
+    this.sprintDuration = 0;
+    // Ski-boat tow surge: Yeti takes off down the mountain pulling the player!
+    this.dragSpeed = Math.max(this.baseSpeed * 1.42, 54);
+    if (this.onSprintStateChange) this.onSprintStateChange(true);
+  }
+
   public triggerAmbushTurnaround(playerPos: Vector3): void {
-    if (this.state === YetiAIState.DEAD || this.state === YetiAIState.AMBUSH_SHOWDOWN) return;
+    if (this.state === YetiAIState.DEAD || this.state === YetiAIState.AMBUSH_SHOWDOWN || this.isTethered) return;
     this.state = YetiAIState.AMBUSH_SHOWDOWN;
     this.isAmbushing = true;
     this.isSprinting = true;
@@ -308,7 +323,7 @@ export class YetiEntity {
     // Player is braking ('S') and carving, applying massive drag torque through the steel towline!
     // On higher levels, the beast resists the towline drag!
     const dragResist = 1.0 + (this.wave - 1) * 0.35;
-    this.dragSpeed = Math.max(9.0, this.dragSpeed - (dragReduction / dragResist) * deltaTime * 3.8);
+    this.dragSpeed = Math.max(16.0, this.dragSpeed - (dragReduction / dragResist) * deltaTime * 3.8);
   }
 
   public update(playerPos: Vector3, deltaTime: number, terrainHeightFn?: (x: number, z: number) => number): void {
@@ -319,7 +334,7 @@ export class YetiEntity {
       const distZ = playerPos.z - this.rootMesh.position.z;
 
       // Sprint burst mechanic (Level >= 2): beast surges ahead when skier approaches
-      if (this.wave >= 2) {
+      if (this.wave >= 2 || this.isTethered) {
         this.sprintCooldownTimer += deltaTime;
         if (!this.isSprinting && this.sprintCooldownTimer > 7.0 && distZ < 28 && distZ > 6) {
           this.isSprinting = true;
@@ -329,7 +344,7 @@ export class YetiEntity {
         }
         if (this.isSprinting) {
           this.sprintDuration += deltaTime;
-          if (this.sprintDuration > 1.8) {
+          if (this.sprintDuration > (this.isTethered ? 3.2 : 1.8)) {
             this.isSprinting = false;
             if (this.onSprintStateChange) this.onSprintStateChange(false);
           }
@@ -346,8 +361,8 @@ export class YetiEntity {
       const effectiveMph = this.dragSpeed + sprintBonus;
       const forwardSpeedUnitsPerSec = (effectiveMph * 0.44704) * 2.2;
 
-      // Check if beast is in AMBUSH_SHOWDOWN (Turned on the skier before finish line)
-      const isAmbush = this.state === YetiAIState.AMBUSH_SHOWDOWN || this.isAmbushing;
+      // Check if beast is in AMBUSH_SHOWDOWN (Turned on the skier before finish line, only if NOT tethered)
+      const isAmbush = !this.isTethered && (this.state === YetiAIState.AMBUSH_SHOWDOWN || this.isAmbushing);
       if (isAmbush) {
         // UPHILL AMBUSH CHARGE: Beast turned around 180° and charges uphill directly into oncoming skier!
         const ambushSpeed = (this.baseSpeed + 28) * 0.44704 * 2.2;
@@ -360,12 +375,14 @@ export class YetiEntity {
         this.rootMesh.position.z -= forwardSpeedUnitsPerSec * deltaTime;
 
         // Dynamic leash boundary: only slow if beast pulls way too far ahead
-        const maxLeashDist = 55 + (this.wave - 1) * 15;
+        const maxLeashDist = this.isTethered ? 34 : (55 + (this.wave - 1) * 15);
         if (distZ > maxLeashDist) {
           this.rootMesh.position.z = playerPos.z - maxLeashDist;
-          this.dragSpeed = Math.min(this.dragSpeed, this.baseSpeed);
-        } else if (distZ < 7.0) {
-          // Skier right on the beast! Beast snaps into aggressive pounce counter-attack!
+          if (!this.isTethered) {
+            this.dragSpeed = Math.min(this.dragSpeed, this.baseSpeed);
+          }
+        } else if (distZ < 7.0 && !this.isTethered) {
+          // Skier right on the untethered beast! Beast snaps into aggressive pounce counter-attack!
           if (this.state !== YetiAIState.BERSERK && this.state !== YetiAIState.POUNCE_CHARGE) {
             this.state = YetiAIState.BERSERK;
           }

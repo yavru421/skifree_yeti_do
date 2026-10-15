@@ -22,12 +22,8 @@ await esbuild.build({
   ]
 });
 
-// Also mirror to public/dist/bundle.js
-if (!fs.existsSync("public/dist")) {
-  fs.mkdirSync("public/dist", { recursive: true });
-}
-fs.copyFileSync("public/bundle.js", "public/dist/bundle.js");
-if (fs.existsSync("public/HavokPhysics.wasm")) {
-  fs.copyFileSync("public/HavokPhysics.wasm", "public/dist/HavokPhysics.wasm");
+// Remove legacy duplicate public/dist artifacts if present
+if (fs.existsSync("public/dist")) {
+  fs.rmSync("public/dist", { recursive: true, force: true });
 }
 console.log("✅ [Build] Clean bundle compiled to public/bundle.js without dynamic requires!");

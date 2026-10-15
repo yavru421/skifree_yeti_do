@@ -71,8 +71,72 @@ export class SkierAvatar {
     // 1. Build and start Volumetric Powder Snow Mist Particles
     this.initPowderParticles();
 
-    // 2. Load the Headless Blender 5.2 Skier GLB Asset
+    // 2. Build 3rd-Person Brass Steam-Harpoon Cannon (Always Visible in Hands)
+    this.initThirdPersonHarpoon();
+
+    // 3. Load the Headless Blender 5.2 Skier GLB Asset
     this.loadSkierGlb();
+  }
+
+  private initThirdPersonHarpoon(): void {
+    this.rifleRoot = new Mesh("skierHarpoonRifleRoot", this.scene);
+    this.rifleRoot.parent = this.rootNode;
+    // Positioned at right hip / shoulder aim line facing downslope (-Z)
+    this.rifleRoot.position.set(0.32, 1.08, -0.22);
+    this.rifleRoot.rotation.set(0.06, 0, 0);
+
+    const steelMat = new StandardMaterial("tpvHarpoonSteelMat", this.scene);
+    steelMat.diffuseColor = new Color3(0.16, 0.22, 0.30);
+    steelMat.specularColor = new Color3(0.85, 0.90, 1.0);
+
+    const brassMat = new StandardMaterial("tpvHarpoonBrassMat", this.scene);
+    brassMat.diffuseColor = new Color3(0.75, 0.56, 0.18);
+    brassMat.emissiveColor = new Color3(0.18, 0.12, 0.02);
+    brassMat.specularColor = new Color3(1.0, 0.88, 0.55);
+
+    const coilMat = new StandardMaterial("tpvHarpoonCoilMat", this.scene);
+    coilMat.diffuseColor = new Color3(0.0, 0.95, 1.0);
+    coilMat.emissiveColor = new Color3(0.0, 0.75, 0.95);
+
+    const barrel = MeshBuilder.CreateCylinder(
+      "tpvHarpoonBarrel",
+      { height: 1.15, diameter: 0.09, tessellation: 12 },
+      this.scene
+    );
+    barrel.material = steelMat;
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0, -0.35);
+    barrel.parent = this.rifleRoot;
+
+    const spool = MeshBuilder.CreateCylinder(
+      "tpvHarpoonSpool",
+      { height: 0.18, diameter: 0.20, tessellation: 14 },
+      this.scene
+    );
+    spool.material = brassMat;
+    spool.rotation.z = Math.PI / 2;
+    spool.position.set(0.06, -0.05, -0.10);
+    spool.parent = this.rifleRoot;
+
+    const pressureRing = MeshBuilder.CreateTorus(
+      "tpvHarpoonCoil",
+      { diameter: 0.13, thickness: 0.028, tessellation: 16 },
+      this.scene
+    );
+    pressureRing.material = coilMat;
+    pressureRing.rotation.x = Math.PI / 2;
+    pressureRing.position.set(0, 0, -0.55);
+    pressureRing.parent = this.rifleRoot;
+
+    const spearTip = MeshBuilder.CreateCylinder(
+      "tpvHarpoonSpear",
+      { height: 0.45, diameterTop: 0.01, diameterBottom: 0.05, tessellation: 8 },
+      this.scene
+    );
+    spearTip.material = coilMat;
+    spearTip.rotation.x = -Math.PI / 2;
+    spearTip.position.set(0, 0, -1.02);
+    spearTip.parent = this.rifleRoot;
   }
 
   private async loadSkierGlb(): Promise<void> {
@@ -221,6 +285,11 @@ export class SkierAvatar {
       this.glbRoot.rotation.x = isTucking ? 0.28 : 0.04;
     }
 
+    if (this.rifleRoot) {
+      this.rifleRoot.position.y = 1.08 - this.currentSquat * 0.7;
+      this.rifleRoot.rotation.x = isTethered ? 0.0 : (isTucking ? 0.18 : 0.05);
+    }
+
     // 5. Powder Snow Rooster Tail Particle Dynamics
     const sprayRate = speedMph > 8 ? Math.min(140, Math.floor(speedMph * 2.8)) : 0;
     if (this.leftSpray) {
@@ -236,6 +305,9 @@ export class SkierAvatar {
     this.rootNode.setEnabled(visible);
     if (this.glbRoot) {
       this.glbRoot.setEnabled(visible);
+    }
+    if (this.rifleRoot) {
+      this.rifleRoot.setEnabled(visible);
     }
     if (!visible) {
       if (this.leftSpray) this.leftSpray.emitRate = 0;
@@ -255,11 +327,11 @@ export class SkierAvatar {
   }
 
   public getTowlineAnchorWorldPosition(): Vector3 {
-    // Connects directly to the front of the skier's chest / harpoon mount
+    // Connects directly to the 3rd-person Steam-Harpoon muzzle tip
     return new Vector3(
-      this.rootNode.position.x + 0.12,
-      this.rootNode.position.y + 1.25,
-      this.rootNode.position.z - 0.40
+      this.rootNode.position.x + 0.32,
+      this.rootNode.position.y + 1.08 - this.currentSquat * 0.7,
+      this.rootNode.position.z - 1.15
     );
   }
 

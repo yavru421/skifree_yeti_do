@@ -1523,8 +1523,8 @@
       <div id="claim-stat-summary" style="font-size:13px; color:#00f0ff; text-align:center; margin:8px 0; font-weight:bold;"></div>
       <p style="font-size:11px; color:#88a0c0; text-align:center; margin-bottom:8px;">Claim & lock your Callsign with a 4-digit PIN:</p>
       
-      <input type="text" id="claim-callsign-input" class="input-field" placeholder="Enter Callsign (e.g. JohnD)" maxlength="12">
-      <input type="password" id="claim-pin-input" class="input-field" placeholder="Enter 4-Digit PIN (e.g. 1234)" maxlength="8" inputmode="numeric">
+      <input type="text" id="claim-callsign-input" class="input-field" placeholder="Enter Callsign (e.g. JohnD)" maxlength="16">
+      <input type="password" id="claim-pin-input" class="input-field" placeholder="Enter 4-Digit PIN (e.g. 1234)" maxlength="4" inputmode="numeric">
       
       <div id="claim-feedback-msg" style="font-size:11px; color:#ff0033; text-align:center; min-height:16px; margin:4px 0;"></div>
       
@@ -1561,7 +1561,7 @@
 
       <div style="display:flex; gap:8px; margin-bottom:8px;">
         <button class="modal-btn modal-btn-ready" id="btn-death-share" style="flex:1; padding:10px; font-size:12px; font-weight:900;" type="button">📤 SHARE RUN</button>
-        <button class="modal-btn" id="btn-death-steam" style="flex:1; padding:10px; font-size:12px; font-weight:900; background:linear-gradient(135deg, #1b2838, #2a475e); border:1px solid #66c0f4; color:#66c0f4;" type="button">⭐ WISHLIST ON STEAM</button>
+        <button class="modal-btn" id="btn-death-steam" style="flex:1; padding:10px; font-size:12px; font-weight:900; background:linear-gradient(135deg, #1b2838, #2a475e); border:1px solid #66c0f4; color:#66c0f4;" type="button">📊 MATCH TELEMETRY [TAB]</button>
       </div>
 
       <button class="modal-btn" id="btn-respawn" type="button">RESPAWN & DROP AGAIN ⛷️</button>
@@ -1603,7 +1603,7 @@
 
 
   <!-- Boot TypeScript + Babylon.js Game Engine -->
-  <script type="module" src="/bundle.js?v=2.5.0"></script>
+  <script type="module" src="/bundle.js?v=2.6.0"></script>
 </body>
 </html>
 

@@ -107,9 +107,20 @@ export class CombatSystem {
 
   private setupInputListeners(): void {
     const tryFire = (e?: Event) => {
-      // Don't fire if interacting with an explicit UI button or input
+      // Don't fire if interacting with UI buttons, inputs, or active modals/lobby
       if (e && e.target instanceof HTMLElement) {
-        if (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT") return;
+        if (
+          e.target.closest(
+            "button, input, select, textarea, a, #lobby-ui, #modal-backdrop, #feedback-modal, #standings-modal, #post-match-modal"
+          )
+        ) {
+          return;
+        }
+      }
+      const lobby = document.getElementById("lobby-ui");
+      const backdrop = document.getElementById("modal-backdrop");
+      if ((lobby && !lobby.classList.contains("hidden")) || (backdrop && !backdrop.classList.contains("hidden"))) {
+        return;
       }
       this.fire();
     };
@@ -121,17 +132,10 @@ export class CombatSystem {
       }
     });
 
-    // 2. Mouse Down (Fallback)
-    window.addEventListener("mousedown", (e: MouseEvent) => {
-      if (e.button === 0) {
-        tryFire(e);
-      }
-    });
-
-    // 3. Keyboard (Spacebar, Enter, F to fire; R to reload)
+    // 2. Keyboard reload ('R'); Fire ('F'/'Enter') & Jump/Reel ('Space') are routed via SkiFreeApp.setupSkierControls
     window.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.code === "Enter" || e.key === "f" || e.key === "F") {
-        tryFire(e);
+      if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+        return;
       }
       if (e.key === "r" || e.key === "R") {
         this.reload();

@@ -26,18 +26,48 @@ export default {
           const body: any = await request.json();
           let rawCallsign = typeof body.callsign === "string" ? body.callsign.trim() : "";
           const callsign = rawCallsign.replace(/[^a-zA-Z0-9_\- ]/g, "").slice(0, 16) || "SKIER_PRO";
-          const wave = Math.max(1, parseInt(body.wave) || 1);
-          const score = Math.max(0, parseInt(body.score) || 0);
+          const wave = Math.min(99, Math.max(1, parseInt(body.wave) || 1));
+          const score = Math.min(5000000, Math.max(0, parseInt(body.score) || 0));
           const time_ms = typeof body.time_ms === "number" ? Math.max(0, Math.round(body.time_ms)) : null;
+          const rawPin = typeof body.pin === "string" ? body.pin.replace(/[^0-9]/g, "").slice(0, 4) : "";
           const now = Date.now();
 
           if (env.DB) {
+            if (callsign.toUpperCase() !== "SKIER_PRO" && callsign.toUpperCase() !== "SKIER_BETA") {
+              await env.DB.prepare(
+                `CREATE TABLE IF NOT EXISTS callsign_pins (callsign TEXT PRIMARY KEY, pin TEXT NOT NULL, updated_at INTEGER)`
+              ).run();
+
+              const existingPinRow: any = await env.DB.prepare(
+                `SELECT pin FROM callsign_pins WHERE UPPER(callsign) = UPPER(?)`
+              ).bind(callsign).first();
+
+              if (existingPinRow && existingPinRow.pin) {
+                if (rawPin !== existingPinRow.pin) {
+                  return new Response(
+                    JSON.stringify({ error: "🔒 Callsign is PIN-locked! Enter your 4-digit PIN to publish under this Callsign." }),
+                    {
+                      status: 403,
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"
+                      }
+                    }
+                  );
+                }
+              } else if (rawPin.length === 4) {
+                await env.DB.prepare(
+                  `INSERT OR REPLACE INTO callsign_pins (callsign, pin, updated_at) VALUES (?, ?, ?)`
+                ).bind(callsign, rawPin, now).run();
+              }
+            }
+
             await env.DB.prepare(
               `INSERT INTO global_leaderboard (callsign, wave, score, time_ms, timestamp) VALUES (?, ?, ?, ?, ?)`
             ).bind(callsign, wave, score, time_ms, now).run();
           }
 
-          return new Response(JSON.stringify({ success: true, callsign, score, wave }), {
+          return new Response(JSON.stringify({ success: true, callsign, score, wave, pinLocked: rawPin.length === 4 }), {
             status: 201,
             headers: {
               "Content-Type": "application/json",

@@ -100,7 +100,10 @@ export class HUDManager {
 
   private setupKeyboardListeners(): void {
     window.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "c" || e.key === "C") {
+      if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+        return;
+      }
+      if (e.key === "v" || e.key === "V") {
         this.toggleCRT();
       }
     });

@@ -7,7 +7,6 @@
 
 import { Vector3, Scalar, Color3, Color4, MeshBuilder, StandardMaterial, Mesh, DynamicTexture } from "@babylonjs/core";
 import { EngineManager } from "./engine";
-import { PhysicsSystem } from "./physics";
 import { TerrainSystem } from "./terrain";
 import { CameraRig } from "./camera";
 import { YetiEntity } from "./yeti";
@@ -24,7 +23,6 @@ import { SkierAvatar } from "./skierAvatar";
 
 export class SkiFreeApp {
   private engineManager!: EngineManager;
-  private physicsSystem!: PhysicsSystem;
   private terrainSystem!: TerrainSystem;
   private cameraRig!: CameraRig;
   private yetiEntity!: YetiEntity;
@@ -113,10 +111,6 @@ export class SkiFreeApp {
     this.engineManager = await EngineManager.create("renderCanvas");
     const scene = this.engineManager.scene;
 
-    // 3. Havok Physics Setup
-    this.physicsSystem = new PhysicsSystem(scene);
-    await this.physicsSystem.init();
-
     // 4. Procedural Terrain & Obstacles
     this.terrainSystem = new TerrainSystem(scene);
     this.terrainSystem.init();
@@ -149,7 +143,7 @@ export class SkiFreeApp {
     // 7b. Summit Starting Gate (Alpine Drop-In Barrier)
     this.setupStartingGate(scene);
 
-    // 8. Zero-Liability Decoupled Simulation: 100% Local Havok Physics & Yeti AI
+    // 8. Zero-Liability Decoupled Simulation: 100% Local Deterministic Kinematics & Yeti AI
     console.log("[SkiFree] Local Alpine Simulation Active — 0ms Edge Latency, $0.00 Liability");
 
     // 9. Precision Combat
@@ -166,10 +160,16 @@ export class SkiFreeApp {
         if (this.steamHarpoon) {
           this.steamHarpoon.attachTowline();
         }
+        // Trigger Ski-Boat Tow Surge on Yeti!
+        this.yetiEntity.triggerHarpoonSurge();
+
         const gauge = document.getElementById("tension-gauge-container");
         const prompt = document.getElementById("tow-action-prompt");
         if (gauge) gauge.classList.remove("hidden");
-        if (prompt) prompt.classList.remove("hidden");
+        if (prompt) {
+          prompt.classList.remove("hidden");
+          prompt.innerHTML = `🚤 <b>HARPOON LOCKED — SKI-BOAT TOW ENGAGED!</b> RAPIDLY TAP <b>[SPACE / CLICK]</b> TO REEL IN & FELL THE BEAST!`;
+        }
 
         // Reveal Rapid-Tap Takedown UI!
         this.takedownTapProgress = 0;
@@ -178,7 +178,32 @@ export class SkiFreeApp {
         if (tapContainer) tapContainer.classList.remove("hidden");
         if (tapProgressEl) tapProgressEl.textContent = "0%";
 
-        // Apply Harpoon Damage Directly to Yeti!
+        // Level 1: Harpoon hit triggers immediate dramatic 1.1s ski-boat tow surge into knockdown & level win!
+        if (this.currentLevel === 1) {
+          const dmg = Math.max(packet.damage || 600, Math.round(this.yetiEntity.maxHp * 0.55));
+          const isFelled = this.yetiEntity.takeDamage(dmg);
+          this.totalScore += packet.isCritical ? 2000 : 1000;
+          this.cameraRig.addImpactShake(0.65);
+
+          const hpPct = Math.max(0, (this.yetiEntity.hp / this.yetiEntity.maxHp) * 100);
+          const bossHpFill = document.getElementById("boss-hp-fill");
+          if (bossHpFill) bossHpFill.style.width = `${hpPct}%`;
+
+          if ((isFelled || this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) && !this.isTakedownTriggered) {
+            this.triggerYetiTakedown();
+          } else {
+            // Brief 1.1s ski-boat tow pull before automatic Level 1 knockdown if player doesn't tap first
+            setTimeout(() => {
+              if (!this.isTakedownTriggered && !this.isPlayerDead && this.currentLevel === 1 && this.steamHarpoon?.isTethered) {
+                this.yetiEntity.takeDamage(this.yetiEntity.hp + 500);
+                this.triggerYetiTakedown();
+              }
+            }, 1100);
+          }
+          return;
+        }
+
+        // Level 2+: Apply Harpoon Damage & require rapid-tap / slalom sawing during ski-boat tow
         const dmg = packet.damage || 400;
         const isFelled = this.yetiEntity.takeDamage(dmg);
         this.totalScore += packet.isCritical ? 1500 : 500;
@@ -302,15 +327,20 @@ export class SkiFreeApp {
   private handleTakedownTap(): void {
     if (!this.steamHarpoon || !this.steamHarpoon.isTethered || this.isTakedownTriggered || this.isPlayerDead) return;
 
-    // Tap step scales down with level: L1=+16%, L2=+10%, L3=+7%, L4=+5%
-    const tapStep = Math.max(5, Math.round(16 - (this.currentLevel - 1) * 3.5));
+    // Early-level fast progression (L1=100%, L2=50%, L3=15%, L4+=10%)
+    const tapStep =
+      this.currentLevel === 1
+        ? 100
+        : this.currentLevel === 2
+        ? 50
+        : Math.max(6, Math.round(15 - (this.currentLevel - 3) * 2.5));
     this.takedownTapProgress = Math.min(100, this.takedownTapProgress + tapStep);
     const tapProgressEl = document.getElementById("takedown-tap-progress");
     if (tapProgressEl) tapProgressEl.textContent = `${this.takedownTapProgress}%`;
 
     // Reel in the Yeti with drag and damage calibrated to health pool
     this.yetiEntity.applyDrag(35, 0.25);
-    const burstDmg = Math.round(350 + (this.currentLevel - 1) * 75);
+    const burstDmg = Math.round(450 + (this.currentLevel - 1) * 110);
     const isFelled = this.yetiEntity.takeDamage(burstDmg);
     this.totalScore += 300;
     this.cameraRig.addImpactShake(0.14);
@@ -325,7 +355,7 @@ export class SkiFreeApp {
     const towPrompt = document.getElementById("tow-action-prompt");
     if (towPrompt) {
       towPrompt.classList.remove("hidden");
-      towPrompt.innerHTML = `⚡ <b>WINCH REEL TURBO!</b> DRAGGING YETI! <span style="color:#ff0055;">-${burstDmg} HP</span> (${this.takedownTapProgress}%)`;
+      towPrompt.innerHTML = `🚤 <b>WINCH REEL TURBO!</b> SKI-BOAT TOW REELING IN! <span style="color:#ff0055;">-${burstDmg} HP</span> (${this.takedownTapProgress}%)`;
     }
 
     if (this.takedownTapProgress >= 100 || isFelled || this.yetiEntity.hp <= 0 || this.yetiEntity.state === YetiAIState.DEAD) {
@@ -345,6 +375,7 @@ export class SkiFreeApp {
     if (this.steamHarpoon) {
       this.steamHarpoon.detachTowline();
     }
+    this.yetiEntity.isTethered = false;
     if (this.skierAvatar) {
       this.skierAvatar.triggerWipeout();
     }
@@ -416,7 +447,7 @@ export class SkiFreeApp {
       const btnSteam = document.getElementById("btn-death-steam");
       if (btnSteam) {
         btnSteam.onclick = () => {
-          window.open("https://store.steampowered.com/app/skifree_yeti", "_blank");
+          this.showPostMatch("death");
         };
       }
     }, 400);
@@ -455,6 +486,9 @@ export class SkiFreeApp {
     const keys: Record<string, boolean> = {};
 
     window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) {
+        return;
+      }
       const key = e.key.toLowerCase();
       keys[key] = true;
       if (key === " " || key === "enter" || key === "f") {
@@ -469,9 +503,9 @@ export class SkiFreeApp {
         } else if (key === " ") {
           e.preventDefault();
           this.triggerPlayerJump();
-        } else if (key === "f") {
+        } else if (key === "f" || key === "enter") {
           e.preventDefault();
-          if (this.combatSystem && !this.isTakedownTriggered) {
+          if (this.combatSystem && !this.isTakedownTriggered && !this.isPlayerDead) {
             this.combatSystem.tryFireHarpoon();
           }
         }
@@ -479,6 +513,11 @@ export class SkiFreeApp {
         if (this.cameraRig) {
           this.cameraRig.toggleCameraMode();
           console.log(`[Camera] Toggled camera mode to ${this.cameraRig.cameraMode}`);
+        }
+      } else if (key === "tab") {
+        if (this.isWaitingForDropIn || this.isPlayerDead) {
+          e.preventDefault();
+          this.showPostMatch(this.isPlayerDead ? "death" : "victory");
         }
       }
     });
@@ -590,11 +629,16 @@ export class SkiFreeApp {
     if (btnSubmitClaim) {
       btnSubmitClaim.addEventListener("click", async () => {
         const claimCallsignInput = document.getElementById("claim-callsign-input") as HTMLInputElement | null;
+        const claimPinInput = document.getElementById("claim-pin-input") as HTMLInputElement | null;
         const feedback = document.getElementById("claim-feedback-msg");
         const chosen = (claimCallsignInput?.value?.trim() || this.callsign || "SKIER_PRO").slice(0, 16);
+        const pinVal = (claimPinInput?.value?.replace(/[^0-9]/g, "") || "").slice(0, 4);
         this.callsign = chosen;
         if (typeof localStorage !== "undefined") {
           localStorage.setItem("skifree_callsign", chosen);
+          if (pinVal.length === 4) {
+            localStorage.setItem("skifree_pin", pinVal);
+          }
         }
         const callsignEl = document.getElementById("callsign-input") as HTMLInputElement | null;
         if (callsignEl) callsignEl.value = chosen;
@@ -613,14 +657,16 @@ export class SkiFreeApp {
               callsign: chosen,
               wave: this.currentLevel,
               score: this.totalScore,
-              time_ms: elapsedMs
+              time_ms: elapsedMs,
+              pin: pinVal
             })
           });
           const resJson = (await resp.json()) as any;
           if (resp.ok && resJson.success) {
             if (feedback) {
               feedback.style.color = "#39ff14";
-              feedback.textContent = `✅ PUBLISHED AS ${chosen}! SCORE: ${this.totalScore.toLocaleString()}`;
+              const lockTag = resJson.pinLocked ? " 🔒 [PIN LOCKED]" : "";
+              feedback.textContent = `✅ PUBLISHED AS ${chosen}${lockTag}! SCORE: ${this.totalScore.toLocaleString()}`;
             }
             if (typeof (window as any).refreshLeaderboard === "function") {
               (window as any).refreshLeaderboard();
@@ -741,7 +787,14 @@ export class SkiFreeApp {
 
     // 1. Skier Downhill Kinematics (Forward along -Z)
     const prevZ = this.playerPos.z;
-    if (this.isTucking) {
+    const isTetheredActive = Boolean(this.steamHarpoon && this.steamHarpoon.isTethered && !this.isTakedownTriggered && !this.isPlayerDead);
+    if (isTetheredActive) {
+      // SKI-BOAT TOW PHYSICS: Yeti surges downhill pulling the player behind on the steel cable!
+      const yetiTowMph = this.yetiEntity.dragSpeed + (this.yetiEntity.isSprinting ? 14 : 6);
+      const targetTowMph = this.isBraking ? Math.max(22, yetiTowMph * 0.78) : Math.max(50, yetiTowMph);
+      this.speedMph = Scalar.Lerp(this.speedMph, targetTowMph, deltaTime * 5.5);
+      this.tuckStamina = Math.min(1.0, this.tuckStamina + deltaTime * 0.25);
+    } else if (this.isTucking) {
       if (this.tuckStamina > 0.05) {
         this.tuckStamina = Math.max(0, this.tuckStamina - deltaTime * 0.28);
         this.speedMph = Scalar.Lerp(this.speedMph, this.maxSpeedMph, deltaTime * 1.5);
@@ -829,7 +882,7 @@ export class SkiFreeApp {
     }
 
     // Yeti Turnaround Ambush Showdown: Turn on the skier 220m before the finish line!
-    if (distToFinish <= 220 && distToFinish > 0 && !this.yetiEntity.isAmbushing && this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
+    if (distToFinish <= 220 && distToFinish > 0 && !this.yetiEntity.isAmbushing && !isTetheredActive && this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
       this.yetiEntity.triggerAmbushTurnaround(this.playerPos);
       this.audioSystem.playYetiRoar();
       this.cameraRig.addImpactShake(1.6);
@@ -915,6 +968,19 @@ export class SkiFreeApp {
     }
 
     // 3. Update Subsystems
+    this.yetiEntity.update(this.playerPos, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
+
+    // Enforce Ski-Boat Towline Spring Constraint so player stays towed behind the Yeti (never overtakes downhill!)
+    if (isTetheredActive) {
+      const minTowDistZ = Math.max(11.0, 22.0 - (this.takedownTapProgress / 100) * 10.0);
+      const maxTowDistZ = 34.0;
+      const yetiZ = this.yetiEntity.rootMesh.position.z;
+      this.playerPos.z = Scalar.Clamp(this.playerPos.z, yetiZ + minTowDistZ, yetiZ + maxTowDistZ);
+      const tetheredTerrainH = this.terrainSystem.getTerrainHeightAt(this.playerPos.x, this.playerPos.z);
+      const tetheredMogulH = this.terrainSystem.getMogulHeightAt(this.playerPos.x, this.playerPos.z);
+      this.playerPos.y = tetheredTerrainH + tetheredMogulH + this.playerJumpY;
+    }
+
     this.terrainSystem.update(this.playerPos.z, deltaTime);
     const isYetiActive = this.yetiEntity && this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead;
     const yetiPos = this.yetiEntity ? this.yetiEntity.rootMesh.position : undefined;
@@ -928,7 +994,6 @@ export class SkiFreeApp {
       isYetiActive,
       this.isTucking
     );
-    this.yetiEntity.update(this.playerPos, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
 
     // Update Realistic 3D Skier Avatar (matches thats_the_best_video_you_have.mp4)
     const isTethered = Boolean(this.steamHarpoon && this.steamHarpoon.isTethered);
@@ -975,36 +1040,43 @@ export class SkiFreeApp {
       this.npcSystem.update(this.playerPos.z, this.yetiEntity.rootMesh.position, deltaTime, (x, z) => this.terrainSystem.getTerrainHeightAt(x, z));
     }
 
-    // 3a. Yeti Attack Proximity & Takedown Check
+    // 3a. Yeti Attack Proximity & Takedown Check (Guard against tethered mauling!)
     const distToYeti = Math.hypot(this.playerPos.x - this.yetiEntity.rootMesh.position.x, this.playerPos.z - this.yetiEntity.rootMesh.position.z);
     if (this.yetiEntity.state !== YetiAIState.DEAD && !this.isTakedownTriggered && !this.isPlayerDead) {
-      const isLethalState = this.yetiEntity.state === YetiAIState.AMBUSH_SHOWDOWN ||
-                            this.yetiEntity.state === YetiAIState.BERSERK ||
-                            this.yetiEntity.state === YetiAIState.POUNCE_CHARGE ||
-                            this.yetiEntity.state === YetiAIState.CLAW_SWIPE ||
-                            this.yetiEntity.isAmbushing;
-      const killRadius = isLethalState ? 5.2 : 4.6;
-      if (distToYeti < killRadius) {
-        this.triggerPlayerMauledByYeti();
-      } else {
-        if (distToYeti < 10.0 && Date.now() - this.lastNearMissTime > 1500) {
-          this.lastNearMissTime = Date.now();
-          this.closeCallsCount++;
-          this.cameraRig.triggerNearMiss();
-          this.mobileTouchController?.triggerYetiProximityPulse(distToYeti);
+      if (isTethered) {
+        // When Yeti is harpooned on the towline, reeling within 8.5m triggers the point-blank finisher takedown!
+        if (distToYeti < 8.5) {
+          this.triggerYetiTakedown();
         }
-        if (isLethalState && distToYeti < 11.0) {
-          this.cameraRig.addImpactShake(0.95);
-          const clawOverlay = document.getElementById("claw-overlay");
-          if (clawOverlay && !clawOverlay.classList.contains("slash-active")) {
-            clawOverlay.classList.add("slash-active");
-            clawOverlay.style.display = "block";
-            setTimeout(() => {
-              if (clawOverlay) {
-                clawOverlay.classList.remove("slash-active");
-                clawOverlay.style.display = "none";
-              }
-            }, 500);
+      } else {
+        const isLethalState = this.yetiEntity.state === YetiAIState.AMBUSH_SHOWDOWN ||
+                              this.yetiEntity.state === YetiAIState.BERSERK ||
+                              this.yetiEntity.state === YetiAIState.POUNCE_CHARGE ||
+                              this.yetiEntity.state === YetiAIState.CLAW_SWIPE ||
+                              this.yetiEntity.isAmbushing;
+        const killRadius = isLethalState ? 5.2 : 4.6;
+        if (distToYeti < killRadius) {
+          this.triggerPlayerMauledByYeti();
+        } else {
+          if (distToYeti < 10.0 && Date.now() - this.lastNearMissTime > 1500) {
+            this.lastNearMissTime = Date.now();
+            this.closeCallsCount++;
+            this.cameraRig.triggerNearMiss();
+            this.mobileTouchController?.triggerYetiProximityPulse(distToYeti);
+          }
+          if (isLethalState && distToYeti < 11.0) {
+            this.cameraRig.addImpactShake(0.95);
+            const clawOverlay = document.getElementById("claw-overlay");
+            if (clawOverlay && !clawOverlay.classList.contains("slash-active")) {
+              clawOverlay.classList.add("slash-active");
+              clawOverlay.style.display = "block";
+              setTimeout(() => {
+                if (clawOverlay) {
+                  clawOverlay.classList.remove("slash-active");
+                  clawOverlay.style.display = "none";
+                }
+              }, 500);
+            }
           }
         }
       }
@@ -1141,6 +1213,7 @@ export class SkiFreeApp {
     if (this.steamHarpoon) {
       this.steamHarpoon.detachTowline();
     }
+    this.yetiEntity.isTethered = false;
 
     // Hide active combat gauges & prompts during celebration
     const gauge = document.getElementById("tension-gauge-container");
@@ -1191,11 +1264,15 @@ export class SkiFreeApp {
     // Skier keeps cruising downhill past the felled beast!
     this.speedMph = Math.max(38, this.speedMph);
 
-    // Show Takedown Cinematic Banners
+    // Show Takedown Cinematic Letterbox Bars & Banner
     const bars = document.getElementById("cinematic-bars");
+    const topBar = document.getElementById("cinematic-bar-top");
+    const bottomBar = document.getElementById("cinematic-bar-bottom");
     const banner = document.getElementById("takedown-cinematic-overlay");
 
     if (bars) bars.classList.remove("hidden");
+    if (topBar) topBar.style.transform = "translateY(0)";
+    if (bottomBar) bottomBar.style.transform = "translateY(0)";
     if (banner) {
       banner.classList.remove("hidden");
       banner.style.opacity = "1";
@@ -1254,6 +1331,9 @@ export class SkiFreeApp {
         this.skierAvatar.setCutsceneVictory(false);
       }
 
+      if (topBar) topBar.style.transform = "translateY(-100%)";
+      if (bottomBar) bottomBar.style.transform = "translateY(100%)";
+      if (bars) bars.classList.add("hidden");
       if (banner) {
         banner.style.opacity = "0";
         banner.classList.add("hidden");
@@ -1467,11 +1547,15 @@ export class SkiFreeApp {
 
     // Reset cinematic bars & banner
     const bars = document.getElementById("cinematic-bars");
+    const topBar = document.getElementById("cinematic-bar-top");
+    const bottomBar = document.getElementById("cinematic-bar-bottom");
     const banner = document.getElementById("takedown-cinematic-overlay");
     const modal = document.getElementById("takedown-modal");
     const prompt = document.getElementById("tow-action-prompt");
     const gauge = document.getElementById("tension-gauge-container");
 
+    if (topBar) topBar.style.transform = "translateY(-100%)";
+    if (bottomBar) bottomBar.style.transform = "translateY(100%)";
     if (bars) bars.classList.add("hidden");
     if (banner) {
       banner.classList.add("hidden");
@@ -1682,6 +1766,7 @@ export class SkiFreeApp {
     const levelClearModal = document.getElementById("level-clear-modal");
     const statSummary = document.getElementById("claim-stat-summary");
     const callsignInput = document.getElementById("claim-callsign-input") as HTMLInputElement | null;
+    const pinInput = document.getElementById("claim-pin-input") as HTMLInputElement | null;
     const feedback = document.getElementById("claim-feedback-msg");
 
     if (deathModal) deathModal.classList.add("hidden");
@@ -1692,6 +1777,10 @@ export class SkiFreeApp {
 
     if (callsignInput) {
       callsignInput.value = this.callsign;
+    }
+    if (pinInput && typeof localStorage !== "undefined") {
+      const savedPin = localStorage.getItem("skifree_pin");
+      if (savedPin) pinInput.value = savedPin;
     }
     if (feedback) {
       feedback.textContent = "";

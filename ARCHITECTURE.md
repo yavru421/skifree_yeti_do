@@ -1,89 +1,50 @@
 # SkiFree 2: Phase II — Comprehensive Architecture & Technical Specifications
 
-Architectural review and system design specification for **SkiFree 2: The Hunt for the Yeti** (`yavru421/skifree_yeti_do`).
+Architectural specification for **SkiFree 2: The Hunt for the Yeti** (`yeti.dondlingergc.com`).
 
 ---
 
 ## 1. Executive Summary & Core Paradigm
-**SkiFree 2: The Hunt for the Yeti** transforms the classic 1991 2D game into a high-octane **3D First-Person View (FPV) WebGL experience** powered by Cloudflare's serverless edge infrastructure.
+**SkiFree 2: The Hunt for the Yeti** reimagines the 1991 2D classic as a **60 FPS 3D Downhill & Steam-Harpoon Boss Hunt** built on **Babylon.js 7.0 (WebGPU / WebGL2)** and deployed on **Cloudflare Workers + D1 SQLite** under the **Zero-Liability (`$0.00` Wall-Clock Compute) Invariant**.
 
-The defining architectural decision is using an **authoritative serverless model** where the Cloudflare Worker (`index.ts`) acts as a smart router, and a dedicated **Cloudflare Durable Object (`MountainDO.ts`)** runs a single-threaded, strongly consistent 20Hz physics and game state loop. The system is deployed live at `yeti.dondlingergc.com`.
+All 60Hz downhill ski kinematics, mogul suspension, hitscan ballistics, and Yeti boss AI run 100% client-side with 0ms network latency, while the stateless Cloudflare Worker (`src/index.ts`) serves static assets (`ASSETS`) and persists global leaderboards, PIN-locked callsigns, and player beta feedback in Cloudflare D1 (`skifree-global-db`).
 
 ```
-                        ┌────────────────────────────────────────────────────────┐
-                        │              Cloudflare Edge Network                   │
-                        │                                                        │
-┌──────────────┐        │   ┌────────────────────────────────────────────────┐   │
-│ Client (FPV) │◄───────┼──►│             Worker Router (index.ts)           │   │
-│ Three.js     │        │   │  • / (landing.html)  • /play (index.html)      │   │
-│ Audio Engine │        │   │  • /api/scores       • Security CSP Headers    │   │
-└──────────────┘        │   └───────────────────────┬────────────────────────┘   │
-      ▲                 │                           │                            │
-      │ WebSocket (20Hz)│                           ▼                            │
-      │ WSS /ws?callsign│   ┌────────────────────────────────────────────────┐   │
-      └─────────────────┼──►│          MountainDO (Durable Object)           │   │
-                        │   │  • Authoritative 20Hz Tick Physics Engine      │   │
-                        │   │  • Yeti State Machine (Charge/Stagger/Bite)    │   │
-                        │   │  • Multi-Wave Health & Difficulty Scaling      │   │
-                        │   │  • Anti-Cheat Shoot Throttle & Sanitize        │   │
-                        │   │  • Embedded SQLite (storage.sql) Ledger        │   │
-                        │   └────────────────────────────────────────────────┘   │
-                        └────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│              Cloudflare Edge Network                   │
+│                                                        │
+│   ┌────────────────────────────────────────────────┐   │
+│   │         Stateless Worker Router (index.ts)     │   │
+│   │  • GET/POST /api/scores (PIN-Locked Standings) │   │
+│   │  • GET/POST /api/feedback (Beta Issue Tracker) │   │
+│   │  • Static Asset Binding (ASSETS - $0 Egress)   │   │
+│   └───────────────────────┬────────────────────────┘   │
+│                           │                            │
+│                           ▼                            │
+│   ┌────────────────────────────────────────────────┐   │
+│   │       Cloudflare D1 SQLite (skifree-global-db) │   │
+│   │  • global_leaderboard (callsign, wave, score)  │   │
+│   │  • callsign_pins (4-digit PIN ownership lock)  │   │
+│   │  • beta_feedback (live bug & balance reports)  │   │
+│   └────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Deep Dive: Edge Engine Architecture (`MountainDO.ts`)
+## 2. Client Engine Architecture (`src/client/`)
 
-### **Authoritative 20Hz Tick Physics Loop**
-* **Alarm Scheduling**: The match lobby loop drives physics state updates by setting recurring alarms via `storage.setAlarm(Date.now() + 50)`.
-* **Skier Physics**: Calculates downhill forward velocity, 90° lateral carving vectors, and tuck/brake states on each tick.
-* **State Broadcast**: Every 50ms (20Hz), compressed JSON state frames—containing active skier positions, Yeti coordinates, health ratios, and militia status—are broadcast across connected WebSockets.
-
-### **Yeti Boss AI State Machine**
-The Yeti AI is governed by an explicit four-stage finite state machine:
-1. **`CHARGING`**: Stalks and accelerates towards the nearest player at `targetSpeed + 12 MPH`.
-2. **`STAGGERED`**: Triggered when receiving critical rifle headshots, inducing a 1.0-second recovery slowdown window.
-3. **`RETREATING`**: Backs off and repositions 30 meters up the slope after inflicting damage.
-4. **`DEAD`**: Triggers lobby victory fanfare, logs telemetry, and initiates the next boss wave.
-
-### **Mechanic Highlight: Limb Dissociation**
-When the Yeti comes within **< 3.2 meters** of a skier, it executes a bite attack that inflicts progressive limb loss (**Left Arm → Right Arm → Skeletonized**). Rather than causing an immediate game-over, the bite knocks the Yeti back 30 meters, enabling the player to continue skiing downhill in a damaged state.
+* **[`main.ts`](file:///c:/dev/skifree-yeti-do/src/client/main.ts)**: Master game loop (`tick()`), downhill carving kinematics, **Ski-Boat Tow** spring-tether physics, level progression across Granby Ranch runs, cutscene orchestration, and D1 API integration.
+* **[`yeti.ts`](file:///c:/dev/skifree-yeti-do/src/client/yeti.ts)**: 3D rigged Yeti boss (`yeti.glb`), quadrupedal gallop kinematics, flank weak-point vulnerability switching, **Harpoon Ski-Boat Surge** (`triggerHarpoonSurge()`), and 220m finish-line Turnaround Ambush Showdown.
+* **[`combat.ts`](file:///c:/dev/skifree-yeti-do/src/client/combat.ts) & [`harpoon.ts`](file:///c:/dev/skifree-yeti-do/src/client/harpoon.ts)**: Hitscan raycast combat with smart auto-aim magnetism, CS:GO-style dynamic crosshair bloom, floating damage numbers, brass Steam-Harpoon cannon (1st-person & 3rd-person rigs), and catenary steel towline cable.
+* **[`skierAvatar.ts`](file:///c:/dev/skifree-yeti-do/src/client/skierAvatar.ts) & [`camera.ts`](file:///c:/dev/skifree-yeti-do/src/client/camera.ts)**: Blender 5.2 `skier.glb` downhill racer with volumetric Gaussian powder snow spray, 3rd-person mounted Steam-Harpoon cannon, and dual-mode (`third_person` / `first_person`) camera rig with 3-phase takedown orbit cutscenes.
+* **[`terrain.ts`](file:///c:/dev/skifree-yeti-do/src/client/terrain.ts) & [`granbyTracks.ts`](file:///c:/dev/skifree-yeti-do/src/client/granbyTracks.ts)**: Procedural Granby Ranch runs (rod-and-gun green to double-black diamond), 3D mogul fields, slalom gates, and Nitro Wax / Cryo Harpoon power-ups.
 
 ---
 
-## 3. Networking, Protocol & Security
+## 3. Ski-Boat Tow & Takedown Mechanics
 
-* **WebSocket Hibernation API**: By accepting connections with `ctx.acceptWebSocket(server, [playerId])`, idle lobbies consume **0 active CPU cycles**. On incoming frames, connection attachments are deserialized (`deserializeAttachment()`) without maintaining expensive in-memory state.
-* **Telemetry Protocol**: Uses the **Dynamic State-Matrix Telemetry (DSMT)** specification outlined in `METROPOLIS_DSMT_PROTOCOL.md`.
-* **Server-Authoritative Combat & Anti-Cheat**:
-  * **Rate Limiting**: Fire input is strictly throttle-capped at a **120ms cooldown**.
-  * **Damage Validation**: Clients send raycast hit notifications, but damage calculations (**400–1,000 HP per hit**) are computed authoritatively on `MountainDO.ts`.
-  * **Input Sanitization**: Callsigns are validated against `^[a-zA-Z0-9_\- ]{1,12}$`, blocking script injection into SQLite ledgers and DOM elements.
-
----
-
-## 4. Embedded Persistence & Data Layer (`storage.sql`)
-
-The Durable Object utilizes zero-latency **embedded SQLite storage** (`storage.sql` / `schema.sql`) directly inside the instance:
-* **`global_leaderboard`**: Stores `callsign`, `max_distance`, `max_speed`, `survival_time`, `score`, and monotonic timestamps.
-* **`yeti_kills`**: Records `killer_callsign`, `wave`, `total_lobby_damage`, `clear_time_sec`, and kill timestamps.
-
----
-
-## 5. Client Rendering & Quality of Life Features
-
-* **3D FPV Graphics**: Rendered using **Three.js** with retro 90s CRT scanline overlays (toggled via `C`).
-* **Tactical Aiming**: Features a 180° rearview rifle aim (Hold `Shift` or Right-Click) and manual magazine reloading (`R`, 8-round magazine).
-* **Preset Velocities**:
-  * **1 (Easy)**: 20–45 MPH.
-  * **2 (Medium)**: 28–60 MPH.
-  * **3 (Pro)**: 38–85 MPH.
-* **Recent QoL Polish**: Recent commits introduce 350ms drop-in key debouncing, socket queue buffering, fog visibility calibration, and Havok Physics asset resolution fixes.
-
----
-
-## 6. Infrastructure Economics & Operational Profile
-
-* **$0 Bandwidth Egress**: Three.js bundles, MP3 sound streams, and static media are bound via Cloudflare Static Assets (`ASSETS`), avoiding bandwidth egress fees.
-* **Micro-Compute Costs**: Running a match lobby continuously for 1 hour consumes ≈ 460.8 GB-s, resulting in an operational cost of less than **$0.00006 per hour**.
+1. **Harpoon Impact & Ski-Boat Surge**: Landing a harpoon hit locks the braided steel towline onto the Yeti and triggers `yetiEntity.triggerHarpoonSurge()`. The Yeti takes off down the fall-line at `1.42x` speed, towing the skier behind it like a ski-boat between `11m–34m`.
+2. **Progressive Level Takedown**:
+   * **Level 1**: Landing a direct harpoon hit initiates an immediate high-speed ski-boat tow surge into a guaranteed knockdown so players immediately experience the takedown cutscene and advance to Level 2.
+   * **Level 2+**: Players rapidly mash `Space` / `Click` on the glowing **TAP!** winch button or hold `S` while carving `A` / `D` across the fall-line to saw the steel cable, drain the Yeti's HP, and reel the beast inside `< 8.5m` for a point-blank takedown.
